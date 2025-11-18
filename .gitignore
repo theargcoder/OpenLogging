@@ -1,3 +1,13 @@
+#Cmake Stuff
+
+/build/
+
+# Ignore cache
+.cache/
+
+#Ignore formatting stuff
+.clang-format
+
 # Prerequisites
 *.d
 
