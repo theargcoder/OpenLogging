@@ -1,7 +1,9 @@
+#pragma once
+
 #include <cstddef>
 #include <fstream>
 #include <memory>
-#include <stack>
+#include <string.h>
 #include <string>
 
 #ifdef OPENLOGGING_FORMATTING_CHAR_BEG
@@ -46,39 +48,29 @@
 
 namespace OpenLogging
 {
-static char __open__ = OPENLOGGING_FORMATTING_CHAR_BEG;
-static char __close__ = OPENLOGGING_FORMATTING_CHAR_END;
-std::unique_ptr<std::string> FILE = nullptr;
+constexpr char __open__ = OPENLOGGING_FORMATTING_CHAR_BEG;
+constexpr char __close__ = OPENLOGGING_FORMATTING_CHAR_END;
 
-template <const char *, typename... Types>
-void
-Log (const char *str, Types... args)
+template <size_t N>
+consteval bool
+validate_string (const char (&str)[N])
 {
-  if (FILE)
+  int A = 0, B = 0;
+  for (size_t i = 0; i < N - 1; ++i) // ignore null terminator
     {
-      std::ofstream file_out (*FILE, std::ios::out);
-      std::stack<char> stk;
-
-      bool in_format = false;
-      size_t pos = 0;
-
-      auto ch = str;
-      while (*ch != '\0')
-        {
-          auto empty = stk.empty ();
-          if (empty)
-            {
-              if (*ch == __open__)
-                stk.push (__open__);
-              else if (*ch == __close__)
-                throw 0;
-              // TODO static assert???? idk
-            }
-        }
+      if (str[i] == __open__)
+        ++A;
+      if (str[i] == __close__)
+        ++B;
     }
-  else
-    {
-      // TODO
-    }
+  return A == B;
+}
+
+template <typename... Types, size_t N>
+consteval void
+log (const char (&str)[N], Types... args)
+{
+  if (!validate_string (str))
+    throw "Invalid formatted string, You have extra or missing formatting delimiters check the string please";
 }
 }
