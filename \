@@ -1,0 +1,17 @@
+#include "OpenLogging.hpp"
+
+int main (int argc, char *argv[])
+{
+  OpenLogging::log ("HELlO {}");
+  // COMPILE TIME ERROR
+  // OpenLogging::log ("HELlO }");
+  OpenLogging::log ("hello {}", true);
+
+  std::string __ansi_begin__ = "\033[1;5;38;5;";
+  std::string __ansi_end__ = "m";
+  std::string __ansi_reset__ = "\033[0m";
+
+  std::cout << __ansi_begin__ + "9" + __ansi_end__ + "Hello in red" + __ansi_reset__ + " Hello in normal color" << '\n';
+
+  return 0;
+}
