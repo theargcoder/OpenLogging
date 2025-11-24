@@ -52,8 +52,8 @@
 #define OPENLOGGING_BOOL_VALUE_FALSE_COLOR 91
 #endif
 
-#ifndef OPENLOGGING_VOID_COLOR
-#define OPENLOGGING_VOID_COLOR 237
+#ifndef OPENLOGGING_POINTERS_COLOR
+#define OPENLOGGING_POINTERS_COLOR 237
 #endif
 
 #ifndef OPENLOGGING_NULLPTR_COLOR
@@ -78,6 +78,10 @@
 
 #ifndef OPENLOGGING_STRINGS_COLOR
 #define OPENLOGGING_STRINGS_COLOR 3
+#endif
+
+#ifndef OPENLOGGING_UNKNOWN_COLOR
+#define OPENLOGGING_UNKNOWN_COLOR 12
 #endif
 
 #ifndef OPENLOGGING_BOOL_VALUE_FALSE_COLOR
@@ -111,12 +115,13 @@ namespace OpenLogging
   constexpr static uint8_t __color_bool_value_true__ = OPENLOGGING_BOOL_VALUE_TRUE_COLOR;
   constexpr static uint8_t __color_bool_value_false__ = OPENLOGGING_BOOL_VALUE_FALSE_COLOR;
   constexpr static uint8_t __color_nullptr__ = OPENLOGGING_NULLPTR_COLOR;
-  constexpr static uint8_t __color_void__ = OPENLOGGING_VOID_COLOR;
+  constexpr static uint8_t __color_pointers__ = OPENLOGGING_POINTERS_COLOR;
   constexpr static uint8_t __color_char__ = OPENLOGGING_CHAR_COLOR;
   constexpr static uint8_t __color_ints__ = OPENLOGGING_INTS_COLOR;
   constexpr static uint8_t __color_floats__ = OPENLOGGING_FLOATS_COLOR;
   constexpr static uint8_t __color_doubles__ = OPENLOGGING_DOUBLES_COLOR;
   constexpr static uint8_t __color_strings__ = OPENLOGGING_STRINGS_COLOR;
+  constexpr static uint8_t __color_unknown__ = OPENLOGGING_UNKNOWN_COLOR;
   constexpr static const char *__ansi_begin__ = "\033[";
   constexpr static const char *__ansi_none__ = "0;";
   constexpr static const char *__ansi_bold__ = "1;";
@@ -153,7 +158,7 @@ namespace OpenLogging
   };
 
   template <typename T>
-  static std::string __to_string_into_buff__ (T &var, const char (&format)[10], const bool &blink)
+  static std::string __to_string_into_buff__ (const T &var, const char (&format)[10], const bool &blink)
   {
     static std::string __buffer__;
     __buffer__.reserve (4096);
@@ -166,14 +171,6 @@ namespace OpenLogging
       __buffer__ += (OPENLOGGING_DEBUG_BLINK) ? __ansi_blink__ : "";
       __buffer__ += __ansi_st_color__;
       __buffer__ += std::to_string (__color_nullptr__) + __ansi_en_color__ + "0 (nullptr)";
-      __buffer__ += __ansi_reset__;
-    }
-    else if constexpr (std::is_same_v<T, void *>)
-    {
-      __buffer__ += __ansi_begin__;
-      __buffer__ += __ansi_bold__;
-      __buffer__ += __ansi_st_color__;
-      __buffer__ += std::to_string (__color_void__) + __ansi_en_color__ + "UNSUPORTED";
       __buffer__ += __ansi_reset__;
     }
     else if constexpr (std::is_same_v<T, bool>)
@@ -237,6 +234,15 @@ namespace OpenLogging
       __buffer__ += std::to_string (__color_strings__) + __ansi_en_color__ + std::string (var);
       __buffer__ += __ansi_reset__;
     }
+    else if constexpr (std::is_pointer_v<T>)
+    {
+      __buffer__ += __ansi_begin__;
+      __buffer__ += __ansi_bold__;
+      __buffer__ += __ansi_st_color__;
+      __buffer__
+          += std::to_string (__color_pointers__) + __ansi_en_color__ + std::to_string (reinterpret_cast<std::uintptr_t> (var));
+      __buffer__ += __ansi_reset__;
+    }
     else
     {
       __buffer__ += __ansi_begin__;
@@ -256,7 +262,7 @@ namespace OpenLogging
     const auto N = fmt.N;
     static char format[10] = { '\0' };
     (
-        [&] (auto __arg)
+        [&] (const auto __arg)
         {
           for (size_t i = 0; i < N; i++)
           {
