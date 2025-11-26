@@ -1,6 +1,8 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
+#include <ctime>
 #include <iostream>
 #include <string.h>
 
@@ -131,7 +133,7 @@ namespace OpenLogging
   constexpr static const char *__ansi_reset__ = "\033[0m";
 
   template <size_t N>
-  constexpr bool validate_string (const char (&str)[N])
+  consteval bool validate_string (const char (&str)[N])
   {
     int A = 0, B = 0;
     for (size_t i = 0; i < N - 1; ++i) // ignore null terminator
@@ -156,6 +158,38 @@ namespace OpenLogging
         throw "Invalid formatted string, You have extra or missing formatting delimiters check the string please";
     }
   };
+
+  static constexpr std::string __time_formatted__ (long &time_v)
+  {
+    struct tm *timeinfo;
+
+    const uint8_t BUFFSIZE = 32;
+    char buffer[BUFFSIZE];
+
+    timeinfo = localtime (&time_v);
+
+    size_t len = strftime (buffer, BUFFSIZE, "%a  %d-%m-%y  %H:%M:%S.", timeinfo);
+
+    return std::string (buffer);
+  }
+
+  static constexpr std::string __time_mili_format__ (long &time_v)
+  {
+    const uint8_t BUFFSIZE = 4;
+    char buffer[BUFFSIZE];
+
+    long cpy = time_v / 10;
+    long cpy_cpy = time_v;
+
+    for (int i = BUFFSIZE - 1; i >= 0; i--)
+    {
+      buffer[i] = '0' + (cpy_cpy % cpy);
+      cpy_cpy = cpy;
+      cpy /= 10;
+    }
+
+    return std::string (buffer);
+  }
 
   template <typename T>
   static std::string __to_string_into_buff__ (const T &var, const char (&format)[10], const bool &blink)
@@ -264,6 +298,16 @@ namespace OpenLogging
     (
         [&] (const auto __arg)
         {
+          auto time_now = std::chrono::high_resolution_clock::now ();
+          long time_seconds = std::chrono::duration_cast<std::chrono::seconds> (time_now.time_since_epoch ()).count ();
+          long time_microseconds_div_100
+              = std::chrono::duration_cast<std::chrono::microseconds> (time_now.time_since_epoch ()).count () / 100;
+          const auto time_fmt = __time_formatted__ (time_seconds);
+          const auto time_str_micro_segment = __time_mili_format__ (time_microseconds_div_100);
+
+          const std::string begin_log_str = time_fmt + time_str_micro_segment + "  ";
+
+          std::cout << begin_log_str;
           for (size_t i = 0; i < N; i++)
           {
             if (str[i] != __open__ && str[i] != __close__)
@@ -274,12 +318,15 @@ namespace OpenLogging
             {
               i++; // WE skip the formatting delimiter
               int f = 0;
-              // guaranteed to have the } due to the __valid_string_format__'s nature
+              // guaranteed to have the closing delim due to the __valid_string_format__'s nature
               while (str[i] != __close__)
                 format[++f] = str[i++];
 
-              const std::string str = __to_string_into_buff__ (__arg, format, OPENLOGGING_DEBUG_BLINK);
-              std::cout << str << '\n';
+              std::string str = __to_string_into_buff__ (__arg, format, OPENLOGGING_DEBUG_BLINK);
+
+              std::cout << str << "\n";
+
+              ;
             }
           }
         }(args),
