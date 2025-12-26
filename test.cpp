@@ -1,25 +1,45 @@
-#include "OpenLogging.hpp"
+#include "include/OpenLogging.h"
 
-int main (int argc, char *argv[])
+#define RETURN_GOOD 0
+#define NON_MAGIC_NUM 0
+#define CHAR_PTR_SIZE 12
+
+int main()
 {
-  OpenLogging::log ("HELlO {}");
+  OpenLogging logger;
+  logger.info("HELlO {}");
+
   // COMPILE TIME ERROR
-  // OpenLogging::log ("HELlO }");
-  int b = 9;
-  auto a = &b;
 
-  auto fn = [] () {};
+  int byx = NON_MAGIC_NUM;
+  auto *abc = &byx;
 
-  OpenLogging::log ("hello {}", fn);
-  OpenLogging::log ("hello {}", a);
-  OpenLogging::log ("hello {}", nullptr);
-  OpenLogging::log ("hello {}", true);
-  OpenLogging::log ("hello {}", 1);
-  OpenLogging::log ("hello {}", 1.0);
-  OpenLogging::log ("hello {}", 1.0f);
-  OpenLogging::log ("hello {}", "const char *");
-  OpenLogging::log ("hello {}", const_cast<char *> ("const char *"));
-  OpenLogging::log ("hello {}", std::string ("std::string"));
+  auto fnct = []() -> int { return RETURN_GOOD; };
+  std::array<char, CHAR_PTR_SIZE> char_ptr = { 'c', 'h', 'a', 'r', ' ', 'p', 'o', 'i', 'n', 't', 'e', 'r' };
 
-  return 0;
+  /*
+  logger.info("hello {}", fnct);
+  logger.info("hello {}", abc);
+  logger.info("hello {}", nullptr);
+  logger.info("hello {}", true);
+  logger.info("hello {}", 1);
+  logger.info("hello {}", 1.0);
+  logger.info("hello {}", 1.0F);
+  logger.info("hello {}", "const char *");
+  logger.info("hello {}", char_ptr);
+  logger.info("hello {}", std::string("std::string"));
+  */
+
+  logger.info("hello {}", fnct);
+  logger.info("hello {}", abc);
+  logger.debug("hello {}", 1.0F);
+  logger.debug("hello {}", "const char *");
+  logger.warn("hello {}", nullptr);
+  logger.warn("hello {}", true);
+  logger.error("hello {}", 1);
+  logger.error("hello {}", 1.0);
+  logger.fatal("hello {}", char_ptr);
+  logger.fatal("hello {}", std::string("std::string"));
+
+  return RETURN_GOOD;
 }

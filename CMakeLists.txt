@@ -8,9 +8,25 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Debug config
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
+  set(CMAKE_BUILD_TYPE
+      Debug
+      CACHE STRING "" FORCE)
 endif()
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -fno-omit-frame-pointer")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_compile_options(
+    -g
+    -O0
+    -Wall
+    -Wshadow
+    -Wshadow=compatible-local
+    -Wshadow=local
+    -Werror=shadow
+    -Wnull-dereference
+    -Wduplicated-cond
+    -Wduplicated-branches
+    -Wlogical-op
+    -fno-omit-frame-pointer)
+endif()
 
 # Header-only library
 add_library(OpenLogging INTERFACE)
@@ -19,4 +35,3 @@ target_include_directories(OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 # Test executable
 add_executable(Test test.cpp)
 target_link_libraries(Test PRIVATE OpenLogging)
-
