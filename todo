@@ -2,8 +2,9 @@
 
 ##############################################
 done - Formatter string validates format open and closing also number of fomats vs arguments!!
+done - use stack for validating the "{}" since "{{}}" would be valid when it shouldn't same with "}}{{"
 
-TODO - Need to properly do a printf function.
+TODO - Need to properly do a printf function. 
 TODO - ThreadSafe 
 TODO - AsyncLogging 
 TODO - FileOutput 

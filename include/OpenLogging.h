@@ -6,6 +6,7 @@
 #include <cstring>
 #include <ctime>
 #include <iostream>
+#include <stack>
 #include <utility>
 
 #ifdef OPENLOGGING_FORMATTING_CHAR_BEG
@@ -153,15 +154,36 @@ private:
     [[nodiscard]] consteval size_t validate_string(const char (&in_str)[M])
     {
       size_t A = 0, B = 0;
-      for(size_t i = 0; i < M - 1; i++) // ignore null terminator
+      bool prev_is_backlash = in_str[0] == '\\';
+      bool prev_open = in_str[0] == _open_, prev_close = in_str[0] == _close_;
+      bool open = false, close = false;
+      for(size_t i = 1; i < M - 1; i++) // ignore null terminator
       {
-        if(in_str[i] == _open_)
+        const char &ch = in_str[i];
+        open = ch == _open_, close = ch == _close_;
+        prev_is_backlash = in_str[i - 1] == '\\';
+
+        if(prev_is_backlash || (!open && !close))
+        {
+          continue;
+        }
+        else if(open && !close)
         {
           A++;
+          if(prev_open && !prev_is_backlash)
+            throw "Invalid formatted string, you have 2 succesive open delimiters";
+
+          prev_open = true;
+          prev_close = false;
         }
-        if(in_str[i] == _close_)
+        else if(!open && close)
         {
           B++;
+          if(prev_close && !prev_is_backlash)
+            throw "Invalid formatted string, you have 2 succesive closed delimiters";
+
+          prev_close = true;
+          prev_open = false;
         }
       }
       if(A != B)
