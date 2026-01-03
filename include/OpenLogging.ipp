@@ -6,7 +6,7 @@
 #include "OpenLogging.h"
 
 template <OpenLogging::LogType type, typename... types>
-void OpenLogging::general_logger(const _valid_string_format_ &fmt, const types &...args)
+void OpenLogging::general_logger(const _valid_string_format_<sizeof...(types)> &fmt, const types &...args)
 {
   if constexpr(sizeof...(args) == 0)
   {
@@ -31,21 +31,21 @@ void OpenLogging::general_logger(const _valid_string_format_ &fmt, const types &
     const auto *str = fmt.str;
     const auto n = fmt.N;
     static char format[buff_size_for_format];
+    auto time_now = std::chrono::high_resolution_clock::now();
+    long time_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_now.time_since_epoch()).count();
+    long time_microseconds_div_100 = std::chrono::duration_cast<std::chrono::microseconds>(time_now.time_since_epoch()).count() / one_hundred;
+    const auto time_fmt = _time_formatted_(time_seconds);
+    const auto time_str_micro_segment = _time_mili_format_(time_microseconds_div_100);
+
+    const std::string begin_log_str = time_fmt + time_str_micro_segment + ' ';
+
+    std::cout << begin_log_str;
+    std::cout << OpenLogging::_return_log_type_str_<type>();
+    size_t i = 0;
     (
-        [&](const auto _arg)
+        [&](const auto &_arg)
         {
-          auto time_now = std::chrono::high_resolution_clock::now();
-          long time_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_now.time_since_epoch()).count();
-          long time_microseconds_div_100 = std::chrono::duration_cast<std::chrono::microseconds>(time_now.time_since_epoch()).count() / one_hundred;
-          const auto time_fmt = _time_formatted_(time_seconds);
-          const auto time_str_micro_segment = _time_mili_format_(time_microseconds_div_100);
-
-          const std::string begin_log_str = time_fmt + time_str_micro_segment + ' ';
-
-          std::cout << begin_log_str;
-          std::cout << OpenLogging::_return_log_type_str_<type>();
-
-          for(size_t i = 0; i < n; i++)
+          for(; i < n; i++)
           {
             if(str[i] != _open_ && str[i] != _close_)
             {
@@ -59,12 +59,12 @@ void OpenLogging::general_logger(const _valid_string_format_ &fmt, const types &
               while(str[i] != _close_)
                 format[++f] = str[i++];
 
-              std::string out_str = _to_string_into_buff_(_arg, format);
-
-              std::cout << out_str << "\n";
+              std::cout << _to_string_into_buff_(_arg, format);
             }
           }
         }(args),
         ...);
+
+    std::cout << '\n';
   }
 }

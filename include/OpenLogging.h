@@ -132,6 +132,8 @@ private:
   constexpr static const char *_ansi_en_color_ = "m";
   constexpr static const char *_ansi_reset_ = "\033[0m";
 
+private:
+  template <size_t N_VALIDICS>
   struct _valid_string_format_
   {
     const char *str;
@@ -140,27 +142,33 @@ private:
     template <size_t M>
     consteval _valid_string_format_(const char (&in_str)[M]) : str(in_str), N(M)
     {
-      if(!validate_string(in_str))
-        throw "Invalid formatted string, You have extra or missing formatting delimiters check the string please";
+      if(validate_string(in_str) != N_VALIDICS)
+      {
+        throw "Placeholder count mismatch! Check your format string vs the number of arguments provided.";
+      }
     }
 
   private:
     template <size_t M>
-    consteval bool validate_string(const char (&in_str)[M])
+    [[nodiscard]] consteval size_t validate_string(const char (&in_str)[M])
     {
-      int A = 0, B = 0;
-      for(size_t i = 0; i < M - 1; ++i) // ignore null terminator
+      size_t A = 0, B = 0;
+      for(size_t i = 0; i < M - 1; i++) // ignore null terminator
       {
         if(in_str[i] == _open_)
         {
-          ++A;
+          A++;
         }
         if(in_str[i] == _close_)
         {
-          ++B;
+          B++;
         }
       }
-      return A == B;
+      if(A != B)
+      {
+        throw "Invalid formatted string, You have extra or missing formatting delimiters check the string please";
+      }
+      return A;
     }
   };
 
@@ -208,36 +216,36 @@ private:
 private:
   // non specific type logger function
   template <LogType type, typename... types>
-  static void general_logger(const _valid_string_format_ &fmt, const types &...args);
+  static void general_logger(const _valid_string_format_<sizeof...(types)> &fmt, const types &...args);
 
 public:
   // debug
   template <typename... types>
-  static void debug(const _valid_string_format_ fmt, const types... args)
+  static void debug(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::DEBUG>(fmt, args...);
   };
   // info
   template <typename... types>
-  static void info(const _valid_string_format_ fmt, const types... args)
+  static void info(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::INFO>(fmt, args...);
   };
   // warn
   template <typename... types>
-  static void warn(const _valid_string_format_ fmt, const types... args)
+  static void warn(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::WARN>(fmt, args...);
   };
   // error
   template <typename... types>
-  static void error(const _valid_string_format_ fmt, const types... args)
+  static void error(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::ERROR>(fmt, args...);
   };
   // fatal
   template <typename... types>
-  static void fatal(const _valid_string_format_ fmt, const types... args)
+  static void fatal(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::FATAL>(fmt, args...);
   };
@@ -276,17 +284,15 @@ private:
     return { buffer.data() };
   }
 
-  template <size_t M, typename t>
-  static std::string _to_string_into_buff_(const t &var, const char (&format)[M])
+  template <size_t M, typename T>
+  static std::string &_to_string_into_buff_(const T &var, const char (&format)[M])
   {
     if(format)
     {
     }
-
     static std::string _buffer_;
-    _buffer_.reserve(4096);
 
-    if constexpr(std::is_same_v<t, std::nullptr_t>)
+    if constexpr(std::is_same_v<T, std::nullptr_t>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -295,7 +301,7 @@ private:
       _buffer_ += std::to_string(_color_nullptr_) + _ansi_en_color_ + "0 (nullptr)";
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, bool>)
+    else if constexpr(std::is_same_v<T, bool>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -310,7 +316,7 @@ private:
       }
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, char>)
+    else if constexpr(std::is_same_v<T, char>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -318,8 +324,8 @@ private:
       _buffer_ += std::to_string(_color_char_) + _ansi_en_color_ + var;
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, int8_t> || std::is_same_v<t, int16_t> || std::is_same_v<t, int32_t> || std::is_same_v<t, int64_t>
-                      || std::is_same_v<t, uint8_t> || std::is_same_v<t, uint16_t> || std::is_same_v<t, uint32_t> || std::is_same_v<t, uint64_t>)
+    else if constexpr(std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>
+                      || std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -327,7 +333,7 @@ private:
       _buffer_ += std::to_string(_color_ints_) + _ansi_en_color_ + std::to_string(var);
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, float>)
+    else if constexpr(std::is_same_v<T, float>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -335,7 +341,7 @@ private:
       _buffer_ += std::to_string(_color_floats_) + _ansi_en_color_ + std::to_string(var);
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, double> || std::is_same_v<t, long double>)
+    else if constexpr(std::is_same_v<T, double> || std::is_same_v<T, long double>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -343,7 +349,7 @@ private:
       _buffer_ += std::to_string(_color_doubles_) + _ansi_en_color_ + std::to_string(var);
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, std::string>)
+    else if constexpr(std::is_same_v<T, std::string>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -351,7 +357,7 @@ private:
       _buffer_ += std::to_string(_color_strings_) + _ansi_en_color_ + var;
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<t, const char *> || std::is_same_v<t, char *>)
+    else if constexpr(std::is_same_v<T, const char *> || std::is_same_v<T, char *>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
@@ -359,7 +365,7 @@ private:
       _buffer_ += std::to_string(_color_strings_) + _ansi_en_color_ + std::string(var);
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_pointer_v<t>)
+    else if constexpr(std::is_pointer_v<T>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;

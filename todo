@@ -1,0 +1,11 @@
+
+
+##############################################
+done - Formatter string validates format open and closing also number of fomats vs arguments!!
+
+TODO - Need to properly do a printf function.
+TODO - ThreadSafe 
+TODO - AsyncLogging 
+TODO - FileOutput 
+TODO - IFDEF OPENLOGGINGDEBUG -- Doesnt Compile anything 
+

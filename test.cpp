@@ -7,7 +7,7 @@
 int main()
 {
   OpenLogging logger;
-  logger.info("HELlO {}");
+  logger.info("HELlO");
 
   // COMPILE TIME ERROR
 
@@ -17,29 +17,18 @@ int main()
   auto fnct = []() -> int { return RETURN_GOOD; };
   std::array<char, CHAR_PTR_SIZE> char_ptr = { 'c', 'h', 'a', 'r', ' ', 'p', 'o', 'i', 'n', 't', 'e', 'r' };
 
-  /*
-  logger.info("hello {}", fnct);
-  logger.info("hello {}", abc);
-  logger.info("hello {}", nullptr);
-  logger.info("hello {}", true);
-  logger.info("hello {}", 1);
-  logger.info("hello {}", 1.0);
-  logger.info("hello {}", 1.0F);
-  logger.info("hello {}", "const char *");
-  logger.info("hello {}", char_ptr);
-  logger.info("hello {}", std::string("std::string"));
-  */
-
   logger.info("hello {}", fnct);
   logger.info("hello {}", abc);
   logger.debug("hello {}", 1.0F);
   logger.debug("hello {}", "const char *");
-  logger.warn("hello {}", nullptr);
   logger.warn("hello {}", true);
+  logger.warn("hello {}", std::string("std::string"));
   logger.error("hello {}", 1);
   logger.error("hello {}", 1.0);
   logger.fatal("hello {}", char_ptr);
-  logger.fatal("hello {}", std::string("std::string"));
+  logger.fatal("hello {}", nullptr);
+
+  logger.info("hello {}, {}, {} ", "hi", "hi", "bye");
 
   return RETURN_GOOD;
-}
+};
