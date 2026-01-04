@@ -22,10 +22,16 @@ int main()
   // logger.info("hello {}}", fnct);
   // logger.info("hello {{}", fnct);
   // logger.info("hello {}", fnct);
+  // logger.info("Hell yeah \\\\{{}\\\\}", 2);
+  // logger.info("Hell yeah \\\\{{}\\}\\", 2);
 
   logger.info("hello {}", fnct);
   logger.info("hello {}", abc);
-  logger.info("Hell yeah \\{{}\\}", fnct);
+  logger.info("hello {}def", "abc");
+  logger.info("hello {} def", "abc");
+  logger.info("hello {} hello", 1);
+  logger.info("Hell yeah \\{{}\\}", 2);
+  logger.info("Hell yeah \\\\{}\\\\", 2);
   logger.info("hello {}, {}, {} ", "hi", "hihi", "bye");
 
   logger.debug("hello {}", 1.0F);
