@@ -50,11 +50,11 @@
 #endif
 
 #ifndef OPENLOGGING_BOOL_VALUE_TRUE_COLOR
-#define OPENLOGGING_BOOL_VALUE_TRUE_COLOR 64
+#define OPENLOGGING_BOOL_VALUE_TRUE_COLOR 214
 #endif
 
 #ifndef OPENLOGGING_BOOL_VALUE_FALSE_COLOR
-#define OPENLOGGING_BOOL_VALUE_FALSE_COLOR 91
+#define OPENLOGGING_BOOL_VALUE_FALSE_COLOR 214
 #endif
 
 #ifndef OPENLOGGING_POINTERS_COLOR
@@ -74,15 +74,15 @@
 #endif
 
 #ifndef OPENLOGGING_FLOATS_COLOR
-#define OPENLOGGING_FLOATS_COLOR 1
+#define OPENLOGGING_FLOATS_COLOR 130
 #endif
 
 #ifndef OPENLOGGING_DOUBLES_COLOR
-#define OPENLOGGING_DOUBLES_COLOR 2
+#define OPENLOGGING_DOUBLES_COLOR 130
 #endif
 
 #ifndef OPENLOGGING_STRINGS_COLOR
-#define OPENLOGGING_STRINGS_COLOR 3
+#define OPENLOGGING_STRINGS_COLOR 76
 #endif
 
 #ifndef OPENLOGGING_UNKNOWN_COLOR
@@ -109,6 +109,14 @@
 #define OPENLOGGING_LOG_TO_STDOUT 1
 #endif
 
+#ifndef OPENLOGGING_BOOL_BOLD
+#define OPENLOGGING_BOOL_BOLD 1
+#endif
+
+#ifndef OPENLOGGING_BOOL_ITALIC
+#define OPENLOGGING_BOOL_ITALIC 1
+#endif
+
 class OpenLogging
 {
 private:
@@ -127,6 +135,7 @@ private:
   constexpr static uint8_t _color_unknown_ = OPENLOGGING_UNKNOWN_COLOR;
   constexpr static const char *_ansi_begin_ = "\033[";
   constexpr static const char *_ansi_none_ = "0;";
+  constexpr static const char *_ansi_italic_ = "3;";
   constexpr static const char *_ansi_bold_ = "1;";
   constexpr static const char *_ansi_blink_ = "5;";
   constexpr static const char *_ansi_st_color_ = "38;5;";
@@ -320,7 +329,6 @@ private:
     if constexpr(std::is_same_v<T, std::nullptr_t>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += (_debug_blink_) ? _ansi_blink_ : "";
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_nullptr_) + _ansi_en_color_ + "0 (nullptr)";
@@ -330,6 +338,7 @@ private:
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_bold_;
+      _buffer_ += _ansi_italic_;
       _buffer_ += _ansi_st_color_;
       if(var)
       {
@@ -344,7 +353,6 @@ private:
     else if constexpr(std::is_same_v<T, char>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_char_) + _ansi_en_color_ + var;
       _buffer_ += _ansi_reset_;
@@ -353,7 +361,6 @@ private:
                       || std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_ints_) + _ansi_en_color_ + std::to_string(var);
       _buffer_ += _ansi_reset_;
@@ -361,7 +368,6 @@ private:
     else if constexpr(std::is_same_v<T, float>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_floats_) + _ansi_en_color_ + std::to_string(var);
       _buffer_ += _ansi_reset_;
@@ -369,7 +375,6 @@ private:
     else if constexpr(std::is_same_v<T, double> || std::is_same_v<T, long double>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_doubles_) + _ansi_en_color_ + std::to_string(var);
       _buffer_ += _ansi_reset_;
@@ -377,7 +382,6 @@ private:
     else if constexpr(std::is_same_v<T, std::string>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_strings_) + _ansi_en_color_ + var;
       _buffer_ += _ansi_reset_;
@@ -385,7 +389,6 @@ private:
     else if constexpr(std::is_same_v<T, const char *> || std::is_same_v<T, char *>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_strings_) + _ansi_en_color_ + std::string(var);
       _buffer_ += _ansi_reset_;
@@ -393,7 +396,6 @@ private:
     else if constexpr(std::is_pointer_v<T>)
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(_color_pointers_) + _ansi_en_color_ + std::to_string(reinterpret_cast<std::uintptr_t>(var));
       _buffer_ += _ansi_reset_;
@@ -401,7 +403,6 @@ private:
     else
     {
       _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
       _buffer_ += _ansi_st_color_;
       _buffer_ += std::to_string(11) + _ansi_en_color_ + "unknown type";
       _buffer_ += _ansi_reset_;

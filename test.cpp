@@ -7,9 +7,6 @@
 int main()
 {
   OpenLogging logger;
-  logger.info("HELlO");
-
-  // COMPILE TIME ERROR
 
   int byx = NON_MAGIC_NUM;
   auto *abc = &byx;
@@ -17,6 +14,7 @@ int main()
   auto fnct = []() -> int { return RETURN_GOOD; };
   std::array<char, CHAR_PTR_SIZE> char_ptr = { 'c', 'h', 'a', 'r', ' ', 'p', 'o', 'i', 'n', 't', 'e', 'r' };
 
+  // COMPILE TIME ERROR
   // Shouldn't complile
   // logger.info("hello {}{}", fnct);
   // logger.info("hello {}}", fnct);
@@ -25,6 +23,7 @@ int main()
   // logger.info("Hell yeah \\\\{{}\\\\}", 2);
   // logger.info("Hell yeah \\\\{{}\\}\\", 2);
 
+  logger.info("HELlO");
   logger.info("hello {}", fnct);
   logger.info("hello {}", abc);
   logger.info("hello {}def", "abc");
@@ -35,9 +34,9 @@ int main()
   logger.info("hello {}, {}, {} ", "hi", "hihi", "bye");
 
   logger.debug("hello {}", 1.0F);
-  logger.debug("hello {}", "const char *");
+  logger.debug("hello {}", "we passed a const char *");
   logger.warn("hello {}", true);
-  logger.warn("hello {}", std::string("std::string"));
+  logger.warn("hello {}", std::string("we passed a std::string"));
   logger.error("hello {}", 1);
   logger.error("hello {}", 1.0);
   logger.fatal("hello {}", char_ptr);
