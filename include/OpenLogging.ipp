@@ -1,7 +1,14 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <limits>
+#include <type_traits>
 
 #include "OpenLogging.h"
 
@@ -77,5 +84,135 @@ void OpenLogging::general_logger(const _valid_string_format_<sizeof...(types)> &
         ...);
 
     std::cout << '\n';
+  }
+}
+
+namespace OpenLogging_::Helpers_
+{
+  template <typename T>
+    requires std::is_floating_point_v<T>
+  static std::string _numeric_to_str_buff_(T input)
+  {
+    static const constexpr auto BASE = 10;
+    static const constexpr auto MAX_PRECISION = std::numeric_limits<T>::digits10;
+
+    std::string buff;
+
+    if(input == 0)
+    {
+      return "0";
+    }
+
+    int exp10 = std::floor(std::log10(std::abs(input)));
+    T power_of_10 = std::pow(T{ BASE }, exp10);
+    std::cout << "\n\n\t input  === " << input << '\n';
+    std::cout << "\\t exp10 . power_of_10 === " << exp10 << " . " << power_of_10 << '\n' << '\n';
+
+    for(int i = 0; i < MAX_PRECISION; ++i)
+    {
+      int digit = static_cast<int>(input / power_of_10);
+      buff.push_back('0' + std::abs(digit));
+
+      input -= static_cast<T>(digit) * power_of_10;
+      power_of_10 /= T{ BASE };
+
+      if(i == 0 && exp10 >= 0)
+      {
+        // Handle decimal point logic here
+        // or whatever bruh
+      }
+    }
+
+    // @@@ TODO
+    // idea return the std::fexp exponent after all the precision bits to do 1023802E+-EXPONENT separated by ,???
+
+    return buff;
+  }
+
+  template <typename T>
+    requires std::is_integral_v<T> && std::is_unsigned_v<T>
+  static std::string _numeric_to_str_buff_(T input)
+  {
+    static const constexpr T BASE = T{ 10 };
+
+    std::string buff;
+
+    if(input == 0)
+    {
+      return "0";
+    }
+
+    auto quot = input / BASE;
+    auto rem = input % BASE;
+
+    while(quot || rem)
+    {
+      buff.push_back('0' + rem);
+
+      quot /= BASE;
+      rem = quot % BASE;
+    }
+
+    std::ranges::reverse(buff);
+
+    return buff;
+  }
+
+  template <typename T>
+    requires std::is_integral_v<T> && std::is_signed_v<T>
+  static std::string _numeric_to_str_buff_(T input)
+  {
+    static const constexpr T BASE = T{ 10 };
+
+    if(input == 0)
+    {
+      return "0";
+    }
+
+    std::string buff;
+
+    auto div = std::div(input, BASE);
+
+    while(div.rem || div.quot)
+    {
+      buff.push_back('0' + std::abs(div.rem));
+      div = std::div(div.quot, BASE);
+    }
+
+    if(input < 0)
+    {
+      buff.push_back('-');
+    }
+
+    std::ranges::reverse(buff);
+
+    return buff;
+  }
+
+} // namespace OpenLogging_::Helpers_
+
+template <size_t M, typename T>
+std::string OpenLogging::_print_with_format_(const T &arg, const char (&format)[M])
+{
+  if constexpr(std::is_pointer_v<T>)
+  {
+    auto input_str = OpenLogging_::Helpers_::_numeric_to_str_buff_(reinterpret_cast<std::uintptr_t>(arg));
+    return input_str;
+  }
+  else if constexpr(std::is_integral_v<T>)
+  {
+    auto input_str = OpenLogging_::Helpers_::_numeric_to_str_buff_(arg);
+    // const auto input_str = std::to_string(arg);
+    return input_str;
+  }
+  else if constexpr(std::is_floating_point_v<T>)
+  {
+    auto input_str = OpenLogging_::Helpers_::_numeric_to_str_buff_(arg);
+    // const auto input_str = std::to_string(arg);
+    return input_str;
+  }
+  else
+  {
+    return "TBD";
   }
 }

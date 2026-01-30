@@ -3,9 +3,17 @@ done - Formatter string validates format open and closing also number of fomats 
 done - use stack for validating the "{}" since "{{}}" would be valid when it shouldn't same with "}}{{"
 
 ##############################################
-TODO - Need to properly do a printf function. 
+IN-PROCESS - Need to properly do a printf function. 
+  // @@@ TODO 
+  // OpenLogging.ipp line 126
+  // idea return the std::fexp exponent after all the precision bits to do 1023802E+-EXPONENT separated by ,???
+  // then based on the format drop the . wherever
+  // or do watever client asks??
+
+##############################################
 TODO - ThreadSafe 
 TODO - AsyncLogging 
 TODO - FileOutput 
 TODO - IFDEF OPENLOGGINGDEBUG -- Doesnt Compile anything 
+##############################################
 

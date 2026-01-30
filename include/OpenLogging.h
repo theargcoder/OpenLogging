@@ -5,9 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
-#include <iostream>
-#include <stack>
-#include <utility>
+#include <string>
 
 #ifdef OPENLOGGING_FORMATTING_CHAR_BEG
 
@@ -318,11 +316,11 @@ private:
   }
 
   template <size_t M, typename T>
+  static std::string _print_with_format_(const T &arg, const char (&format)[M]);
+
+  template <size_t M, typename T>
   static std::string &_to_string_into_buff_(const T &var, const char (&format)[M])
   {
-    if(format)
-    {
-    }
     static std::string _buffer_;
     _buffer_.clear();
 
@@ -331,7 +329,7 @@ private:
       _buffer_ += _ansi_begin_;
       _buffer_ += (_debug_blink_) ? _ansi_blink_ : "";
       _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_nullptr_) + _ansi_en_color_ + "0 (nullptr)";
+      _buffer_ += std::to_string(_color_nullptr_) + _ansi_en_color_ + "nullptr";
       _buffer_ += _ansi_reset_;
     }
     else if constexpr(std::is_same_v<T, bool>)
@@ -357,26 +355,25 @@ private:
       _buffer_ += std::to_string(_color_char_) + _ansi_en_color_ + var;
       _buffer_ += _ansi_reset_;
     }
-    else if constexpr(std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>
-                      || std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>)
+    else if constexpr(std::is_integral_v<T>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_ints_) + _ansi_en_color_ + std::to_string(var);
+      _buffer_ += std::to_string(_color_ints_) + _ansi_en_color_ + _print_with_format_(var, format);
       _buffer_ += _ansi_reset_;
     }
     else if constexpr(std::is_same_v<T, float>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_floats_) + _ansi_en_color_ + std::to_string(var);
+      _buffer_ += std::to_string(_color_floats_) + _ansi_en_color_ + _print_with_format_(var, format);
       _buffer_ += _ansi_reset_;
     }
     else if constexpr(std::is_same_v<T, double> || std::is_same_v<T, long double>)
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_doubles_) + _ansi_en_color_ + std::to_string(var);
+      _buffer_ += std::to_string(_color_doubles_) + _ansi_en_color_ + _print_with_format_(var, format);
       _buffer_ += _ansi_reset_;
     }
     else if constexpr(std::is_same_v<T, std::string>)
@@ -404,7 +401,7 @@ private:
     {
       _buffer_ += _ansi_begin_;
       _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(11) + _ansi_en_color_ + "unknown type";
+      _buffer_ += std::to_string(_color_unknown_) + _ansi_en_color_ + "unknown type";
       _buffer_ += _ansi_reset_;
     }
 

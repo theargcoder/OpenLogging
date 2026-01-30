@@ -1,4 +1,6 @@
 #include "include/OpenLogging.h"
+#include <cfloat>
+#include <cstdint>
 
 #define RETURN_GOOD 0
 #define NON_MAGIC_NUM 0
@@ -30,8 +32,21 @@ int main()
   logger.info("hello {} def", "abc");
   logger.info("hello {} hello", 1);
   logger.info("Hell yeah \\{{}\\}", 2);
-  logger.info("Hell yeah \\\\{}\\\\", 2);
+  logger.info(R"(Hell yeah \\{}\\)", 2);
   logger.info("hello {}, {}, {} ", "hi", "hihi", "bye");
+
+  logger.info("positive int {}", 1'234'567);
+  logger.info("positive uint {}", 1'234'567U);
+  logger.info("negative int {}", -1'234'567);
+
+  logger.info("positive MAX_UINT64 {}", UINT64_MAX);
+  logger.info("nevative SMALLEST_INT64 {}", INT64_MIN);
+
+  logger.info("positive DBL_MAX {}", DBL_MAX);
+  logger.info("nevative DBL_MIN {}", DBL_MIN);
+
+  logger.info("positive DBL {}", 0.0000123456);
+  logger.info("nevative DBL {}", -0.0000123456);
 
   logger.debug("hello {}", 1.0F);
   logger.debug("hello {}", "we passed a const char *");
