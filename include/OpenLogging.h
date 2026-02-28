@@ -176,7 +176,7 @@ public:
     (
         [&](const auto &_arg)
         {
-          for(; i < N; i++)
+          for(; i < N - 1; i++)
           {
             is_curr_backlash = str[i] == '\\';
             if(is_prev_backlash && is_curr_backlash)
@@ -185,7 +185,7 @@ public:
               result += str[i];
               continue;
             }
-            else if(is_prev_backlash || (!is_curr_backlash && str[i] != ::Constants::Delimiters::open))
+            else if(is_prev_backlash || (!is_curr_backlash && str[i] != ::Constants::Delimiters::open && str[i] != ::Constants::Delimiters::close))
             {
               result += str[i];
             }
@@ -196,6 +196,8 @@ public:
               // guaranteed to have the closing delim due to the __valid_string_format__'s nature
               while(str[i] != ::Constants::Delimiters::close)
                 format[++f] = str[i++];
+
+              format[f] = '\0';
 
               // i++; // we skip the ending formatting delimiter
 

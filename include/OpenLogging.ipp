@@ -231,11 +231,11 @@ public:
       {
         if constexpr(M > 0)
         {
-          buffer += Helpers::Numeric::ToStr(color_of_this_template) + ::Helpers::PritntWithFormat(var, format);
+          buffer += ::Helpers::PritntWithFormat(var, format);
         }
         else if constexpr(Helpers::Template::Types::is_string_v<T>())
         {
-          buffer += Helpers::Numeric::ToStr(color_of_this_template) + std::string(var);
+          buffer += std::string(var);
         }
       }
 

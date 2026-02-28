@@ -69,10 +69,22 @@ BOOST_AUTO_TEST_CASE(int32_t_test_all_numbers)
   for(int32_t i = INT32_MIN, lim = 0; i < INT32_MAX && lim < 10; i++)
   {
     const auto log = logger.format<false>("{}", i);
-    const auto num_to_str = std::to_string(i);
+    const auto num_to_str = std::string(std::to_string(i));
     if(log != num_to_str)
     {
       std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
+      std::cout << "log        = ";
+      for(unsigned char c : log)
+      {
+        std::cout << std::hex << (int)c << " ";
+      }
+      std::cout << std::endl;
+      std::cout << "num_to_str = ";
+      for(unsigned char c : num_to_str)
+      {
+        std::cout << std::hex << (int)c << " ";
+      }
+      std::cout << std::endl;
       BOOST_CHECK_EQUAL(log, num_to_str);
       lim++;
     }
