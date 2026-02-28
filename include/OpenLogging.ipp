@@ -129,9 +129,13 @@ public:
       requires std::is_integral_v<T>
     static std::string ToStr(const T &input)
     {
-      static const constexpr T BASE = T{ 10 };
+      const constexpr T BASE = T{ 10 };
+      const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 1;
 
-      std::string buff;
+      char buff[MAX_DIGITS10 + 2];       // +2 for NULL terminaor and for case of having a '-'
+      char buff_final[MAX_DIGITS10 + 2]; //
+      std::memset(&buff[0], '\0', sizeof(buff));
+      std::memset(&buff_final[0], '\0', sizeof(buff));
 
       if(input == 0)
       {
@@ -140,34 +144,44 @@ public:
 
       T rem = input % BASE, quot = input;
 
+      auto i = MAX_DIGITS10 + 1;
       while(quot || rem)
       {
         if constexpr(std::is_signed_v<T>)
         {
-          buff.push_back('0' + std::abs(rem));
+          buff[i] = '0' + std::abs(rem);
         }
         else
         {
-          buff.push_back('0' + rem);
+          buff[i] = '0' + rem;
         }
 
         quot /= BASE;
         rem = quot % BASE;
+        --i;
       }
 
       if(input < 0)
       {
-        buff.push_back('-');
+        buff[i] = '-';
       }
 
-      std::ranges::reverse(buff);
+      i = 0;
+      for(const auto &cha : buff)
+      {
+        if(cha == '\0')
+        {
+          continue;
+        }
+        buff_final[i++] = cha;
+      }
 
-      return buff;
+      return std::string(&buff_final[0]);
     }
 
     template <typename T>
       requires std::is_floating_point_v<T>
-    static std::string ToStr(T input)
+    static std::string ToStr(const T &input)
     {
       static const constexpr auto BASE = 10;
       static const constexpr auto MAX_PRECISION = std::numeric_limits<T>::digits10;
@@ -179,22 +193,31 @@ public:
         return "0";
       }
 
-      if(input < 0)
-      {
-        buff.push_back('-');
-      }
-
       int exp10 = std::floor(std::log10(std::abs(input)));
       T power_of_10 = std::pow(T{ BASE }, exp10);
       std::cout << "\n\n\t input  === " << input << '\n';
       std::cout << "\\t exp10 . power_of_10 === " << exp10 << " . " << power_of_10 << '\n' << '\n';
 
+      bool once = true;
+      if(input < T{ 0 })
+      {
+        buff.push_back('-');
+      }
+
+      T input_abs = std::abs(input);
+
       for(int i = 0; i < MAX_PRECISION; ++i)
       {
-        int digit = static_cast<int>(input / power_of_10);
+        int digit = static_cast<int>(input_abs / power_of_10);
         buff.push_back('0' + std::abs(digit));
 
-        input -= static_cast<T>(digit) * power_of_10;
+        if(once && (i == exp10 || exp10 < 0 || (i == 0 && std::abs(exp10) > std::numeric_limits<T>::max_digits10)))
+        {
+          once = false;
+          buff.push_back('.');
+        }
+
+        input_abs -= static_cast<T>(digit) * power_of_10;
         power_of_10 /= T{ BASE };
       }
 

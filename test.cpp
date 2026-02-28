@@ -1,4 +1,5 @@
 #include <limits>
+#include <type_traits>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -63,89 +64,68 @@ BOOST_AUTO_TEST_CASE(just_some_logging_no_exceptions_should_happen)
   BOOST_CHECK_NO_THROW(logger.fatal("hello {}", nullptr));
 }
 
-BOOST_AUTO_TEST_CASE(int32_t_test_all_numbers)
+namespace
 {
-  OpenLogging logger;
-
-  for(int32_t i = -10'000, lim = 0; i < 10'000 && lim < 10; i++)
+  const auto log_str_into_hex = [](const std::string &in)
   {
-    const auto log = logger.format<false>("{}", i);
-    const auto num_to_str = std::string(std::to_string(i));
-    if(log != num_to_str)
+    for(unsigned char c : in)
     {
-      std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
-      std::cout << "log        = ";
-      for(unsigned char c : log)
-      {
-        std::cout << std::hex << (int)c << " ";
-      }
-      std::cout << std::endl;
-      std::cout << "num_to_str = ";
-      for(unsigned char c : num_to_str)
-      {
-        std::cout << std::hex << (int)c << " ";
-      }
-      std::cout << std::endl;
-      BOOST_CHECK_EQUAL(log, num_to_str);
-      lim++;
+      std::cout << std::hex << (int)c << " ";
     }
-  }
-
-  {
-    const auto log = logger.format<false>("{}", INT32_MIN);
-    const auto num_to_str = std::string(std::to_string(INT32_MIN));
-    BOOST_CHECK_EQUAL(log, num_to_str);
-  }
-
-  {
-    const auto log = logger.format<false>("{}", INT32_MAX);
-    const auto num_to_str = std::string(std::to_string(INT32_MAX));
-    BOOST_CHECK_EQUAL(log, num_to_str);
-  }
-}
-
-BOOST_AUTO_TEST_CASE(test_all_integers)
-{
-  const auto tester = []<typename T>
-    requires std::is_integral_v<T>
-  (const T &val)
-  {
-    const auto lopper = []<typename Type>(const bool &PLUS, const Type &DELIM) -> void
-    {
-      OpenLogging logger;
-      for(Type i = DELIM, lim = 0; i < DELIM + ((PLUS) ? +10'000 : -10'000) && lim < 10; i++)
-      {
-        const auto log = logger.format<false>("{}", i);
-        const auto num_to_str = std::string(std::to_string(i));
-        if(log != num_to_str)
-        {
-          std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
-          std::cout << "log        = ";
-          for(unsigned char c : log)
-          {
-            std::cout << std::hex << (int)c << " ";
-          }
-          std::cout << std::endl;
-          std::cout << "num_to_str = ";
-          for(unsigned char c : num_to_str)
-          {
-            std::cout << std::hex << (int)c << " ";
-          }
-          std::cout << std::endl;
-          BOOST_CHECK_EQUAL(log, num_to_str);
-          lim++;
-        }
-      }
-    };
-
-    const constexpr auto MIN = std::numeric_limits<T>::min();
-    const constexpr auto MAX = std::numeric_limits<T>::max();
-    lopper(true, MIN);
-    lopper(true, 0);
-    lopper(false, 0);
-    lopper(false, MAX);
   };
 
+  const auto lopper = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP) -> void
+  {
+    const constexpr auto WISHED_RANGE = 10'000;
+    const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
+    const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
+    const constexpr Type MAX_ERRORS = 10;
+
+    OpenLogging logger;
+    for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
+    {
+      const auto log = logger.format<false>("{}", i);
+      const auto num_to_str = std::string(std::to_string(i));
+      if(log != num_to_str)
+      {
+        std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
+        std::cout << "log        = ";
+        for(unsigned char c : log)
+        {
+          std::cout << std::hex << (int)c << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "num_to_str = ";
+        for(unsigned char c : num_to_str)
+        {
+          std::cout << std::hex << (int)c << " ";
+        }
+        std::cout << std::endl;
+        BOOST_CHECK_EQUAL(log, num_to_str);
+        lim++;
+      }
+    }
+  };
+
+  const auto tester = []<typename T>(const T & /*unused*/)
+  {
+    const constexpr auto MIN = std::numeric_limits<T>::min();
+    const constexpr auto MIN_JUMP = std::numeric_limits<T>::denorm_min();
+    const constexpr auto MAX = std::numeric_limits<T>::max();
+    lopper(true, MIN, MIN_JUMP);
+    lopper(true, MIN, T{ 1 });
+    lopper(true, T{ 0 }, MIN_JUMP);
+    lopper(true, T{ 0 }, T{ 1 });
+
+    lopper(false, MAX, MIN_JUMP);
+    lopper(false, MAX, T{ 1 });
+    lopper(false, T{ 0 }, MIN_JUMP);
+    lopper(false, T{ 0 }, T{ 1 });
+  };
+} // namespace
+
+BOOST_AUTO_TEST_CASE(test_all_integegral_v)
+{
   tester(static_cast<int8_t>(0));
   tester(static_cast<int16_t>(0));
   tester(static_cast<int32_t>(0));
@@ -157,43 +137,8 @@ BOOST_AUTO_TEST_CASE(test_all_integers)
   tester(static_cast<uint64_t>(0));
 }
 
-BOOST_AUTO_TEST_CASE(int64_t_test_all_numbers)
+BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
-  OpenLogging logger;
-
-  for(int32_t i = -10'000, lim = 0; i < 10'000 && lim < 10; i++)
-  {
-    const auto log = logger.format<false>("{}", i);
-    const auto num_to_str = std::string(std::to_string(i));
-    if(log != num_to_str)
-    {
-      std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
-      std::cout << "log        = ";
-      for(unsigned char c : log)
-      {
-        std::cout << std::hex << (int)c << " ";
-      }
-      std::cout << std::endl;
-      std::cout << "num_to_str = ";
-      for(unsigned char c : num_to_str)
-      {
-        std::cout << std::hex << (int)c << " ";
-      }
-      std::cout << std::endl;
-      BOOST_CHECK_EQUAL(log, num_to_str);
-      lim++;
-    }
-  }
-
-  {
-    const auto log = logger.format<false>("{}", INT32_MIN);
-    const auto num_to_str = std::string(std::to_string(INT32_MIN));
-    BOOST_CHECK_EQUAL(log, num_to_str);
-  }
-
-  {
-    const auto log = logger.format<false>("{}", INT32_MAX);
-    const auto num_to_str = std::string(std::to_string(INT32_MAX));
-    BOOST_CHECK_EQUAL(log, num_to_str);
-  }
+  tester(static_cast<float_t>(0));
+  tester(static_cast<float_t>(0));
 }
