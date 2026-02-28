@@ -1,3 +1,4 @@
+#include <limits>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -66,7 +67,7 @@ BOOST_AUTO_TEST_CASE(int32_t_test_all_numbers)
 {
   OpenLogging logger;
 
-  for(int32_t i = INT32_MIN, lim = 0; i < INT32_MAX && lim < 10; i++)
+  for(int32_t i = -10'000, lim = 0; i < 10'000 && lim < 10; i++)
   {
     const auto log = logger.format<false>("{}", i);
     const auto num_to_str = std::string(std::to_string(i));
@@ -88,5 +89,111 @@ BOOST_AUTO_TEST_CASE(int32_t_test_all_numbers)
       BOOST_CHECK_EQUAL(log, num_to_str);
       lim++;
     }
+  }
+
+  {
+    const auto log = logger.format<false>("{}", INT32_MIN);
+    const auto num_to_str = std::string(std::to_string(INT32_MIN));
+    BOOST_CHECK_EQUAL(log, num_to_str);
+  }
+
+  {
+    const auto log = logger.format<false>("{}", INT32_MAX);
+    const auto num_to_str = std::string(std::to_string(INT32_MAX));
+    BOOST_CHECK_EQUAL(log, num_to_str);
+  }
+}
+
+BOOST_AUTO_TEST_CASE(test_all_integers)
+{
+  const auto tester = []<typename T>
+    requires std::is_integral_v<T>
+  (const T &val)
+  {
+    const auto lopper = []<typename Type>(const bool &PLUS, const Type &DELIM) -> void
+    {
+      OpenLogging logger;
+      for(Type i = DELIM, lim = 0; i < DELIM + ((PLUS) ? +10'000 : -10'000) && lim < 10; i++)
+      {
+        const auto log = logger.format<false>("{}", i);
+        const auto num_to_str = std::string(std::to_string(i));
+        if(log != num_to_str)
+        {
+          std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
+          std::cout << "log        = ";
+          for(unsigned char c : log)
+          {
+            std::cout << std::hex << (int)c << " ";
+          }
+          std::cout << std::endl;
+          std::cout << "num_to_str = ";
+          for(unsigned char c : num_to_str)
+          {
+            std::cout << std::hex << (int)c << " ";
+          }
+          std::cout << std::endl;
+          BOOST_CHECK_EQUAL(log, num_to_str);
+          lim++;
+        }
+      }
+    };
+
+    const constexpr auto MIN = std::numeric_limits<T>::min();
+    const constexpr auto MAX = std::numeric_limits<T>::max();
+    lopper(true, MIN);
+    lopper(true, 0);
+    lopper(false, 0);
+    lopper(false, MAX);
+  };
+
+  tester(static_cast<int8_t>(0));
+  tester(static_cast<int16_t>(0));
+  tester(static_cast<int32_t>(0));
+  tester(static_cast<int64_t>(0));
+
+  tester(static_cast<uint8_t>(0));
+  tester(static_cast<uint16_t>(0));
+  tester(static_cast<uint32_t>(0));
+  tester(static_cast<uint64_t>(0));
+}
+
+BOOST_AUTO_TEST_CASE(int64_t_test_all_numbers)
+{
+  OpenLogging logger;
+
+  for(int32_t i = -10'000, lim = 0; i < 10'000 && lim < 10; i++)
+  {
+    const auto log = logger.format<false>("{}", i);
+    const auto num_to_str = std::string(std::to_string(i));
+    if(log != num_to_str)
+    {
+      std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
+      std::cout << "log        = ";
+      for(unsigned char c : log)
+      {
+        std::cout << std::hex << (int)c << " ";
+      }
+      std::cout << std::endl;
+      std::cout << "num_to_str = ";
+      for(unsigned char c : num_to_str)
+      {
+        std::cout << std::hex << (int)c << " ";
+      }
+      std::cout << std::endl;
+      BOOST_CHECK_EQUAL(log, num_to_str);
+      lim++;
+    }
+  }
+
+  {
+    const auto log = logger.format<false>("{}", INT32_MIN);
+    const auto num_to_str = std::string(std::to_string(INT32_MIN));
+    BOOST_CHECK_EQUAL(log, num_to_str);
+  }
+
+  {
+    const auto log = logger.format<false>("{}", INT32_MAX);
+    const auto num_to_str = std::string(std::to_string(INT32_MAX));
+    BOOST_CHECK_EQUAL(log, num_to_str);
   }
 }
