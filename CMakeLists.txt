@@ -33,5 +33,5 @@ add_library(OpenLogging INTERFACE)
 target_include_directories(OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Test executable
-add_executable(Test test.cpp)
-target_link_libraries(Test PRIVATE OpenLogging)
+add_executable(test test.cpp)
+target_link_libraries(test PRIVATE OpenLogging)

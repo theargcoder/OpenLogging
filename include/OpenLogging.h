@@ -1,154 +1,29 @@
 #pragma once
 
+#include "include/OpenLogging.ipp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <string>
-
-#ifdef OPENLOGGING_FORMATTING_CHAR_BEG
-
-#if OPENLOGGING_FORMATTING_CHAR_BEG == 0
-#error "OPENLOGGING_FORMATTING_CHAR_BEG cannot be NULL (ASCII 0)"
-#elif OPENLOGGING_FORMATTING_CHAR_BEG >= 48 && OPENLOGGING_FORMATTING_CHAR_BEG <= 57
-#error "OPENLOGGING_FORMATTING_CHAR_BEG cannot be digits 0-9"
-#elif OPENLOGGING_FORMATTING_CHAR_BEG >= 65 && OPENLOGGING_FORMATTING_CHAR_BEG <= 90
-#error "OPENLOGGING_FORMATTING_CHAR_BEG cannot be A-Z"
-#elif OPENLOGGING_FORMATTING_CHAR_BEG >= 97 && OPENLOGGING_FORMATTING_CHAR_BEG <= 122
-#error "OPENLOGGING_FORMATTING_CHAR_BEG cannot be a-z"
-#elif OPENLOGGING_FORMATTING_CHAR_BEG == 255
-#error "OPENLOGGING_FORMATTING_CHAR_BEG cannot be ASCII 255 (nbsp)"
-#endif
-
-#endif // OPENLOGGING_FORMATTING_CHAR_BEG
-
-#ifdef OPENLOGGING_FORMATTING_CHAR_END
-
-#if OPENLOGGING_FORMATTING_CHAR_END == 0
-#error "OPENLOGGING_FORMATTING_CHAR_END cannot be NULL (ASCII 0)"
-#elif OPENLOGGING_FORMATTING_CHAR_END >= 48 && OPENLOGGING_FORMATTING_CHAR_END <= 57
-#error "OPENLOGGING_FORMATTING_CHAR_END cannot be digits 0-9"
-#elif OPENLOGGING_FORMATTING_CHAR_END >= 65 && OPENLOGGING_FORMATTING_CHAR_END <= 90
-#error "OPENLOGGING_FORMATTING_CHAR_END cannot be A-Z"
-#elif OPENLOGGING_FORMATTING_CHAR_END >= 97 && OPENLOGGING_FORMATTING_CHAR_END <= 122
-#error "OPENLOGGING_FORMATTING_CHAR_END cannot be a-z"
-#elif OPENLOGGING_FORMATTING_CHAR_END == 255
-#error "OPENLOGGING_FORMATTING_CHAR_END cannot be ASCII 255 (nbsp)"
-#endif
-
-#endif // OPENLOGGING_FORMATTING_CHAR_END
-
-#ifndef OPENLOGGING_FORMATTING_CHAR_BEG
-#define OPENLOGGING_FORMATTING_CHAR_BEG '{'
-#endif
-
-#ifndef OPENLOGGING_FORMATTING_CHAR_END
-#define OPENLOGGING_FORMATTING_CHAR_END '}'
-#endif
-
-#ifndef OPENLOGGING_BOOL_VALUE_TRUE_COLOR
-#define OPENLOGGING_BOOL_VALUE_TRUE_COLOR 214
-#endif
-
-#ifndef OPENLOGGING_BOOL_VALUE_FALSE_COLOR
-#define OPENLOGGING_BOOL_VALUE_FALSE_COLOR 214
-#endif
-
-#ifndef OPENLOGGING_POINTERS_COLOR
-#define OPENLOGGING_POINTERS_COLOR 237
-#endif
-
-#ifndef OPENLOGGING_NULLPTR_COLOR
-#define OPENLOGGING_NULLPTR_COLOR 196
-#endif
-
-#ifndef OPENLOGGING_CHAR_COLOR
-#define OPENLOGGING_CHAR_COLOR 8
-#endif
-
-#ifndef OPENLOGGING_INTS_COLOR
-#define OPENLOGGING_INTS_COLOR 130
-#endif
-
-#ifndef OPENLOGGING_FLOATS_COLOR
-#define OPENLOGGING_FLOATS_COLOR 130
-#endif
-
-#ifndef OPENLOGGING_DOUBLES_COLOR
-#define OPENLOGGING_DOUBLES_COLOR 130
-#endif
-
-#ifndef OPENLOGGING_STRINGS_COLOR
-#define OPENLOGGING_STRINGS_COLOR 76
-#endif
-
-#ifndef OPENLOGGING_UNKNOWN_COLOR
-#define OPENLOGGING_UNKNOWN_COLOR 12
-#endif
-
-#ifndef OPENLOGGING_FATAL_BLINK
-#define OPENLOGGING_FATAL_BLINK 1
-#endif
-
-#ifndef OPENLOGGING_ERROR_BLINK
-#define OPENLOGGING_ERROR_BLINK 1
-#endif
-
-#ifndef OPENLOGGING_WARNING_BLINK
-#define OPENLOGGING_WARNING_BLINK 1
-#endif
-
-#ifndef OPENLOGGING_DEBUG_BLINK
-#define OPENLOGGING_DEBUG_BLINK 1
-#endif
-
-#ifndef OPENLOGGING_LOG_TO_STDOUT
-#define OPENLOGGING_LOG_TO_STDOUT 1
-#endif
-
-#ifndef OPENLOGGING_BOOL_BOLD
-#define OPENLOGGING_BOOL_BOLD 1
-#endif
-
-#ifndef OPENLOGGING_BOOL_ITALIC
-#define OPENLOGGING_BOOL_ITALIC 1
-#endif
+#include <type_traits>
 
 class OpenLogging
 {
 private:
-  constexpr static char _open_ = OPENLOGGING_FORMATTING_CHAR_BEG;
-  constexpr static char _close_ = OPENLOGGING_FORMATTING_CHAR_END;
-  constexpr static bool _debug_blink_ = OPENLOGGING_DEBUG_BLINK;
-  constexpr static uint8_t _color_bool_value_true_ = OPENLOGGING_BOOL_VALUE_TRUE_COLOR;
-  constexpr static uint8_t _color_bool_value_false_ = OPENLOGGING_BOOL_VALUE_FALSE_COLOR;
-  constexpr static uint8_t _color_nullptr_ = OPENLOGGING_NULLPTR_COLOR;
-  constexpr static uint8_t _color_pointers_ = OPENLOGGING_POINTERS_COLOR;
-  constexpr static uint8_t _color_char_ = OPENLOGGING_CHAR_COLOR;
-  constexpr static uint8_t _color_ints_ = OPENLOGGING_INTS_COLOR;
-  constexpr static uint8_t _color_floats_ = OPENLOGGING_FLOATS_COLOR;
-  constexpr static uint8_t _color_doubles_ = OPENLOGGING_DOUBLES_COLOR;
-  constexpr static uint8_t _color_strings_ = OPENLOGGING_STRINGS_COLOR;
-  constexpr static uint8_t _color_unknown_ = OPENLOGGING_UNKNOWN_COLOR;
-  constexpr static const char *_ansi_begin_ = "\033[";
-  constexpr static const char *_ansi_none_ = "0;";
-  constexpr static const char *_ansi_italic_ = "3;";
-  constexpr static const char *_ansi_bold_ = "1;";
-  constexpr static const char *_ansi_blink_ = "5;";
-  constexpr static const char *_ansi_st_color_ = "38;5;";
-  constexpr static const char *_ansi_en_color_ = "m";
-  constexpr static const char *_ansi_reset_ = "\033[0m";
+  struct Helpers;
+  struct Constants;
 
 private:
   template <size_t N_VALIDICS>
-  struct _valid_string_format_
+  struct valid_string_format
   {
     const char *str;
     size_t N;
 
     template <size_t M>
-    consteval _valid_string_format_(const char (&in_str)[M]) : str(in_str), N(M)
+    consteval valid_string_format(const char (&in_str)[M]) : str(in_str), N(M)
     {
       if(validate_string(in_str) != N_VALIDICS)
       {
@@ -160,15 +35,16 @@ private:
     template <size_t M>
     [[nodiscard]] consteval size_t validate_string(const char (&in_str)[M])
     {
-      size_t A = 0, B = 0;
       bool prev_prev_is_backlash = false, prev_is_backlash = in_str[0] == '\\';
-      bool prev_open = in_str[0] == _open_, prev_close = in_str[0] == _close_;
+      bool prev_open = in_str[0] == ::Constants::Delimiters::open, prev_close = in_str[0] == ::Constants::Delimiters::close;
       bool open = false, close = false;
+
+      size_t A = prev_open, B = prev_close;
 
       for(size_t i = 1; i < M - 1; i++) // ignore null terminator
       {
         const char &ch = in_str[i];
-        open = ch == _open_, close = ch == _close_;
+        open = ch == ::Constants::Delimiters::open, close = ch == ::Constants::Delimiters::close;
         prev_prev_is_backlash = prev_is_backlash;
         prev_is_backlash = in_str[i - 1] == '\\';
 
@@ -247,36 +123,120 @@ private:
 private:
   // non specific type logger function
   template <LogType type, typename... types>
-  static void general_logger(const _valid_string_format_<sizeof...(types)> &fmt, const types &...args);
+  static void general_logger(const valid_string_format<sizeof...(types)> &fmt, const types &...args)
+  {
+    if constexpr(sizeof...(args) == 0)
+    {
+      const constexpr int32_t one_hundred = 100;
+
+      auto time_now = std::chrono::high_resolution_clock::now();
+      long time_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_now.time_since_epoch()).count();
+      long time_microseconds_div_100 = std::chrono::duration_cast<std::chrono::microseconds>(time_now.time_since_epoch()).count() / one_hundred;
+      const auto time_fmt = _time_formatted_(time_seconds);
+      const auto time_str_micro_segment = _time_mili_format_(time_microseconds_div_100);
+
+      const std::string begin_log_str = time_fmt + time_str_micro_segment + ' ';
+
+      std::cout << begin_log_str;
+      std::cout << OpenLogging::_return_log_type_str_<type>();
+      std::cout << fmt.str << '\n';
+    }
+    else
+    {
+      const constexpr int32_t one_hundred = 100;
+      auto time_now = std::chrono::high_resolution_clock::now();
+      long time_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_now.time_since_epoch()).count();
+      long time_microseconds_div_100 = std::chrono::duration_cast<std::chrono::microseconds>(time_now.time_since_epoch()).count() / one_hundred;
+      const auto time_fmt = _time_formatted_(time_seconds);
+      const auto time_str_micro_segment = _time_mili_format_(time_microseconds_div_100);
+
+      const std::string begin_log_str = time_fmt + time_str_micro_segment + ' ';
+
+      std::cout << begin_log_str;
+      std::cout << OpenLogging::_return_log_type_str_<type>();
+      std::cout << OpenLogging::format<true>(fmt, args...);
+      std::cout << '\n';
+    }
+  }
+
+public:
+  // format
+  template <bool ANSI_SCAPE_SEQUENCES = true, typename... types>
+  static std::string format(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  {
+    constexpr size_t buff_size_for_format = 10;
+    const auto *str = fmt.str;
+    const auto N = fmt.N;
+    static char format[buff_size_for_format];
+
+    std::string result;
+
+    size_t i = 0;
+    bool is_curr_backlash, is_prev_backlash = str[0] == '\\';
+    (
+        [&](const auto &_arg)
+        {
+          for(; i < N; i++)
+          {
+            is_curr_backlash = str[i] == '\\';
+            if(is_prev_backlash && is_curr_backlash)
+            {
+              is_prev_backlash = false;
+              result += str[i];
+              continue;
+            }
+            else if(is_prev_backlash || (!is_curr_backlash && str[i] != ::Constants::Delimiters::open))
+            {
+              result += str[i];
+            }
+            else if(str[i] == ::Constants::Delimiters::open)
+            {
+              i++; // we skip the starting formatting delimiter
+              int f = 0;
+              // guaranteed to have the closing delim due to the __valid_string_format__'s nature
+              while(str[i] != ::Constants::Delimiters::close)
+                format[++f] = str[i++];
+
+              // i++; // we skip the ending formatting delimiter
+
+              result += _to_string_into_buff_<ANSI_SCAPE_SEQUENCES>(_arg, format);
+            }
+            is_prev_backlash = str[i] == '\\';
+          }
+        }(args),
+        ...);
+
+    return result;
+  }
 
 public:
   // debug
   template <typename... types>
-  static void debug(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
+  static void debug(const valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::DEBUG>(fmt, args...);
   };
   // info
   template <typename... types>
-  static void info(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
+  static void info(const valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::INFO>(fmt, args...);
   };
   // warn
   template <typename... types>
-  static void warn(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
+  static void warn(const valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::WARN>(fmt, args...);
   };
   // error
   template <typename... types>
-  static void error(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
+  static void error(const valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::ERROR>(fmt, args...);
   };
   // fatal
   template <typename... types>
-  static void fatal(const _valid_string_format_<sizeof...(types)> fmt, const types... args)
+  static void fatal(const valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::FATAL>(fmt, args...);
   };
@@ -315,97 +275,46 @@ private:
     return { buffer.data() };
   }
 
-  template <size_t M, typename T>
-  static std::string _print_with_format_(const T &arg, const char (&format)[M]);
-
-  template <size_t M, typename T>
-  static std::string &_to_string_into_buff_(const T &var, const char (&format)[M])
+  template <bool ANSI_SCAPE_SEQUENCES, size_t M, typename T>
+  static std::string _to_string_into_buff_(const T &var, const char (&format)[M])
   {
-    static std::string _buffer_;
-    _buffer_.clear();
-
     if constexpr(std::is_same_v<T, std::nullptr_t>)
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += (_debug_blink_) ? _ansi_blink_ : "";
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_nullptr_) + _ansi_en_color_ + "nullptr";
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>("nullptr", format, ::Constants::Colors::nullptrs);
     }
     else if constexpr(std::is_same_v<T, bool>)
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_bold_;
-      _buffer_ += _ansi_italic_;
-      _buffer_ += _ansi_st_color_;
-      if(var)
-      {
-        _buffer_ += std::to_string(_color_bool_value_true_) + _ansi_en_color_ + "true";
-      }
-      else
-      {
-        _buffer_ += std::to_string(_color_bool_value_false_) + _ansi_en_color_ + "false";
-      }
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>((var) ? "true" : "false", format,
+                                                                        (var) ? ::Constants::Colors::bool_value_true : ::Constants::Colors::bool_value_false);
     }
-    else if constexpr(std::is_same_v<T, char>)
+    else if constexpr(::Helpers::Template::Types::is_char_v<T>())
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_char_) + _ansi_en_color_ + var;
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::chars);
     }
     else if constexpr(std::is_integral_v<T>)
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_ints_) + _ansi_en_color_ + _print_with_format_(var, format);
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::ints);
     }
     else if constexpr(std::is_same_v<T, float>)
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_floats_) + _ansi_en_color_ + _print_with_format_(var, format);
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::floats);
     }
     else if constexpr(std::is_same_v<T, double> || std::is_same_v<T, long double>)
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_doubles_) + _ansi_en_color_ + _print_with_format_(var, format);
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::doubles);
     }
-    else if constexpr(std::is_same_v<T, std::string>)
+    else if constexpr(::Helpers::Template::Types::is_string_v<T>())
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_strings_) + _ansi_en_color_ + var;
-      _buffer_ += _ansi_reset_;
-    }
-    else if constexpr(std::is_same_v<T, const char *> || std::is_same_v<T, char *>)
-    {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_strings_) + _ansi_en_color_ + std::string(var);
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::strings);
     }
     else if constexpr(std::is_pointer_v<T>)
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_pointers_) + _ansi_en_color_ + std::to_string(reinterpret_cast<std::uintptr_t>(var));
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(reinterpret_cast<std::uintptr_t>(var), format, ::Constants::Colors::pointers);
     }
     else
     {
-      _buffer_ += _ansi_begin_;
-      _buffer_ += _ansi_st_color_;
-      _buffer_ += std::to_string(_color_unknown_) + _ansi_en_color_ + "unknown type";
-      _buffer_ += _ansi_reset_;
+      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>("unknown type", format, ::Constants::Colors::unknown);
     }
-
-    return _buffer_;
   }
 }; // class OpenLogging
 
