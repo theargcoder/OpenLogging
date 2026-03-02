@@ -1,8 +1,7 @@
 #pragma once
 
-#include <algorithm>
-#include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -122,6 +121,41 @@ public:
     return "NOT IMPLEMENTED YET";
   }
 
+  struct DigitsTabe
+  {
+  private:
+  public:
+    static const constexpr auto SIZE = 1000;
+    static const constexpr auto BASE = 10;
+    char table[SIZE][3]{};
+    consteval DigitsTabe()
+    {
+      for(int i = 0; i < SIZE; ++i)
+      {
+        const char hundreds = '0' + i / (BASE * BASE);
+        const char tens = '0' + (i / BASE) % BASE;
+        const char ones = '0' + i % BASE;
+
+        fill_char_array(table, i, hundreds, tens, ones);
+      }
+    }
+  };
+
+  template <size_t M, size_t P, typename... Chars>
+    requires(std::is_same_v<char, Chars> && ...)
+  static consteval void fill_char_array(char (&array)[M][P], auto &idx, const Chars &...args)
+  {
+    size_t a = 0;
+    ((array[idx][a++] = args), ...);
+  }
+
+  template <size_t A, size_t X, size_t Y, typename... Args>
+    requires(std::is_integral_v<Args> && ...)
+  static void fill_decrement_char_array(char (&dest)[A], const char (&src)[X][Y], uint32_t &dest_idx, const auto &src_idx, const Args &...args)
+  {
+    ((dest[dest_idx--] = src[src_idx][args]), ...);
+  }
+
   // impl
   struct Numeric
   {
@@ -129,36 +163,59 @@ public:
       requires std::is_integral_v<T>
     static std::string ToStr(const T &input)
     {
-      const constexpr T BASE = T{ 10 };
       const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 1;
-
-      char buff[MAX_DIGITS10 + 2];       // +2 for NULL terminaor and for case of having a '-'
-      char buff_final[MAX_DIGITS10 + 2]; //
-      std::memset(&buff[0], '\0', sizeof(buff));
-      std::memset(&buff_final[0], '\0', sizeof(buff));
 
       if(input == 0)
       {
         return "0";
       }
 
-      T rem = input % BASE, quot = input;
+      // 2 exra for lookuptable
+      char buff[MAX_DIGITS10 + 4]; // +2 for NULL terminaor and for case of having a '-'
+      std::memset(&buff[0], '\0', sizeof(buff));
 
-      auto i = MAX_DIGITS10 + 1;
-      while(quot || rem)
+      const auto &lookup_table = DigitsTabe{}.table;
+
+      uint32_t i = MAX_DIGITS10 + 3; // not touching null terminator just in case
+      if constexpr(std::is_same_v<int8_t, T> || std::is_same_v<uint8_t, T>)
       {
         if constexpr(std::is_signed_v<T>)
         {
-          buff[i] = '0' + std::abs(rem);
+          fill_decrement_char_array(buff, lookup_table, i, std::abs(input), 2, 1, 0);
         }
         else
         {
-          buff[i] = '0' + rem;
+          fill_decrement_char_array(buff, lookup_table, i, input, 2, 1, 0);
         }
+      }
+      else
+      {
+        static constexpr T BASE = 1000;
+        T rem, quot;
+        rem = input % BASE, quot = input;
+        while(quot || rem)
+        {
+          if constexpr(std::is_signed_v<T>)
+          {
+            fill_decrement_char_array(buff, lookup_table, i, std::abs(rem), 2, 1, 0);
+          }
+          else
+          {
+            fill_decrement_char_array(buff, lookup_table, i, rem, 2, 1, 0);
+          }
 
-        quot /= BASE;
-        rem = quot % BASE;
-        --i;
+          quot /= BASE;
+          rem = quot % BASE;
+        }
+      }
+
+      if(buff[i + 1] == '0')
+      {
+        buff[++i] = '\0';
+        if(buff[i + 1] == '0')
+        {
+          buff[++i] = '\0';
+        }
       }
 
       if(input < 0)
@@ -167,16 +224,12 @@ public:
       }
 
       i = 0;
-      for(const auto &cha : buff)
+      while(i < sizeof(buff) && buff[i] == '\0')
       {
-        if(cha == '\0')
-        {
-          continue;
-        }
-        buff_final[i++] = cha;
+        i++;
       }
 
-      return std::string(&buff_final[0]);
+      return std::string(&buff[i]);
     }
 
     template <typename T>

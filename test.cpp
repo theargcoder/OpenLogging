@@ -1,12 +1,11 @@
-#include <limits>
-#include <type_traits>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
 #include <cfloat>
-#include <cstdint>
-
 #include <climits>
+#include <cstdint>
+#include <limits>
+#include <type_traits>
 
 #include "include/OpenLogging.h"
 
