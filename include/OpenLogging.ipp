@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <iostream>
 #include <limits>
 #include <type_traits>
@@ -121,14 +122,14 @@ public:
     return "NOT IMPLEMENTED YET";
   }
 
-  struct DigitsTabe
+  struct IntegralDigitsTable
   {
   private:
   public:
     static const constexpr auto SIZE = 1000;
     static const constexpr auto BASE = 10;
     char table[SIZE][3]{};
-    consteval DigitsTabe()
+    consteval IntegralDigitsTable()
     {
       for(int i = 0; i < SIZE; ++i)
       {
@@ -137,6 +138,47 @@ public:
         const char ones = '0' + i % BASE;
 
         fill_char_array(table, i, hundreds, tens, ones);
+      }
+    }
+  };
+
+  struct FloatingDigitsTable
+  {
+  public:
+    static const constexpr int BIAS = 1023;
+    static const constexpr auto MAX_DIGITS10 = 18; // its log_10( 2 ^ 63);
+
+  private:
+    static const constexpr int SIZE = BIAS * 2 + 1; // -MAX_EXP -> 0 -> MAX_EXP - 1;
+    static const constexpr uint64_t MAX = std::numeric_limits<int64_t>::max();
+
+  public:
+    int64_t table[SIZE]{};
+
+    consteval FloatingDigitsTable()
+    {
+      unsigned __int128 val = 1;
+
+      for(int k = 0; k <= BIAS; ++k)
+      {
+        table[BIAS - k] = static_cast<int64_t>(val);
+
+        val *= 5;
+
+        while(val > MAX)
+          val /= 10;
+      }
+
+      val = 1;
+
+      for(int k = 0; k <= BIAS; ++k)
+      {
+        table[BIAS + k] = static_cast<int64_t>(val);
+
+        val *= 2;
+
+        while(val > MAX)
+          val /= 10;
       }
     }
   };
@@ -174,7 +216,8 @@ public:
       char buff[MAX_DIGITS10 + 4]; // +2 for NULL terminaor and for case of having a '-'
       std::memset(&buff[0], '\0', sizeof(buff));
 
-      const auto &lookup_table = DigitsTabe{}.table;
+      const auto &IntegralStruct = IntegralDigitsTable();
+      const auto &lookup_table = IntegralStruct.table;
 
       uint32_t i = MAX_DIGITS10 + 3; // not touching null terminator just in case
       if constexpr(std::is_same_v<int8_t, T> || std::is_same_v<uint8_t, T>)
@@ -209,35 +252,32 @@ public:
         }
       }
 
-      if(buff[i + 1] == '0')
+      i++;
+
+      if(buff[i] == '0')
       {
-        buff[++i] = '\0';
-        if(buff[i + 1] == '0')
+        buff[i++] = '\0';
+        if(buff[i] == '0')
         {
-          buff[++i] = '\0';
+          buff[i++] = '\0';
         }
       }
 
       if(input < 0)
       {
-        buff[i] = '-';
+        buff[--i] = '-';
       }
 
-      i = 0;
-      while(i < sizeof(buff) && buff[i] == '\0')
-      {
-        i++;
-      }
-
-      return std::string(&buff[i]);
+      return std::string(buff + i, sizeof(buff) - i);
     }
 
     template <typename T>
-      requires std::is_floating_point_v<T>
+      requires std::is_floating_point_v<T> && (std::numeric_limits<T>::radix == 2)
     static std::string ToStr(const T &input)
     {
-      static const constexpr auto BASE = 10;
-      static const constexpr auto MAX_PRECISION = std::numeric_limits<T>::digits10;
+      const constexpr T LOG_10_2 = 0.30103;
+      const auto &FloatingStruct = FloatingDigitsTable();
+      const auto &table = FloatingStruct.table;
 
       std::string buff;
 
@@ -246,36 +286,30 @@ public:
         return "0";
       }
 
-      int exp10 = std::floor(std::log10(std::abs(input)));
-      T power_of_10 = std::pow(T{ BASE }, exp10);
-      std::cout << "\n\n\t input  === " << input << '\n';
-      std::cout << "\\t exp10 . power_of_10 === " << exp10 << " . " << power_of_10 << '\n' << '\n';
+      int exp = 0;
+      T mantissa = std::frexp(input, &exp);
 
-      bool once = true;
-      if(input < T{ 0 })
-      {
-        buff.push_back('-');
-      }
+      std::cout << "mantissa = " << std::format("{:e} \n", mantissa);
+      std::cout << "exp = " << exp << "\n";
 
-      T input_abs = std::abs(input);
+      const auto mantissa_2 = mantissa * 2.0;
+      const auto exp_2 = table[exp - 1 + FloatingStruct.BIAS];
 
-      for(int i = 0; i < MAX_PRECISION; ++i)
-      {
-        int digit = static_cast<int>(input_abs / power_of_10);
-        buff.push_back('0' + std::abs(digit));
+      const auto digits_10 = mantissa_2 * exp_2;
+      const auto digits_10_int = static_cast<int64_t>(digits_10);
 
-        if(once && (i == exp10 || exp10 < 0 || (i == 0 && std::abs(exp10) > std::numeric_limits<T>::max_digits10)))
-        {
-          once = false;
-          buff.push_back('.');
-        }
+      std::cout << "mantissa_2 = " << mantissa_2 << '\n';
+      std::cout << "exp_2 = " << exp_2 << '\n';
+      std::cout << "digits_10 (double )= " << digits_10 << '\n';
+      std::cout << "digits_10_int = " << digits_10_int << '\n';
 
-        input_abs -= static_cast<T>(digit) * power_of_10;
-        power_of_10 /= T{ BASE };
-      }
+      std::cout << "to_str = " << std::format("{:e} \n", input);
+
+      buff = ::Helpers::Numeric::ToStr(digits_10_int);
 
       buff.push_back('e');
-      buff += ToStr(exp10);
+
+      buff += ::Helpers::Numeric::ToStr(static_cast<int>(exp * LOG_10_2) - FloatingStruct.MAX_DIGITS10);
 
       return buff;
     }

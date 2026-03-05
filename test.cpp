@@ -1,3 +1,4 @@
+#include <cmath>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -139,5 +140,6 @@ BOOST_AUTO_TEST_CASE(test_all_integegral_v)
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   tester(static_cast<float_t>(0));
-  tester(static_cast<float_t>(0));
+  tester(static_cast<double_t>(0));
+  tester(static_cast<long_double_t>(0));
 }
