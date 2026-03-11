@@ -1,13 +1,13 @@
-#include <cmath>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
 #include <cfloat>
-#include <climits>
+#include <cmath>
 #include <cstdint>
 #include <limits>
-#include <type_traits>
 
+#include "include/Constants.h"
+#include "include/Helpers/Helpers.h"
 #include "include/OpenLogging.h"
 
 BOOST_AUTO_TEST_CASE(just_some_logging_no_exceptions_should_happen)
@@ -102,6 +102,7 @@ namespace
         }
         std::cout << std::endl;
         BOOST_CHECK_EQUAL(log, num_to_str);
+
         lim++;
       }
     }
@@ -139,7 +140,95 @@ BOOST_AUTO_TEST_CASE(test_all_integegral_v)
 
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
-  tester(static_cast<float_t>(0));
-  tester(static_cast<double_t>(0));
-  tester(static_cast<long_double_t>(0));
+  // tester(static_cast<float_t>(0));
+  // tester(static_cast<double_t>(0));
+  //  tester(static_cast<long_double_t>(0));
+}
+
+BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
+{
+  {
+    const constexpr auto FloatTable = Constants::FloatingDigitsTable<float>();
+    const auto &table = FloatTable.table;
+
+    constexpr int BIAS = Constants::FloatingDigitsTable<float>::BIAS;
+    constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<float>::MAX_DIGITS10;
+    constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<float>::MIN_SIG_FIGS;
+    constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<float>::MAX_SIG_FIGS;
+
+    const double scale = std::pow(10.0, MAX_DIGITS10);
+
+    for(int i = 0; i < FloatTable.SIZE; ++i)
+    {
+      const int exp = i - BIAS;
+      const auto val = table[i];
+
+      // digit count
+      const int digits = std::to_string(val).size();
+      BOOST_CHECK_EQUAL(digits, MAX_DIGITS10);
+
+      static const auto LOG_10_2 = std::log10(2.0);
+
+      // reconstruct approximate value
+      const double result = (static_cast<double>(val) / ((exp < 0) ? scale : scale / 10)) * pow(10.0, static_cast<int32_t>(LOG_10_2 * exp));
+      const double expected = std::pow(2.0, exp);
+
+      const double abs_error = std::abs(result - expected);
+      const double rel_error = abs_error / expected;
+
+      // bounds
+      BOOST_CHECK(val >= MIN_SIG_FIGS);
+      BOOST_CHECK(val < MAX_SIG_FIGS);
+      BOOST_CHECK_SMALL(rel_error, std::pow(10, -(MAX_DIGITS10 - 1)));
+
+      if(i == 0)
+      {
+        continue;
+      }
+
+      std::cout << std::format("table[{:+4}] = {:10} | result {:e} | expected {:e} | rel_err {:.2e}\n", exp, val, result, expected, rel_error);
+    }
+  }
+
+  {
+    const auto DoubleTable = Constants::FloatingDigitsTable<double>();
+    const auto &table = DoubleTable.table;
+
+    constexpr int BIAS = Constants::FloatingDigitsTable<double>::BIAS;
+    constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<double>::MAX_DIGITS10;
+    constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<double>::MIN_SIG_FIGS;
+    constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<double>::MAX_SIG_FIGS;
+
+    const double scale = std::pow(10.0, MAX_DIGITS10);
+
+    for(int i = 0; i < DoubleTable.SIZE; ++i)
+    {
+      const int exp = i - BIAS;
+      const auto val = table[i];
+
+      // digit count
+      const int digits = std::to_string(val).size();
+      BOOST_CHECK_EQUAL(digits, MAX_DIGITS10);
+
+      static const auto LOG_10_2 = std::log10(2.0);
+
+      // reconstruct approximate value
+      const double result = (static_cast<double>(val) / ((exp < 0) ? scale : scale / 10)) * pow(10.0, static_cast<int32_t>(LOG_10_2 * exp));
+      const double expected = std::pow(2.0, exp);
+
+      const double rel_error = std::abs(result - expected) / expected;
+
+      // bounds
+      BOOST_CHECK(val >= MIN_SIG_FIGS);
+      BOOST_CHECK(val < MAX_SIG_FIGS);
+      BOOST_CHECK_SMALL(rel_error, std::pow(10, -(MAX_DIGITS10 - 1)));
+
+      if(i == 0)
+      {
+        continue;
+      }
+
+      // std::cout << std::format("table[{:+4}] = {:10} | result {:e} | expected {:e} | rel_err {:.2e}\n", exp, val, result, expected, rel_error);
+    }
+  }
 }

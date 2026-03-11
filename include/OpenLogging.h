@@ -1,21 +1,17 @@
 #pragma once
 
-#include "include/OpenLogging.ipp"
-#include <array>
 #include <chrono>
 #include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <ctime>
-#include <string>
-#include <type_traits>
+#include <iostream>
+
+#include "include/Constants.h"
+
+#include "include/Helpers/Helpers.h"
+
+#include "include/Helpers/String.h"
 
 class OpenLogging
 {
-private:
-  struct Helpers;
-  struct Constants;
-
 private:
   template <size_t N_VALIDICS>
   struct valid_string_format
@@ -37,7 +33,7 @@ private:
     [[nodiscard]] consteval size_t validate_string(const char (&in_str)[M])
     {
       bool prev_prev_is_backlash = false, prev_is_backlash = in_str[0] == '\\';
-      bool prev_open = in_str[0] == ::Constants::Delimiters::open, prev_close = in_str[0] == ::Constants::Delimiters::close;
+      bool prev_open = in_str[0] == Constants::Delimiters::open, prev_close = in_str[0] == Constants::Delimiters::close;
       bool open = false, close = false;
 
       size_t A = prev_open, B = prev_close;
@@ -283,42 +279,40 @@ private:
   {
     if constexpr(std::is_same_v<T, std::nullptr_t>)
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>("nullptr", format, ::Constants::Colors::nullptrs);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>("nullptr", format, ::Constants::Colors::nullptrs);
     }
     else if constexpr(std::is_same_v<T, bool>)
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>((var) ? "true" : "false", format,
-                                                                        (var) ? ::Constants::Colors::bool_value_true : ::Constants::Colors::bool_value_false);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>((var) ? "true" : "false", format,
+                                                                      (var) ? ::Constants::Colors::bool_value_true : ::Constants::Colors::bool_value_false);
     }
-    else if constexpr(::Helpers::Template::Types::is_char_v<T>())
+    else if constexpr(Helpers::Templating::Types::is_char_v<T>())
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::chars);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::chars);
     }
     else if constexpr(std::is_integral_v<T>)
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::ints);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::ints);
     }
     else if constexpr(std::is_same_v<T, float>)
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::floats);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::floats);
     }
     else if constexpr(std::is_same_v<T, double> || std::is_same_v<T, long double>)
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::doubles);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::doubles);
     }
-    else if constexpr(::Helpers::Template::Types::is_string_v<T>())
+    else if constexpr(::Helpers::Templating::Types::is_string_v<T>())
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::strings);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(var, format, ::Constants::Colors::strings);
     }
     else if constexpr(std::is_pointer_v<T>)
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(reinterpret_cast<std::uintptr_t>(var), format, ::Constants::Colors::pointers);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>(reinterpret_cast<std::uintptr_t>(var), format, ::Constants::Colors::pointers);
     }
     else
     {
-      return ::Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>("unknown type", format, ::Constants::Colors::unknown);
+      return Helpers::String::AnsiConcatenation<ANSI_SCAPE_SEQUENCES>("unknown type", format, ::Constants::Colors::unknown);
     }
   }
 }; // class OpenLogging
-
-#include "OpenLogging.ipp"
