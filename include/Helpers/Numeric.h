@@ -1,11 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <format>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <type_traits>
 
@@ -17,9 +18,16 @@
 
 struct Helpers::Numeric
 {
-  template <typename T>
+  template <size_t N>
+  struct char_array
+  {
+    char array[N];
+  };
+
+  template <bool FORCE_SIGN = false, typename T>
     requires std::is_integral_v<T>
-  static std::string ToStr(const T &input)
+  // 2 exra for lookuptable; 1 for '-'; 1 for null
+  static std::string /* char_array<std::numeric_limits<T>::digits10 + 4 + 1> */ ToStr(const T &input)
   {
     const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 1;
 
@@ -28,9 +36,8 @@ struct Helpers::Numeric
       return "0";
     }
 
-    // 2 exra for lookuptable
-    char buff[MAX_DIGITS10 + 4]; // +2 for NULL terminaor and for case of having a '-'
-    std::memset(&buff[0], '\0', sizeof(buff));
+    char_array<std::numeric_limits<T>::digits10 + 4 + 1> buff;
+    std::memset(&buff.array[0], '\0', sizeof(buff.array));
 
     const auto &IntegralStruct = Constants::IntegralDigitsTable();
     const auto &lookup_table = IntegralStruct.table;
@@ -40,11 +47,11 @@ struct Helpers::Numeric
     {
       if constexpr(std::is_signed_v<T>)
       {
-        Helpers::Templating::Fillers::fill_decrement_char_array(buff, lookup_table, i, std::abs(input), 2, 1, 0);
+        Helpers::Templating::Fillers::fill_decrement_char_array(buff.array, lookup_table, i, std::abs(input), 2, 1, 0);
       }
       else
       {
-        Helpers::Templating::Fillers::fill_decrement_char_array(buff, lookup_table, i, input, 2, 1, 0);
+        Helpers::Templating::Fillers::fill_decrement_char_array(buff.array, lookup_table, i, input, 2, 1, 0);
       }
     }
     else
@@ -56,11 +63,11 @@ struct Helpers::Numeric
       {
         if constexpr(std::is_signed_v<T>)
         {
-          Helpers::Templating::Fillers::fill_decrement_char_array(buff, lookup_table, i, std::abs(rem), 2, 1, 0);
+          Helpers::Templating::Fillers::fill_decrement_char_array(buff.array, lookup_table, i, std::abs(rem), 2, 1, 0);
         }
         else
         {
-          Helpers::Templating::Fillers::fill_decrement_char_array(buff, lookup_table, i, rem, 2, 1, 0);
+          Helpers::Templating::Fillers::fill_decrement_char_array(buff.array, lookup_table, i, rem, 2, 1, 0);
         }
 
         quot /= BASE;
@@ -70,61 +77,101 @@ struct Helpers::Numeric
 
     i++;
 
-    if(buff[i] == '0')
+    if(buff.array[i] == '0')
     {
-      buff[i++] = '\0';
-      if(buff[i] == '0')
+      buff.array[i++] = '\0';
+      if(buff.array[i] == '0')
       {
-        buff[i++] = '\0';
+        buff.array[i++] = '\0';
       }
     }
 
     if(input < 0)
     {
-      buff[--i] = '-';
+      buff.array[--i] = '-';
+    }
+    else if constexpr(FORCE_SIGN)
+    {
+      buff.array[--i] = '+';
     }
 
-    return std::string(buff + i, sizeof(buff) - i);
+    return std::string(buff.array + i, sizeof(buff) - i);
   }
 
-  template <int PRECISION = 3 /* FloatingDigitsTable::MAX_DIGITS10 */, typename T>
+  template <typename T, int PRECISION = Constants::FloatingDigitsTable<T>::MAX_DIGITS10>
     requires std::is_floating_point_v<T> && (std::numeric_limits<T>::max_exponent <= Constants::FloatingDigitsTable<T>::BIAS + 1) && (std::numeric_limits<T>::radix == 2)
              && (PRECISION <= Constants::FloatingDigitsTable<T>::MAX_DIGITS10)
   static std::string ToStr(const T &input)
   {
     const constexpr T LOG_10_2 = 0.30103;
-    static const auto FloatingStruct = Constants::FloatingDigitsTable<T>();
-    static const auto &table = FloatingStruct.table;
-
-    std::string buff;
+    using FloatingStruct = Constants::FloatingDigitsTable<T>;
+    static const auto &table = FloatingStruct().table;
 
     if(input == 0)
     {
       return "0";
     }
+    else if(std::isfinite(input) == false)
+    {
+      if(std::isnan(input))
+      {
+        return "nan";
+      }
+      return (input < 0) ? "-inf" : "inf";
+    }
+
+    // +1 for '+', +1 for '.' + 1 for 'e' + 1 for null
+    // +4; +1; + 1
+    char buff[PRECISION + 6];
+    std::memset(&buff[0], '\0', sizeof(buff));
 
     int exp = 0;
     T mantissa = std::frexp(input, &exp);
 
-    const auto mantissa_2 = mantissa;
-    const auto exp_2 = table[exp + FloatingStruct.BIAS];
+    const auto exp_2 = table[exp + FloatingStruct::BIAS];
 
-    std::cout << std::format("mantissa_2 = {:e} exp_2 = {}\n", mantissa_2, exp_2);
+    const auto digits_10 = static_cast<Constants::FloatingDigitsTable<T>::smallest_underlying>(mantissa * exp_2);
 
-    const auto digits_10 = static_cast<int64_t>(mantissa_2 * exp_2);
+    const constexpr auto DIGITS_10_PRES = FloatingStruct::MAX_DIGITS10 - PRECISION;
+    const constexpr auto precision = Helpers::Math::Constexpr::pow(static_cast<Constants::FloatingDigitsTable<T>::smallest_underlying>(10), DIGITS_10_PRES);
+    auto res = digits_10 / precision;
 
-    std::cout << std::format("digits_10 = {} \n", digits_10);
-    std::cout << std::format("\nREAL EXPECTED RESULT = {:e} \n\n", input);
+    size_t i = 0, idx = 0;
+    const auto str = Numeric::ToStr<true>(res);
 
-    const constexpr auto DIGITS_10_PRES = FloatingStruct.MAX_DIGITS10 - PRECISION;
-    const constexpr auto precision = Helpers::Math::Constexpr::pow(10, DIGITS_10_PRES - 1);
-    const auto res = digits_10 / precision;
-    buff = Numeric::ToStr(res);
+    buff[i++] = str[idx++];
 
-    buff.push_back('e');
+    if(str.size() < PRECISION + 1)
+    {
+      buff[i++] = '0';
+    }
+    else
+    {
+      buff[i++] = str[idx++];
+    }
 
-    buff += Numeric::ToStr(static_cast<int>(exp * LOG_10_2) - DIGITS_10_PRES - FloatingStruct.MAX_DIGITS10);
+    buff[i++] = '.';
 
-    return buff;
+    while(idx < str.size())
+    {
+      buff[i++] = str[idx++];
+    }
+
+    buff[i++] = 'e';
+
+    const auto exp_base_10 = std::floor(exp * LOG_10_2);
+    const auto exp_base_10_int = static_cast<int>(exp_base_10);
+
+    const auto exp_str = Numeric::ToStr<true>(exp_base_10_int);
+
+    std::memcpy(&buff[i], exp_str.data(), exp_str.size());
+
+    i = 0;
+    if(buff[i] == '+')
+    {
+      i++;
+    }
+
+    return std::string(&buff[i]);
   }
 };

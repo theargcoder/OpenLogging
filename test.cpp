@@ -1,3 +1,4 @@
+#include <type_traits>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -85,21 +86,19 @@ namespace
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
       const auto log = logger.format<false>("{}", i);
-      const auto num_to_str = std::string(std::to_string(i));
+      const auto num_to_str = std::format("{}", std::to_string(i));
       if(log != num_to_str)
       {
         std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
         std::cout << "log        = ";
-        for(unsigned char c : log)
-        {
-          std::cout << std::hex << (int)c << " ";
-        }
+
+        log_str_into_hex(log);
+
         std::cout << std::endl;
         std::cout << "num_to_str = ";
-        for(unsigned char c : num_to_str)
-        {
-          std::cout << std::hex << (int)c << " ";
-        }
+
+        log_str_into_hex(num_to_str);
+
         std::cout << std::endl;
         BOOST_CHECK_EQUAL(log, num_to_str);
 
@@ -138,23 +137,19 @@ BOOST_AUTO_TEST_CASE(test_all_integegral_v)
   tester(static_cast<uint64_t>(0));
 }
 
-BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
+namespace
 {
-  // tester(static_cast<float_t>(0));
-  // tester(static_cast<double_t>(0));
-  //  tester(static_cast<long_double_t>(0));
-}
-
-BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
-{
+  const auto test_float_table = []<typename T>
+    requires std::is_floating_point_v<T>
+  (T)
   {
-    const constexpr auto FloatTable = Constants::FloatingDigitsTable<float>();
+    const constexpr auto FloatTable = Constants::FloatingDigitsTable<T>();
     const auto &table = FloatTable.table;
 
-    constexpr int BIAS = Constants::FloatingDigitsTable<float>::BIAS;
-    constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<float>::MAX_DIGITS10;
-    constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<float>::MIN_SIG_FIGS;
-    constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<float>::MAX_SIG_FIGS;
+    constexpr int BIAS = Constants::FloatingDigitsTable<T>::BIAS;
+    constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<T>::MAX_DIGITS10;
+    constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<T>::MIN_SIG_FIGS;
+    constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<T>::MAX_SIG_FIGS;
 
     const double scale = std::pow(10.0, MAX_DIGITS10);
 
@@ -186,49 +181,122 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
         continue;
       }
 
-      std::cout << std::format("table[{:+4}] = {:10} | result {:e} | expected {:e} | rel_err {:.2e}\n", exp, val, result, expected, rel_error);
-    }
-  }
-
-  {
-    const auto DoubleTable = Constants::FloatingDigitsTable<double>();
-    const auto &table = DoubleTable.table;
-
-    constexpr int BIAS = Constants::FloatingDigitsTable<double>::BIAS;
-    constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<double>::MAX_DIGITS10;
-    constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<double>::MIN_SIG_FIGS;
-    constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<double>::MAX_SIG_FIGS;
-
-    const double scale = std::pow(10.0, MAX_DIGITS10);
-
-    for(int i = 0; i < DoubleTable.SIZE; ++i)
-    {
-      const int exp = i - BIAS;
-      const auto val = table[i];
-
-      // digit count
-      const int digits = std::to_string(val).size();
-      BOOST_CHECK_EQUAL(digits, MAX_DIGITS10);
-
-      static const auto LOG_10_2 = std::log10(2.0);
-
-      // reconstruct approximate value
-      const double result = (static_cast<double>(val) / ((exp < 0) ? scale : scale / 10)) * pow(10.0, static_cast<int32_t>(LOG_10_2 * exp));
-      const double expected = std::pow(2.0, exp);
-
-      const double rel_error = std::abs(result - expected) / expected;
-
-      // bounds
-      BOOST_CHECK(val >= MIN_SIG_FIGS);
-      BOOST_CHECK(val < MAX_SIG_FIGS);
-      BOOST_CHECK_SMALL(rel_error, std::pow(10, -(MAX_DIGITS10 - 1)));
-
-      if(i == 0)
-      {
-        continue;
-      }
-
       // std::cout << std::format("table[{:+4}] = {:10} | result {:e} | expected {:e} | rel_err {:.2e}\n", exp, val, result, expected, rel_error);
     }
-  }
+  };
+} // namespace
+
+BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
+{
+  test_float_table(static_cast<float>(0));
+  test_float_table(static_cast<double>(0));
+}
+
+namespace
+{
+  const auto almost_equal = []<typename T>(const T &a, const T &b) -> bool
+  {
+    const auto abs_error = std::abs(a - b);
+    const auto denom = std::max(std::abs(b), std::numeric_limits<T>::denorm_min());
+    const auto rel_error = abs_error / denom;
+
+    const constexpr auto REL_TOL = T{ 1 } / Helpers::Math::Constexpr::pow(T{ 10.0 }, std::numeric_limits<T>::digits10 - 2);
+    BOOST_CHECK_SMALL(rel_error, REL_TOL);
+    return rel_error <= REL_TOL;
+  };
+
+  const auto lopper_format_exponential = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP) -> void
+  {
+    const constexpr auto WISHED_RANGE = 10'000;
+    const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
+    const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
+    const constexpr Type MAX_ERRORS = 10;
+
+    OpenLogging logger;
+
+    for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
+    {
+      const auto log = logger.format<false>("{}", i);
+      const auto num_to_str = std::format("{:e}", i);
+
+      if(log != num_to_str)
+      {
+        const auto log_val = static_cast<Type>(std::strtold(log.c_str(), nullptr));
+        const auto ref_val = static_cast<Type>(std::strtold(num_to_str.c_str(), nullptr));
+
+        if(!almost_equal(log_val, ref_val))
+        {
+          std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
+
+          std::cout << "log        = ";
+
+          log_str_into_hex(log);
+
+          std::cout << std::endl;
+
+          std::cout << "num_to_str = ";
+
+          log_str_into_hex(num_to_str);
+
+          std::cout << std::endl;
+
+          lim++;
+        }
+      }
+    }
+  };
+
+  const auto tester_format_exponential = []<typename T>(const T &)
+  {
+    const constexpr auto MIN = std::numeric_limits<T>::min();
+    const constexpr auto DENORM = std::numeric_limits<T>::denorm_min();
+    const constexpr auto MAX = std::numeric_limits<T>::max();
+    const constexpr auto EPS = std::numeric_limits<T>::epsilon();
+
+    // ---- small / subnormal region ----
+    lopper_format_exponential(true, T{ 0 }, DENORM);
+    lopper_format_exponential(true, MIN, DENORM);
+
+    // ---- small normal numbers ----
+    lopper_format_exponential(true, MIN, EPS);
+    lopper_format_exponential(true, MIN * T{ 10 }, EPS);
+
+    // ---- around powers of two ----
+    for(int e = -20; e <= 20; ++e)
+    {
+      const T val = std::ldexp(T{ 1 }, e); // 2^e
+      lopper_format_exponential(true, val, EPS * val);
+      lopper_format_exponential(false, val, EPS * val);
+    }
+
+    // ---- around powers of ten ----
+    for(int e = -20; e <= 20; ++e)
+    {
+      const T val = std::pow(T{ 10 }, e);
+      lopper_format_exponential(true, val, EPS * val);
+      lopper_format_exponential(false, val, EPS * val);
+    }
+
+    // ---- medium magnitude sweeps ----
+    lopper_format_exponential(true, T{ 1 }, EPS);
+    lopper_format_exponential(true, T{ 100 }, EPS * T{ 100 });
+    lopper_format_exponential(true, T{ 1e6 }, EPS * T{ 1e6 });
+
+    // ---- large numbers ----
+    lopper_format_exponential(false, MAX, EPS * MAX);
+    lopper_format_exponential(false, MAX / T{ 10 }, EPS * MAX);
+    lopper_format_exponential(false, MAX / T{ 1000 }, EPS * MAX);
+
+    // ---- randomish mantissa coverage ----
+    lopper_format_exponential(true, T{ 1.234 }, T{ 0.0001 });
+    lopper_format_exponential(true, T{ 123.456 }, T{ 0.01 });
+    lopper_format_exponential(false, T{ 98765.4321 }, T{ 0.1 });
+  };
+} // namespace
+
+BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
+{
+  tester_format_exponential(static_cast<float>(0));
+  // tester_format_exponential(static_cast<double>(0));
+  //  tester_format_exponential(static_cast<long double>(0));
 }

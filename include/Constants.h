@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <type_traits>
@@ -72,11 +73,15 @@ struct Constants
   {
   public:
     static const constexpr T BASE = T{ 10 };
-    static const constexpr auto BIAS = std::numeric_limits<T>::max_exponent - 1;
-    static const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10;                   // safe LIMIT
-    static const constexpr auto SIZE = BIAS * 2 + 1;                                               // -MAX_EXP -> 0 -> MAX_EXP - 1;
-    static const constexpr T MIN_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, MAX_DIGITS10 - 1); // min precision
-    static const constexpr T MAX_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, MAX_DIGITS10);     // upper bound for precision
+    static constexpr auto MIN_BIN_EXP = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits + 1; // Smallest binary exponent (subnormal limit)
+    static constexpr auto MAX_BIN_EXP = std::numeric_limits<T>::max_exponent - 1;                                  // Largest binary exponent
+    static constexpr auto BIAS = -MIN_BIN_EXP;                                                                     // Offset so that table[BIAS] corresponds to 2^0
+    static constexpr auto SIZE = MAX_BIN_EXP - MIN_BIN_EXP + 1;
+
+    static constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10;
+    static constexpr auto MAX_EXP_DIGITS10 = static_cast<int>(std::log10(std::numeric_limits<T>::max_exponent10));
+    static constexpr T MIN_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, MAX_DIGITS10 - 1);
+    static constexpr T MAX_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, MAX_DIGITS10);
 
   private:
     // normalize works on a copy and returns the normalized value (no refs)
@@ -94,18 +99,16 @@ struct Constants
     }
 
     // loop multiplies incrementally and guards against overflow by dividing as needed
-    template <bool PLUS, int SUB_BASE>
+    template <bool INCREMENT, int SUB_BASE, int ST_PT, int DELIM>
     consteval void loop(T &val)
     {
-      for(int k = 0; k <= BIAS; ++k)
+      for(int k = ST_PT; (INCREMENT ? (k <= DELIM) : (k >= DELIM)); (INCREMENT) ? (k++) : (k--))
       {
-        const auto idx = (PLUS) ? BIAS + k : BIAS - k;
+        const auto idx = k + BIAS;
 
-        // normalize the current val and store as integer
         const T norm = normalize(val);
         table[idx] = static_cast<smallest_underlying>(norm + T{ 0.5 }); // round to closest
 
-        // prepare next val safely: if multiplying by SUB_BASE would push val >= MAX_SIG_FIGS, scale down first
         while(val >= T{ MAX_SIG_FIGS } / T{ SUB_BASE })
         {
           val /= T{ BASE };
@@ -124,11 +127,11 @@ struct Constants
     {
       T val = T{ 1 };
 
-      loop<false, 5>(val); // negative exponents: multiply by 5 each step but scale as needed
+      loop<false, 5, 0, MIN_BIN_EXP>(val); // negative exponents: multiply by 5 each step but scale as needed
 
       val = T{ 1 };
 
-      loop<true, 2>(val); // positive exponents: multiply by 2 each step but scale as needed
+      loop<true, 2, 0, MAX_BIN_EXP>(val); // positive exponents: multiply by 2 each step but scale as needed
     }
   };
 };
