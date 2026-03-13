@@ -99,11 +99,11 @@ struct Helpers::Numeric
   }
 
   template <typename T, int PRECISION = Constants::FloatingDigitsTable<T>::MAX_DIGITS10>
-    requires std::is_floating_point_v<T> && (std::numeric_limits<T>::max_exponent <= Constants::FloatingDigitsTable<T>::BIAS + 1) && (std::numeric_limits<T>::radix == 2)
-             && (PRECISION <= Constants::FloatingDigitsTable<T>::MAX_DIGITS10)
+    requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static std::string ToStr(const T &input)
   {
-    const constexpr T LOG_10_2 = 0.30103;
+
+    constexpr T LOG_10_2 = std::log10(T{ 2 });
     using FloatingStruct = Constants::FloatingDigitsTable<T>;
     static const auto &table = FloatingStruct().table;
 
@@ -122,7 +122,7 @@ struct Helpers::Numeric
 
     // +1 for '+', +1 for '.' + 1 for 'e' + 1 for null
     // +4; +1; + 1
-    char buff[PRECISION + 6];
+    char buff[PRECISION + 7];
     std::memset(&buff[0], '\0', sizeof(buff));
 
     int exp = 0;
@@ -133,8 +133,15 @@ struct Helpers::Numeric
     const auto digits_10 = static_cast<Constants::FloatingDigitsTable<T>::smallest_underlying>(mantissa * exp_2);
 
     const constexpr auto DIGITS_10_PRES = FloatingStruct::MAX_DIGITS10 - PRECISION;
-    const constexpr auto precision = Helpers::Math::Constexpr::pow(static_cast<Constants::FloatingDigitsTable<T>::smallest_underlying>(10), DIGITS_10_PRES);
-    auto res = digits_10 / precision;
+    const constexpr auto take_off_precision = Helpers::Math::Constexpr::pow(static_cast<Constants::FloatingDigitsTable<T>::smallest_underlying>(10), DIGITS_10_PRES);
+    const constexpr auto precision = Helpers::Math::Constexpr::pow(static_cast<Constants::FloatingDigitsTable<T>::smallest_underlying>(10), PRECISION);
+    typename Constants::FloatingDigitsTable<T>::smallest_underlying res = digits_10 / take_off_precision;
+
+    int exp_shf = 0;
+    if(res < precision)
+    {
+      exp_shf--;
+    }
 
     size_t i = 0, idx = 0;
     const auto str = Numeric::ToStr<true>(res);
@@ -159,8 +166,9 @@ struct Helpers::Numeric
 
     buff[i++] = 'e';
 
-    const auto exp_base_10 = std::floor(exp * LOG_10_2);
-    const auto exp_base_10_int = static_cast<int>(exp_base_10);
+    const auto exp_base_10_int = static_cast<int>(std::floor(exp * LOG_10_2)) + exp_shf;
+
+    // std::cout << "exp_base_10 = " << exp_base_10_int << "\n";
 
     const auto exp_str = Numeric::ToStr<true>(exp_base_10_int);
 

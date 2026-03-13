@@ -79,9 +79,10 @@ struct Constants
     static constexpr auto SIZE = MAX_BIN_EXP - MIN_BIN_EXP + 1;
 
     static constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10;
+    static constexpr auto ACTUAL_DIGITS10 = MAX_DIGITS10 + 1; // we need that extra digit to avoid rounding errors (errors can happen after our min precision is met)
     static constexpr auto MAX_EXP_DIGITS10 = static_cast<int>(std::log10(std::numeric_limits<T>::max_exponent10));
-    static constexpr T MIN_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, MAX_DIGITS10 - 1);
-    static constexpr T MAX_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, MAX_DIGITS10);
+    static constexpr T MIN_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, ACTUAL_DIGITS10);
+    static constexpr T MAX_SIG_FIGS = Helpers::Math::Constexpr::pow(BASE, ACTUAL_DIGITS10 + 1);
 
   private:
     // normalize works on a copy and returns the normalized value (no refs)
@@ -107,7 +108,7 @@ struct Constants
         const auto idx = k + BIAS;
 
         const T norm = normalize(val);
-        table[idx] = static_cast<smallest_underlying>(norm + T{ 0.5 }); // round to closest
+        table[idx] = static_cast<smallest_underlying>(norm + T{ 0.5 }) / BASE; // round to closest
 
         while(val >= T{ MAX_SIG_FIGS } / T{ SUB_BASE })
         {

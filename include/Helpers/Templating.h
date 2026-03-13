@@ -43,6 +43,23 @@ struct Helpers::Templating
       using BaseType = std::remove_cvref_t<T>;
       return std::is_same_v<BaseType, bool>;
     }
+
+    template <typename T>
+    static constexpr bool is_at_most_64_bit_float_radix_2()
+    {
+      return sizeof(T) <= 8 && std::numeric_limits<T>::radix == 2;
+    }
+  };
+
+  struct Assert
+  {
+    template <typename T>
+    static constexpr bool at_most_64_bit_double_radix_2()
+    {
+      static_assert(Helpers::Templating::Types::is_at_most_64_bit_float_radix_2<T>(),
+                    "Type is larger than 64 bit or has radix is not base 2; check your double implementation in your systems docs");
+      return true;
+    }
   };
 
   struct Fillers

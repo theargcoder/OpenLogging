@@ -1,4 +1,3 @@
-#include <type_traits>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -6,9 +5,11 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <type_traits>
 
 #include "include/Constants.h"
 #include "include/Helpers/Helpers.h"
+#include "include/Helpers/Numeric.h"
 #include "include/OpenLogging.h"
 
 BOOST_AUTO_TEST_CASE(just_some_logging_no_exceptions_should_happen)
@@ -148,6 +149,7 @@ namespace
 
     constexpr int BIAS = Constants::FloatingDigitsTable<T>::BIAS;
     constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<T>::MAX_DIGITS10;
+    constexpr int ACTUAL_DIGITS10 = Constants::FloatingDigitsTable<T>::ACTUAL_DIGITS10;
     constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<T>::MIN_SIG_FIGS;
     constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<T>::MAX_SIG_FIGS;
 
@@ -160,28 +162,33 @@ namespace
 
       // digit count
       const int digits = std::to_string(val).size();
-      BOOST_CHECK_EQUAL(digits, MAX_DIGITS10);
 
       static const auto LOG_10_2 = std::log10(2.0);
 
       // reconstruct approximate value
-      const double result = (static_cast<double>(val) / ((exp < 0) ? scale : scale / 10)) * pow(10.0, static_cast<int32_t>(LOG_10_2 * exp));
+      const double result = (static_cast<double>(val) / (scale)) * std::pow(10.0L, static_cast<int32_t>(std::floor(LOG_10_2 * exp)));
       const double expected = std::pow(2.0, exp);
 
       const double abs_error = std::abs(result - expected);
       const double rel_error = abs_error / expected;
 
       // bounds
-      BOOST_CHECK(val >= MIN_SIG_FIGS);
-      BOOST_CHECK(val < MAX_SIG_FIGS);
-      BOOST_CHECK_SMALL(rel_error, std::pow(10, -(MAX_DIGITS10 - 1)));
+      BOOST_CHECK(val >= MIN_SIG_FIGS / 10);
+      BOOST_CHECK(val < MAX_SIG_FIGS / 10);
+      BOOST_CHECK_EQUAL(digits, ACTUAL_DIGITS10);
+      const double max_tolerance = std::pow(10, -(MAX_DIGITS10));
+      // if its double we allow up to 3 micro-units; otherwise 1 micro unit
+      BOOST_CHECK_SMALL(rel_error, (std::is_same_v<T, double>) ? 3 * max_tolerance : max_tolerance);
 
-      if(i == 0)
+      bool log = !(val >= MIN_SIG_FIGS / 10) || !(val < MAX_SIG_FIGS / 10) || !(digits == ACTUAL_DIGITS10)
+                 || !(rel_error <= ((std::is_same_v<T, double>) ? 3 * max_tolerance : max_tolerance));
+
+      constexpr int FP_PREC = std::numeric_limits<T>::max_digits10;
+
+      if(log)
       {
-        continue;
+        std::cout << std::format("table[{:+4}] = {} \t| result {:.{}e} | expected {:.{}e} | rel_err {:.{}e}\n", exp, val, result, FP_PREC, expected, FP_PREC, rel_error, FP_PREC);
       }
-
-      // std::cout << std::format("table[{:+4}] = {:10} | result {:e} | expected {:e} | rel_err {:.2e}\n", exp, val, result, expected, rel_error);
     }
   };
 } // namespace
@@ -194,13 +201,13 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
 
 namespace
 {
-  const auto almost_equal = []<typename T>(const T &a, const T &b) -> bool
+  const auto almost_equal = []<typename Type>(const Type &type, const long double &a, const long double &b) -> bool
   {
     const auto abs_error = std::abs(a - b);
-    const auto denom = std::max(std::abs(b), std::numeric_limits<T>::denorm_min());
+    const auto denom = std::max(std::abs(b), static_cast<long double>(std::numeric_limits<Type>::denorm_min()));
     const auto rel_error = abs_error / denom;
 
-    const constexpr auto REL_TOL = T{ 1 } / Helpers::Math::Constexpr::pow(T{ 10.0 }, std::numeric_limits<T>::digits10 - 2);
+    const constexpr auto REL_TOL = 1.0L / Helpers::Math::Constexpr::pow(10.0L, std::numeric_limits<Type>::digits10 - 1);
     BOOST_CHECK_SMALL(rel_error, REL_TOL);
     return rel_error <= REL_TOL;
   };
@@ -216,15 +223,16 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
+      constexpr int FP_PREC = std::numeric_limits<Type>::digits10;
       const auto log = logger.format<false>("{}", i);
-      const auto num_to_str = std::format("{:e}", i);
+      const auto num_to_str = std::format("{:.{}e}", i, FP_PREC);
 
       if(log != num_to_str)
       {
-        const auto log_val = static_cast<Type>(std::strtold(log.c_str(), nullptr));
-        const auto ref_val = static_cast<Type>(std::strtold(num_to_str.c_str(), nullptr));
+        const auto log_val = std::strtold(log.c_str(), nullptr);
+        const auto ref_val = std::strtold(num_to_str.c_str(), nullptr);
 
-        if(!almost_equal(log_val, ref_val))
+        if(!almost_equal(i, log_val, ref_val))
         {
           std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
 
@@ -297,6 +305,8 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   tester_format_exponential(static_cast<float>(0));
-  // tester_format_exponential(static_cast<double>(0));
-  //  tester_format_exponential(static_cast<long double>(0));
+  tester_format_exponential(static_cast<double>(0));
+  // tester_format_exponential(static_cast<long double>(0));
 }
+
+//
