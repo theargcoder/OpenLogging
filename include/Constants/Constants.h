@@ -10,6 +10,11 @@
 
 struct Constants
 {
+  struct Size
+  {
+    const constexpr static char MAX_FMT_SIZE = 8;
+  };
+
   struct Interactive
   {
     const constexpr static bool debug_blink = true;

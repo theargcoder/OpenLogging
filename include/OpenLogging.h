@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <iostream>
 
-#include "include/Constants.h"
+#include "include/Constants/Constants.h"
+
+#include "include/Structures/Structures.h"
 
 #include "include/Helpers/Helpers.h"
 
@@ -13,69 +15,6 @@
 class OpenLogging
 {
 private:
-  template <size_t N_VALIDICS>
-  struct valid_string_format
-  {
-    const char *str;
-    size_t N;
-
-    template <size_t M>
-    consteval valid_string_format(const char (&in_str)[M]) : str(in_str), N(M)
-    {
-      if(validate_string(in_str) != N_VALIDICS)
-      {
-        throw "Placeholder count mismatch! Check your format string vs the number of arguments provided.";
-      }
-    }
-
-  private:
-    template <size_t M>
-    [[nodiscard]] consteval size_t validate_string(const char (&in_str)[M])
-    {
-      bool prev_prev_is_backlash = false, prev_is_backlash = in_str[0] == '\\';
-      bool prev_open = in_str[0] == Constants::Delimiters::open, prev_close = in_str[0] == Constants::Delimiters::close;
-      bool open = false, close = false;
-
-      size_t A = prev_open, B = prev_close;
-
-      for(size_t i = 1; i < M - 1; i++) // ignore null terminator
-      {
-        const char &ch = in_str[i];
-        open = ch == ::Constants::Delimiters::open, close = ch == ::Constants::Delimiters::close;
-        prev_prev_is_backlash = prev_is_backlash;
-        prev_is_backlash = in_str[i - 1] == '\\';
-
-        if((!prev_prev_is_backlash && prev_is_backlash) || (!open && !close))
-        {
-          continue;
-        }
-        else if(open && !close)
-        {
-          A++;
-          if(prev_open && !prev_is_backlash)
-            throw "Invalid formatted string, you have 2 succesive open delimiters";
-
-          prev_open = true;
-          prev_close = false;
-        }
-        else if(!open && close)
-        {
-          B++;
-          if(prev_close && !prev_is_backlash)
-            throw "Invalid formatted string, you have 2 succesive closed delimiters";
-
-          prev_close = true;
-          prev_open = false;
-        }
-      }
-      if(A != B)
-      {
-        throw "Invalid formatted string, You have extra or missing formatting delimiters check the string please";
-      }
-      return A;
-    }
-  };
-
 private:
   enum class LogType : uint8_t
   {
@@ -120,7 +59,7 @@ private:
 private:
   // non specific type logger function
   template <LogType type, typename... types>
-  static void general_logger(const valid_string_format<sizeof...(types)> &fmt, const types &...args)
+  static void general_logger(const Structures::valid_string_format<sizeof...(types)> &fmt, const types &...args)
   {
     if constexpr(sizeof...(args) == 0)
     {
@@ -159,7 +98,7 @@ private:
 public:
   // format
   template <bool ANSI_SCAPE_SEQUENCES = true, typename... types>
-  static std::string format(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  static std::string format(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     constexpr size_t buff_size_for_format = 10;
     const auto *str = fmt.str;
@@ -190,7 +129,7 @@ public:
             {
               i++; // we skip the starting formatting delimiter
               int f = 0;
-              // guaranteed to have the closing delim due to the __valid_string_format__'s nature
+              // guaranteed to have the closing delim due to the __Structures::valid_string_format__'s nature
               while(str[i] != ::Constants::Delimiters::close)
                 format[++f] = str[i++];
 
@@ -211,31 +150,31 @@ public:
 public:
   // debug
   template <typename... types>
-  static void debug(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  static void debug(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::DEBUG>(fmt, args...);
   };
   // info
   template <typename... types>
-  static void info(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  static void info(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::INFO>(fmt, args...);
   };
   // warn
   template <typename... types>
-  static void warn(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  static void warn(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::WARN>(fmt, args...);
   };
   // error
   template <typename... types>
-  static void error(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  static void error(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::ERROR>(fmt, args...);
   };
   // fatal
   template <typename... types>
-  static void fatal(const valid_string_format<sizeof...(types)> fmt, const types... args)
+  static void fatal(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
     general_logger<LogType::FATAL>(fmt, args...);
   };

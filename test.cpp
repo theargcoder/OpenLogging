@@ -4,10 +4,11 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <type_traits>
 
-#include "include/Constants.h"
+#include "include/Constants/Constants.h"
 #include "include/Helpers/Helpers.h"
 #include "include/Helpers/Numeric.h"
 #include "include/OpenLogging.h"
@@ -32,6 +33,22 @@ BOOST_AUTO_TEST_CASE(just_some_logging_no_exceptions_should_happen)
   // logger.info("hello {}", fnct);
   // logger.info("Hell yeah \\\\{{}\\\\}", 2);
   // logger.info("Hell yeah \\\\{{}\\}\\", 2);
+
+  // logger.info("hello {}{}", fnct);
+
+  // const auto resters = Structures::valid_string_format<3>("{.3f} {9d} {.3fe00}");
+
+  /*
+  for(auto fmt : resters.fmts)
+  {
+    for(int j = 0; j < Constants::Size::MAX_FMT_SIZE; j++)
+    {
+      std::cout << fmt[j];
+    }
+
+    std::cout << "\n";
+  }
+  */
 
   BOOST_CHECK_NO_THROW(logger.info("HELlO"));
   BOOST_CHECK_NO_THROW(logger.info("hello {}", fnct));
@@ -212,7 +229,7 @@ namespace
     return rel_error <= REL_TOL;
   };
 
-  const auto lopper_format_exponential = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP) -> void
+  const auto lopper_format_exponential = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &log_took, auto &fmt_took) -> void
   {
     const constexpr auto WISHED_RANGE = 10'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
@@ -224,8 +241,16 @@ namespace
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
       constexpr int FP_PREC = std::numeric_limits<Type>::digits10;
+      const auto st_log = std::chrono::high_resolution_clock::now();
       const auto log = logger.format<false>("{}", i);
+      // const auto log = Helpers::Numeric::ToStr(i);
+      const auto en_log = std::chrono::high_resolution_clock::now();
+      const auto st_fmt = std::chrono::high_resolution_clock::now();
       const auto num_to_str = std::format("{:.{}e}", i, FP_PREC);
+      const auto en_fmt = std::chrono::high_resolution_clock::now();
+
+      log_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
+      fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_fmt - st_fmt);
 
       if(log != num_to_str)
       {
@@ -261,51 +286,80 @@ namespace
     const constexpr auto MAX = std::numeric_limits<T>::max();
     const constexpr auto EPS = std::numeric_limits<T>::epsilon();
 
+    std::chrono::nanoseconds log_took{ 0 };
+    std::chrono::nanoseconds fmt_took{ 0 };
+
     // ---- small / subnormal region ----
-    lopper_format_exponential(true, T{ 0 }, DENORM);
-    lopper_format_exponential(true, MIN, DENORM);
+    lopper_format_exponential(true, T{ 0 }, DENORM, log_took, fmt_took);
+    lopper_format_exponential(true, MIN, DENORM, log_took, fmt_took);
 
     // ---- small normal numbers ----
-    lopper_format_exponential(true, MIN, EPS);
-    lopper_format_exponential(true, MIN * T{ 10 }, EPS);
+    lopper_format_exponential(true, MIN, EPS, log_took, fmt_took);
+    lopper_format_exponential(true, MIN * T{ 10 }, EPS, log_took, fmt_took);
 
     // ---- around powers of two ----
     for(int e = -20; e <= 20; ++e)
     {
       const T val = std::ldexp(T{ 1 }, e); // 2^e
-      lopper_format_exponential(true, val, EPS * val);
-      lopper_format_exponential(false, val, EPS * val);
+      lopper_format_exponential(true, val, EPS * val, log_took, fmt_took);
+      lopper_format_exponential(false, val, EPS * val, log_took, fmt_took);
     }
 
     // ---- around powers of ten ----
     for(int e = -20; e <= 20; ++e)
     {
       const T val = std::pow(T{ 10 }, e);
-      lopper_format_exponential(true, val, EPS * val);
-      lopper_format_exponential(false, val, EPS * val);
+      lopper_format_exponential(true, val, EPS * val, log_took, fmt_took);
+      lopper_format_exponential(false, val, EPS * val, log_took, fmt_took);
     }
 
     // ---- medium magnitude sweeps ----
-    lopper_format_exponential(true, T{ 1 }, EPS);
-    lopper_format_exponential(true, T{ 100 }, EPS * T{ 100 });
-    lopper_format_exponential(true, T{ 1e6 }, EPS * T{ 1e6 });
+    lopper_format_exponential(true, T{ 1 }, EPS, log_took, fmt_took);
+    lopper_format_exponential(true, T{ 100 }, EPS * T{ 100 }, log_took, fmt_took);
+    lopper_format_exponential(true, T{ 1e6 }, EPS * T{ 1e6 }, log_took, fmt_took);
 
     // ---- large numbers ----
-    lopper_format_exponential(false, MAX, EPS * MAX);
-    lopper_format_exponential(false, MAX / T{ 10 }, EPS * MAX);
-    lopper_format_exponential(false, MAX / T{ 1000 }, EPS * MAX);
+    lopper_format_exponential(false, MAX, EPS * MAX, log_took, fmt_took);
+    lopper_format_exponential(false, MAX / T{ 10 }, EPS * MAX, log_took, fmt_took);
+    lopper_format_exponential(false, MAX / T{ 1000 }, EPS * MAX, log_took, fmt_took);
 
     // ---- randomish mantissa coverage ----
-    lopper_format_exponential(true, T{ 1.234 }, T{ 0.0001 });
-    lopper_format_exponential(true, T{ 123.456 }, T{ 0.01 });
-    lopper_format_exponential(false, T{ 98765.4321 }, T{ 0.1 });
+    lopper_format_exponential(true, T{ 1.234 }, T{ 0.0001 }, log_took, fmt_took);
+    lopper_format_exponential(true, T{ 123.456 }, T{ 0.01 }, log_took, fmt_took);
+    lopper_format_exponential(false, T{ 98765.4321 }, T{ 0.1 }, log_took, fmt_took);
+
+    return std::make_pair(log_took, fmt_took);
   };
+
+  const auto test_and_benchmark = []<typename T>
+    requires std::is_floating_point_v<T>
+  (const T &)
+  {
+    const auto float_res = tester_format_exponential(static_cast<T>(0));
+
+    const auto &log = float_res.first;
+    const auto &fmt = float_res.second;
+
+    std::cout << "===== RESULTS =====\n";
+
+    std::cout << "Logger:\n";
+    std::cout << "  seconds      : " << std::chrono::duration<double>(log).count() << "\n";
+    std::cout << "  milliseconds : " << std::chrono::duration_cast<std::chrono::milliseconds>(log).count() << "\n";
+    std::cout << "  microseconds : " << std::chrono::duration_cast<std::chrono::microseconds>(log).count() << "\n";
+
+    std::cout << "std::format:\n";
+    std::cout << "  seconds      : " << std::chrono::duration<double>(fmt).count() << "\n";
+    std::cout << "  milliseconds : " << std::chrono::duration_cast<std::chrono::milliseconds>(fmt).count() << "\n";
+    std::cout << "  microseconds : " << std::chrono::duration_cast<std::chrono::microseconds>(fmt).count() << "\n";
+  };
+
 } // namespace
 
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
-  tester_format_exponential(static_cast<float>(0));
-  tester_format_exponential(static_cast<double>(0));
+  test_and_benchmark(static_cast<float>(0));
+  test_and_benchmark(static_cast<double>(0));
+
   // tester_format_exponential(static_cast<long double>(0));
 }
 
