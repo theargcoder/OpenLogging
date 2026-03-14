@@ -68,8 +68,8 @@ private:
       auto time_now = std::chrono::high_resolution_clock::now();
       long time_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_now.time_since_epoch()).count();
       long time_microseconds_div_100 = std::chrono::duration_cast<std::chrono::microseconds>(time_now.time_since_epoch()).count() / one_hundred;
-      const auto time_fmt = _time_formatted_(time_seconds);
-      const auto time_str_micro_segment = _time_mili_format_(time_microseconds_div_100);
+      const auto time_fmt = time_formatted(time_seconds);
+      const auto time_str_micro_segment = time_mili_format(time_microseconds_div_100);
 
       const std::string begin_log_str = time_fmt + time_str_micro_segment + ' ';
 
@@ -83,8 +83,8 @@ private:
       auto time_now = std::chrono::high_resolution_clock::now();
       long time_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_now.time_since_epoch()).count();
       long time_microseconds_div_100 = std::chrono::duration_cast<std::chrono::microseconds>(time_now.time_since_epoch()).count() / one_hundred;
-      const auto time_fmt = _time_formatted_(time_seconds);
-      const auto time_str_micro_segment = _time_mili_format_(time_microseconds_div_100);
+      const auto time_fmt = time_formatted(time_seconds);
+      const auto time_str_micro_segment = time_mili_format(time_microseconds_div_100);
 
       const std::string begin_log_str = time_fmt + time_str_micro_segment + ' ';
 
@@ -97,52 +97,14 @@ private:
 
 public:
   // format
-  template <bool ANSI_SCAPE_SEQUENCES = true, typename... types>
+  template <bool ANSI_SCAPE_SEQUENCES = false, typename... types>
   static std::string format(const Structures::valid_string_format<sizeof...(types)> fmt, const types... args)
   {
-    constexpr size_t buff_size_for_format = 10;
-    const auto *str = fmt.str;
-    const auto N = fmt.N;
-    static char format[buff_size_for_format];
-
     std::string result;
+    result.reserve(4096);
 
     size_t i = 0;
-    bool is_curr_backlash, is_prev_backlash = str[0] == '\\';
-    (
-        [&](const auto &_arg)
-        {
-          for(; i < N - 1; i++)
-          {
-            is_curr_backlash = str[i] == '\\';
-            if(is_prev_backlash && is_curr_backlash)
-            {
-              is_prev_backlash = false;
-              result += str[i];
-              continue;
-            }
-            else if(is_prev_backlash || (!is_curr_backlash && str[i] != ::Constants::Delimiters::open && str[i] != ::Constants::Delimiters::close))
-            {
-              result += str[i];
-            }
-            else if(str[i] == ::Constants::Delimiters::open)
-            {
-              i++; // we skip the starting formatting delimiter
-              int f = 0;
-              // guaranteed to have the closing delim due to the __Structures::valid_string_format__'s nature
-              while(str[i] != ::Constants::Delimiters::close)
-                format[++f] = str[i++];
-
-              format[f] = '\0';
-
-              // i++; // we skip the ending formatting delimiter
-
-              result += _to_string_into_buff_<ANSI_SCAPE_SEQUENCES>(_arg, format);
-            }
-            is_prev_backlash = str[i] == '\\';
-          }
-        }(args),
-        ...);
+    ([&](const auto &_arg) { result += to_string_into_buff<ANSI_SCAPE_SEQUENCES>(_arg, fmt.fmts[i++]); }(args), ...);
 
     return result;
   }
@@ -180,7 +142,7 @@ public:
   };
 
 private:
-  static constexpr std::string _time_formatted_(long &time_v)
+  static constexpr std::string time_formatted(long &time_v)
   {
     struct tm *timeinfo = nullptr;
 
@@ -194,7 +156,7 @@ private:
     return { buffer.data() };
   }
 
-  static constexpr std::string _time_mili_format_(long &time_v)
+  static constexpr std::string time_mili_format(long &time_v)
   {
     const constexpr uint8_t buffsize = 4;
     const constexpr uint8_t BASE = 10;
@@ -214,7 +176,7 @@ private:
   }
 
   template <bool ANSI_SCAPE_SEQUENCES, size_t M, typename T>
-  static std::string _to_string_into_buff_(const T &var, const char (&format)[M])
+  static std::string to_string_into_buff(const T &var, const char (&format)[M])
   {
     if constexpr(std::is_same_v<T, std::nullptr_t>)
     {

@@ -157,7 +157,7 @@ namespace
     {
 
       const auto st_log = std::chrono::high_resolution_clock::now();
-      const auto log = logger.format<false>("{}", i);
+      const auto log = logger.format("{}", i);
       const auto en_log = std::chrono::high_resolution_clock::now();
 
       const auto st_fmt = std::chrono::high_resolution_clock::now();
@@ -341,7 +341,7 @@ namespace
     {
       constexpr int FP_PREC = std::numeric_limits<Type>::digits10;
       const auto st_log = std::chrono::high_resolution_clock::now();
-      const auto log = logger.format<false>("{}", i);
+      const auto log = logger.format("{}", i);
       // const auto log = Helpers::Numeric::ToStr(i);
       const auto en_log = std::chrono::high_resolution_clock::now();
 
