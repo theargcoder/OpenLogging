@@ -341,7 +341,7 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      constexpr int FP_PREC = std::numeric_limits<Type>::digits10;
+      const constexpr int FP_PREC = std::numeric_limits<Type>::digits10;
       const auto st_log = std::chrono::high_resolution_clock::now();
       const auto log = logger.format("{}", i);
       // const auto log = Helpers::Numeric::ToStr(i);
