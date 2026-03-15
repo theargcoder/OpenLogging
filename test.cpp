@@ -1,3 +1,4 @@
+#include <chrono>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -85,15 +86,41 @@ BOOST_AUTO_TEST_CASE(just_some_logging_no_exceptions_should_happen)
 
 namespace
 {
-  const auto log_str_into_hex = [](const std::string &in)
+  struct LogHexStr
   {
-    for(unsigned char c : in)
-    {
-      std::cout << std::hex << (int)c << " ";
-    }
+    std::string_view label;
+    std::string_view num_str;
+    LogHexStr(const std::string &_label, const std::string &_num_str) : label(_label), num_str(_num_str) {};
   };
 
-  const auto log_time_table = []<typename T>(T, const auto &log, const auto &std_fmt)
+  const auto log_str_and_into_hex = []<typename... Args>(const Args &...logs)
+  {
+    std::string log = "we have:";
+
+    ((log += std::format(" {} = '{}'", logs.label, logs.num_str)), ...);
+
+    std::cout << log << std::endl;
+
+    auto print_hex = [](std::string_view in)
+    {
+      for(unsigned char c : in)
+        std::cout << std::hex << (int)c << " ";
+
+      std::cout << std::dec << '\n';
+    };
+
+    (print_hex(logs.num_str), ...);
+  };
+
+  struct BenchResult
+  {
+    std::string_view label;
+    std::chrono::nanoseconds time;
+
+    BenchResult(const char *str, std::chrono::nanoseconds nano) : label(str), time(nano) {};
+  };
+
+  const auto log_time_tables = []<typename T, typename... Args>(T, const Args &...times)
   {
     using namespace std::chrono;
 
@@ -103,49 +130,64 @@ namespace
     const std::string_view RED = "\033[31m";
     const std::string_view YELLOW = "\033[33m";
 
-    auto get_colors = [&](auto v1, auto v2) -> std::pair<std::string_view, std::string_view>
+    const auto SIZE = sizeof...(times);
+
+    // Calculate average time (using double to keep precision)
+    const auto total_ns = (times.time + ...).count();
+    const double average = static_cast<double>(total_ns) / SIZE;
+
+    auto get_color = [&](nanoseconds val) -> std::string_view
     {
-      if(v1 == 0 || v2 == 0)
-        return { RESET, RESET }; // Avoid division by zero
+      if(val.count() == 0)
+        return RESET;
 
-      double ratio = static_cast<double>(v1) / static_cast<double>(v2);
+      double ratio = static_cast<double>(val.count()) / average;
 
-      // Yellow if within 3% (between 0.97 and 1.03)
       if(std::abs(1.0 - ratio) <= 0.03)
-        return { YELLOW, YELLOW };
+        return YELLOW;
 
-      // Green for faster (smaller value), Red for slower
-      if(v1 < v2)
-        return { GREEN, RED };
-      return { RED, GREEN };
+      return (val.count() < average) ? GREEN : RED;
     };
 
-    auto print_row = [&](std::string_view label, auto val1, auto val2)
+    auto get_label_cell = [&](const BenchResult &res) { return std::format(" | {: >15}", res.label); };
+
+    auto get_val_cell = [&](const BenchResult &res, auto unit_type)
     {
-      auto [c1, c2] = get_colors(val1, val2);
-      // Format strings inside the colored blocks to maintain column alignment
-      std::cout << std::format("  {: <15} | {}{: >15}{} | {}{: >15}{}\n", label, c1, val1, RESET, c2, val2, RESET);
+      auto color = get_color(res.time);
+      auto val = duration_cast<duration<double, typename decltype(unit_type)::period>>(res.time).count();
+      return std::format(" | {}{: >15.3f}{}", color, val, RESET);
     };
 
-    // Header Logic
-    std::string title = std::is_floating_point_v<T> ? " FLOATING_TYPE_V RESULTS " : " INTEGRAL_TYPE_V RESULTS ";
-    std::cout << "\n" << std::format("{:=^51}", title) << "\n";
-    std::cout << std::format("  {: <15} | {: >15} | {: >15}\n", "Unit", "Logger", "std::format");
-    std::cout << std::string(51, '-') << "\n";
+    std::string header_row = std::format("{:>15}", "Unit");
+    ((header_row += get_label_cell(times)), ...);
 
-    // Data Rows
-    print_row("Seconds", duration<double>(log).count(), duration<double>(std_fmt).count());
-    print_row("Milliseconds", duration_cast<milliseconds>(log).count(), duration_cast<milliseconds>(std_fmt).count());
-    print_row("Microseconds", duration_cast<microseconds>(log).count(), duration_cast<microseconds>(std_fmt).count());
+    std::string row_sec = std::format("{:>15}", "Seconds");
+    ((row_sec += get_val_cell(times, seconds{})), ...);
 
-    std::cout << std::string(51, '=') << "\n";
+    std::string row_milli = std::format("{:>15}", "Milliseconds");
+    ((row_milli += get_val_cell(times, milliseconds{})), ...);
+
+    std::string row_micro = std::format("{:>15}", "Microseconds");
+    ((row_micro += get_val_cell(times, microseconds{})), ...);
+
+    std::string type_name = std::is_floating_point_v<T> ? "FLOAT" : "INT";
+    std::string title = std::format(" {} COMPARISON (Avg: {:.3f} millisec) ", type_name, average / 1'000'000);
+    int total_width = 15 + (SIZE * 18); // 15 for label + 18 per column (| + color + 15 chars)
+
+    std::cout << "\n" << std::format("{:=^{}}", title, total_width) << "\n";
+    std::cout << header_row << "\n";
+    std::cout << std::string(total_width, '-') << "\n";
+    std::cout << row_sec << "\n";
+    std::cout << row_milli << "\n";
+    std::cout << row_micro << "\n";
+    std::cout << std::string(total_width, '=') << "\n";
   };
 
 } // namespace
 
 namespace
 {
-  const auto lopper_integer = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &log_took, auto &fmt_took) -> void
+  const auto lopper_integer = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging, auto &std_to_string, auto &std_to_char) -> void
   {
     const constexpr auto WISHED_RANGE = 10'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
@@ -162,76 +204,74 @@ namespace
       const auto log = Helpers::Numeric::ToStr(i);
       const auto en_log = std::chrono::high_resolution_clock::now();
 
-      const auto st_fmt = std::chrono::high_resolution_clock::now();
+      const auto st_std_to_str = std::chrono::high_resolution_clock::now();
       // const auto num_to_str = std::format("{}", i);
       const auto num_to_str = std::to_string(i);
-      const auto en_fmt = std::chrono::high_resolution_clock::now();
+      const auto en_std_to_str = std::chrono::high_resolution_clock::now();
 
-      log_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
-      fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_fmt - st_fmt);
+      const auto st_std_to_char = std::chrono::high_resolution_clock::now();
+      const auto num_to_char = Helpers::Numeric::Std::to_string(i);
+      const auto en_std_to_char = std::chrono::high_resolution_clock::now();
 
-      if(log != num_to_str)
+      open_logging += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
+      std_to_string += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str);
+      std_to_char += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_to_char - st_std_to_char);
+
+      if(log != num_to_str || log != num_to_char)
       {
-        std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
-        std::cout << "log         = ";
+        log_str_and_into_hex(LogHexStr("log", log), LogHexStr("num_to_str", num_to_str), LogHexStr("num_to_char", num_to_char));
 
-        log_str_into_hex(log);
-
-        std::cout << std::endl;
-        std::cout << "num_to_str = ";
-
-        log_str_into_hex(num_to_str);
-
-        std::cout << std::endl;
         BOOST_CHECK_EQUAL(log, num_to_str);
+        BOOST_CHECK_EQUAL(log, num_to_char);
 
         lim++;
       }
     }
   };
 
-  const auto tester_integer = []<typename T>(const T & /*unused*/) -> auto
+  const auto tester_integer = []<typename T>(const T &) -> auto
   {
-    std::chrono::nanoseconds log_took{ 0 };
-    std::chrono::nanoseconds fmt_took{ 0 };
+    std::chrono::nanoseconds open_loggin_took{ 0 };
+    std::chrono::nanoseconds std_to_string_took{ 0 };
+    std::chrono::nanoseconds std_to_chars_took{ 0 };
 
     const constexpr auto MIN = std::numeric_limits<T>::min();
     const constexpr auto MAX = std::numeric_limits<T>::max();
     const constexpr T UNIT = T{ 1 };
 
     // ---- Extremes and Zero Region ----
-    lopper_integer(true, MIN, UNIT, log_took, fmt_took);
-    lopper_integer(false, MAX, UNIT, log_took, fmt_took);
-    lopper_integer(true, T{ 0 }, UNIT, log_took, fmt_took);
-    lopper_integer(false, T{ 0 }, UNIT, log_took, fmt_took);
+    lopper_integer(true, MIN, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
+    lopper_integer(false, MAX, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
+    lopper_integer(true, T{ 0 }, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
+    lopper_integer(false, T{ 0 }, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
 
     // ---- Around powers of two (Bit boundaries) ----
     for(int e = 1; e < std::numeric_limits<T>::digits; ++e)
     {
       const T val = UNIT << e;
-      lopper_integer(true, val, UNIT, log_took, fmt_took);
-      lopper_integer(false, val, UNIT, log_took, fmt_took);
+      lopper_integer(true, val, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
+      lopper_integer(false, val, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
     }
 
     // ---- Around powers of ten (String length boundaries) ----
     for(T val = 10; val > 0 && val < MAX / 10; val *= 10)
     {
-      lopper_integer(true, val, UNIT, log_took, fmt_took);
-      lopper_integer(false, val, UNIT, log_took, fmt_took);
+      lopper_integer(true, val, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
+      lopper_integer(false, val, UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
     }
 
     // ---- Large magnitude sweeps (Sparse) ----
     if constexpr(sizeof(T) >= 4)
     {
-      lopper_integer(true, MIN / 2, T{ 123 }, log_took, fmt_took);
-      lopper_integer(false, MAX / 2, T{ 123 }, log_took, fmt_took);
+      lopper_integer(true, MIN / 2, T{ 123 }, open_loggin_took, std_to_string_took, std_to_chars_took);
+      lopper_integer(false, MAX / 2, T{ 123 }, open_loggin_took, std_to_string_took, std_to_chars_took);
     }
 
     // ---- Randomish coverage ----
-    lopper_integer(true, static_cast<T>(MAX * 0.1), UNIT, log_took, fmt_took);
-    lopper_integer(false, static_cast<T>(MAX * 0.9), UNIT, log_took, fmt_took);
+    lopper_integer(true, static_cast<T>(MAX * 0.1), UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
+    lopper_integer(false, static_cast<T>(MAX * 0.9), UNIT, open_loggin_took, std_to_string_took, std_to_chars_took);
 
-    return std::make_pair(log_took, fmt_took);
+    return std::make_tuple(open_loggin_took, std_to_string_took, std_to_chars_took);
   };
 
   const auto test_and_benchmark_int = []<typename T>
@@ -240,7 +280,7 @@ namespace
   {
     const auto res = tester_integer(static_cast<T>(0));
 
-    log_time_table(0, res.first, res.second);
+    log_time_tables(0, BenchResult("OpenLogging", std::get<0>(res)), BenchResult("std::to_string", std::get<1>(res)), BenchResult("std::to_char", std::get<2>(res)));
   };
 } // namespace
 
@@ -330,69 +370,51 @@ namespace
     return rel_error <= REL_TOL;
   };
 
-  const auto lopper_format_exponential = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &log_took, auto &fmt_took) -> void
+  const auto lopper_format_exponential
+      = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took, auto &std_fmt_took, auto &ryu_took) -> void
   {
     const constexpr auto WISHED_RANGE = 10'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
 
-    OpenLogging logger;
+    // OpenLogging logger;
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      std::string log, num_to_str;
+      std::string open_logging, std_format, ryu;
 
-      const auto st_log = std::chrono::high_resolution_clock::now();
+      const auto st_open_logging = std::chrono::high_resolution_clock::now();
 
-      if constexpr(std::is_same_v<Type, double>)
+      // if constexpr(std::is_same_v<Type, double>) { log = logger.format("{15}", i); } else { six in reality should be 5 log = logger.format("{6}", i); }
+      open_logging = Helpers::Numeric::ToStr(i);
+
+      const auto en_open_logging = std::chrono::high_resolution_clock::now();
+
+      const auto st_std_fmt = std::chrono::high_resolution_clock::now();
+
+      std_format = Helpers::Numeric::Std::to_string(i);
+
+      const auto en_std_fmt = std::chrono::high_resolution_clock::now();
+
+      const auto st_ryu = std::chrono::high_resolution_clock::now();
+
+      ryu = Helpers::Numeric::Ryu::ToStr(i);
+
+      const auto en_ryu = std::chrono::high_resolution_clock::now();
+
+      open_logging_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_open_logging - st_open_logging);
+      std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_fmt - st_std_fmt);
+      ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_ryu - st_ryu);
+
+      if(open_logging != std_format)
       {
-        log = logger.format("{15}", i);
-        // const auto log = Helpers::Numeric::ToStr(i);
-      }
-      else
-      {
-        // six in reality should be 5
-        log = logger.format("{6}", i);
-        // const auto log = Helpers::Numeric::ToStr(i);
-      }
-
-      const auto en_log = std::chrono::high_resolution_clock::now();
-
-      const auto st_fmt = std::chrono::high_resolution_clock::now();
-      if constexpr(std::is_same_v<Type, double>)
-      {
-        num_to_str = std::format("{:.14e}", i);
-      }
-      else
-      {
-        num_to_str = std::format("{:.5e}", i);
-      }
-      const auto en_fmt = std::chrono::high_resolution_clock::now();
-
-      log_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
-      fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_fmt - st_fmt);
-
-      if(log != num_to_str)
-      {
-        const auto log_val = std::strtold(log.c_str(), nullptr);
-        const auto ref_val = std::strtold(num_to_str.c_str(), nullptr);
+        const auto log_val = std::strtold(open_logging.c_str(), nullptr);
+        const auto ref_val = std::strtold(std_format.c_str(), nullptr);
 
         if(!almost_equal(i, log_val, ref_val))
         {
-          std::cout << "log == '" << log << "' AND to_str == '" << num_to_str << "'" << std::endl;
-
-          std::cout << "log        = ";
-
-          log_str_into_hex(log);
-
-          std::cout << std::endl;
-
-          std::cout << "num_to_str = ";
-
-          log_str_into_hex(num_to_str);
-
-          std::cout << std::endl;
+          log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
           lim++;
         }
@@ -407,49 +429,50 @@ namespace
     const constexpr auto MAX = std::numeric_limits<T>::max();
     const constexpr auto EPS = std::numeric_limits<T>::epsilon();
 
-    std::chrono::nanoseconds log_took{ 0 };
-    std::chrono::nanoseconds fmt_took{ 0 };
+    std::chrono::nanoseconds open_logging_time{ 0 };
+    std::chrono::nanoseconds std_fmt_time{ 0 };
+    std::chrono::nanoseconds ryu_time{ 0 };
 
     // ---- small / subnormal region ----
-    lopper_format_exponential(true, T{ 0 }, DENORM, log_took, fmt_took);
-    lopper_format_exponential(true, MIN, DENORM, log_took, fmt_took);
+    lopper_format_exponential(true, T{ 0 }, DENORM, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(true, MIN, DENORM, open_logging_time, std_fmt_time, ryu_time);
 
     // ---- small normal numbers ----
-    lopper_format_exponential(true, MIN, EPS, log_took, fmt_took);
-    lopper_format_exponential(true, MIN * T{ 10 }, EPS, log_took, fmt_took);
+    lopper_format_exponential(true, MIN, EPS, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(true, MIN * T{ 10 }, EPS, open_logging_time, std_fmt_time, ryu_time);
 
     // ---- around powers of two ----
     for(int e = -20; e <= 20; ++e)
     {
       const T val = std::ldexp(T{ 1 }, e); // 2^e
-      lopper_format_exponential(true, val, EPS * val, log_took, fmt_took);
-      lopper_format_exponential(false, val, EPS * val, log_took, fmt_took);
+      lopper_format_exponential(true, val, EPS * val, open_logging_time, std_fmt_time, ryu_time);
+      lopper_format_exponential(false, val, EPS * val, open_logging_time, std_fmt_time, ryu_time);
     }
 
     // ---- around powers of ten ----
     for(int e = -20; e <= 20; ++e)
     {
       const T val = std::pow(T{ 10 }, e);
-      lopper_format_exponential(true, val, EPS * val, log_took, fmt_took);
-      lopper_format_exponential(false, val, EPS * val, log_took, fmt_took);
+      lopper_format_exponential(true, val, EPS * val, open_logging_time, std_fmt_time, ryu_time);
+      lopper_format_exponential(false, val, EPS * val, open_logging_time, std_fmt_time, ryu_time);
     }
 
     // ---- medium magnitude sweeps ----
-    lopper_format_exponential(true, T{ 1 }, EPS, log_took, fmt_took);
-    lopper_format_exponential(true, T{ 100 }, EPS * T{ 100 }, log_took, fmt_took);
-    lopper_format_exponential(true, T{ 1e6 }, EPS * T{ 1e6 }, log_took, fmt_took);
+    lopper_format_exponential(true, T{ 1 }, EPS, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(true, T{ 100 }, EPS * T{ 100 }, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(true, T{ 1e6 }, EPS * T{ 1e6 }, open_logging_time, std_fmt_time, ryu_time);
 
     // ---- large numbers ----
-    lopper_format_exponential(false, MAX, EPS * MAX, log_took, fmt_took);
-    lopper_format_exponential(false, MAX / T{ 10 }, EPS * MAX, log_took, fmt_took);
-    lopper_format_exponential(false, MAX / T{ 1000 }, EPS * MAX, log_took, fmt_took);
+    lopper_format_exponential(false, MAX, EPS * MAX, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(false, MAX / T{ 10 }, EPS * MAX, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(false, MAX / T{ 1000 }, EPS * MAX, open_logging_time, std_fmt_time, ryu_time);
 
     // ---- randomish mantissa coverage ----
-    lopper_format_exponential(true, T{ 1.234 }, T{ 0.0001 }, log_took, fmt_took);
-    lopper_format_exponential(true, T{ 123.456 }, T{ 0.01 }, log_took, fmt_took);
-    lopper_format_exponential(false, T{ 98765.4321 }, T{ 0.1 }, log_took, fmt_took);
+    lopper_format_exponential(true, T{ 1.234 }, T{ 0.0001 }, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(true, T{ 123.456 }, T{ 0.01 }, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(false, T{ 98765.4321 }, T{ 0.1 }, open_logging_time, std_fmt_time, ryu_time);
 
-    return std::make_pair(log_took, fmt_took);
+    return std::make_tuple(open_logging_time, std_fmt_time, ryu_time);
   };
 
   const auto test_and_benchmark_float = []<typename T>
@@ -458,7 +481,7 @@ namespace
   {
     const auto float_res = tester_format_exponential(static_cast<T>(0));
 
-    log_time_table(0.0, float_res.first, float_res.second);
+    log_time_tables(0.0, BenchResult("OpenLogging", std::get<0>(float_res)), BenchResult("std::to_chars", std::get<1>(float_res)), BenchResult("ryu", std::get<2>(float_res)));
   };
 
 } // namespace

@@ -12,6 +12,7 @@ if(NOT CMAKE_BUILD_TYPE)
       Debug
       CACHE STRING "" FORCE)
 endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_compile_options(
     -g
@@ -30,8 +31,11 @@ endif()
 
 # Header-only library
 add_library(OpenLogging INTERFACE)
-target_include_directories(OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
+                                                 /home/lucca/Work/ryu)
 
 # Test executable
 add_executable(test test.cpp)
-target_link_libraries(test PRIVATE OpenLogging)
+
+target_link_libraries(test PRIVATE OpenLogging
+                                   /home/lucca/Work/ryu/build/libryu.a)

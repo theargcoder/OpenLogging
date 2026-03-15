@@ -14,10 +14,68 @@
 #include "include/Helpers/Math.h"
 #include "include/Helpers/Templating.h"
 
+extern "C"
+{
+#include "../ryu/ryu/ryu.h"
+}
+
 struct Helpers::Numeric
 {
+public:
+  struct Std
+  {
+    template <typename Type>
+    static std::string to_string(Type value)
+    {
+      std::array<char, 64> buf;
+
+      if constexpr(std::is_floating_point_v<Type>)
+      {
+        int precision;
+        if constexpr(std::is_same_v<Type, double>)
+          precision = 14;
+        else
+          precision = 5;
+
+        auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::scientific, precision);
+
+        if(ec != std::errc{})
+          return {};
+
+        return std::string(buf.data(), ptr);
+      }
+      else if constexpr(std::is_integral_v<Type>)
+      {
+        auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value);
+
+        if(ec != std::errc{})
+          return {};
+
+        return std::string(buf.data(), ptr);
+      }
+    }
+  };
+
+public:
+  struct Ryu
+  {
+    static std::string ToStr(double v)
+    {
+      char buffer[32];
+      int len = d2s_buffered_n(v, buffer);
+      return std::string(buffer, len);
+    }
+
+    static std::string ToStr(float v)
+    {
+      char buffer[32];
+      int len = f2s_buffered_n(v, buffer);
+      return std::string(buffer, len);
+    }
+  };
+
 private:
-  template <size_t N>
+  template <int N>
   struct char_array
   {
     char array[N];
@@ -29,7 +87,7 @@ public:
   static std::string ToStr(const T &input)
   {
     const auto &[st, buff] = Helpers::Numeric::ToStrCharArray<FORCE_SIGN>(input);
-    return std::string(&buff.array[st], sizeof(buff.array) - st - 1);
+    return std::string(&buff.array[st], sizeof(buff.array) - st);
   }
 
   template <bool FORCE_SIGN = false, typename T>
@@ -38,8 +96,8 @@ public:
   {
     const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 1;
 
-    char_array<MAX_DIGITS10 + 4> buff;
-    size_t i = MAX_DIGITS10 + 3; // starting at the end
+    char_array<MAX_DIGITS10 + 1> buff;
+    char *__restrict__ it = &buff.array[MAX_DIGITS10 + 1];
 
     const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
@@ -47,57 +105,103 @@ public:
     using UT = std::make_unsigned_t<T>;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
 
-    if(val == 0)
+    do
     {
-      buff.array[--i] = '0';
-    }
-    else
-    {
-      while(val)
-      {
-        const auto rem = val % BASE;
-        val /= BASE;
+      const auto rem = val % BASE;
+      val /= BASE;
 
-        buff.array[--i] = '0' + rem;
-      }
-    }
+      *--it = '0' + rem;
+
+    } while(val);
 
     if(NEGATIVE)
     {
-      buff.array[--i] = '-';
+      *--it = '-';
     }
     else if constexpr(FORCE_SIGN)
     {
-      buff.array[--i] = '+';
+      *--it = '+';
     }
 
-    return std::make_pair(i, buff);
+    return std::make_pair(it - &buff.array[0], buff);
+  }
+
+  template <bool FORCE_SIGN = false, int N, typename T>
+    requires std::is_integral_v<T>
+  static int ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char, const int &st_idx)
+  {
+    char *__restrict__ it = &out_char.array[st_idx];
+
+    const constexpr auto BASE = 10;
+    const bool NEGATIVE = input < 0;
+
+    using UT = std::make_unsigned_t<T>;
+    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+
+    do
+    {
+      const auto rem = val % BASE;
+      val /= BASE;
+
+      *--it = '0' + rem;
+
+    } while(val);
+
+    if(NEGATIVE)
+    {
+      *--it = '-';
+    }
+    else if constexpr(FORCE_SIGN)
+    {
+      *--it = '+';
+    }
+
+    return it - &out_char.array[0];
+  }
+  template <typename T>
+    requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
+  static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
+  {
+    const auto &[st, buff] = Helpers::Numeric::ToStrCharArray(input, PRECISION);
+    return std::string(&buff.array[st], sizeof(buff.array) - st);
   }
 
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
-  static std::string ToStr(const T &input, const size_t &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
+  static auto ToStrCharArray(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<T>;
     using Truncate = Constants::Tables::Truncate<Floating::MAX_DIGITS10, typename Floating::smallest_underlying>;
 
-    const static constinit T LOG_10_2 = std::log10(T{ 2 });
+    const static constexpr T LOG_10_2 = std::log10(T{ 2 });
     static const auto &table = Floating().DIGITS;
+
+    const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 6;
+
+    char_array<SIZE_OF_BUFF> buff;
 
     if(input == 0)
     {
-      return std::string{ "0" };
+      buff.array[0] = '0';
+      return std::pair(0, buff);
     }
     else if(std::isfinite(input) == false)
     {
       if(std::isnan(input))
       {
-        return std::string{ "nan" };
+        buff.array[0] = 'n';
+        buff.array[1] = 'a';
+        buff.array[2] = 'n';
+        return std::pair(2, buff);
       }
-      return (input < 0) ? std::string{ "-inf" } : std::string{ "inf" };
-    }
 
-    char buff[Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 6];
+      bool shft = input < 0;
+      buff.array[0] = '-';
+      buff.array[0 + shft] = 'i';
+      buff.array[1 + shft] = 'n';
+      buff.array[2 + shft] = 'f';
+      return std::pair(2 + shft, buff);
+    }
 
     int exp = 0;
     T mantissa = std::frexp(input, &exp);
@@ -121,48 +225,26 @@ public:
       exp_shf--;
     }
 
-    size_t i = 0;
-    auto [idx, buff_str] = Numeric::ToStrCharArray<true>(res);
-    const auto *str = &buff_str.array[0];
-    const auto str_len = sizeof(buff_str.array) - idx - 1;
-
-    buff[i++] = str[idx++];
-
-    if(str_len < PRECISION + 1)
-    {
-      buff[i++] = '0';
-    }
-    else
-    {
-      buff[i++] = str[idx++];
-    }
-
-    buff[i++] = '.';
-
-    const auto diff = sizeof(buff_str.array) - idx - 1;
-    std::memcpy(&buff[i], &str[idx], diff);
-
-    i += diff;
-
-    buff[i++] = 'e';
-
     const auto exp_base_10_int = static_cast<int>(std::floor(exp * LOG_10_2)) + exp_shf;
 
-    const auto &[exp_idx, exp_buff_str] = Numeric::ToStrCharArray<true>(exp_base_10_int);
-    const auto *exp_str = &exp_buff_str.array[exp_idx];
-    const auto exp_str_len = sizeof(exp_buff_str.array) - exp_idx - 1;
+    auto exp_idx = Numeric::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
 
-    std::memcpy(&buff[i], exp_str, exp_str_len);
+    buff.array[--exp_idx] = 'e';
 
-    const auto ttl_size = i + exp_str_len;
+    auto res_idx = Numeric::ToStrReverseWriteToCharArray<false>(res, buff, exp_idx);
 
-    i = 0;
-    if(buff[i] == '+')
+    const auto var_len = res_idx - exp_idx;
+
+    if(var_len < PRECISION + 1)
     {
-      i++;
+      buff.array[--res_idx] = '0';
     }
 
-    return std::string(&buff[i], ttl_size);
+    buff.array[res_idx] = '.';
+
+    std::swap(buff.array[res_idx], buff.array[res_idx + 1]);
+
+    return std::make_pair(res_idx, buff);
   }
 };
 

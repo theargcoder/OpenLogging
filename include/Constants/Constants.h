@@ -71,6 +71,24 @@ struct Constants
       }
     };
 
+    struct Integral
+    {
+    public:
+      static const constexpr auto BASE = 10;
+      static constexpr auto SIZE = 100;
+
+      char DIGITS[SIZE][2];
+
+      consteval Integral()
+      {
+        for(int i = 0; i < SIZE; i++)
+        {
+          DIGITS[i][0] = '0' + i / BASE;
+          DIGITS[i][1] = '0' + i % BASE;
+        }
+      }
+    };
+
     template <typename T>
       requires std::is_floating_point_v<T>
     struct Floating
