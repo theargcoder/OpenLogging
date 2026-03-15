@@ -152,16 +152,19 @@ namespace
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
 
-    OpenLogging logger;
+    // OpenLogging logger;
+
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
 
       const auto st_log = std::chrono::high_resolution_clock::now();
-      const auto log = logger.format("{}", i);
+      // const auto log = logger.format("{}", i);
+      const auto log = Helpers::Numeric::ToStr(i);
       const auto en_log = std::chrono::high_resolution_clock::now();
 
       const auto st_fmt = std::chrono::high_resolution_clock::now();
-      const auto num_to_str = std::format("{}", std::to_string(i));
+      // const auto num_to_str = std::format("{}", i);
+      const auto num_to_str = std::to_string(i);
       const auto en_fmt = std::chrono::high_resolution_clock::now();
 
       log_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
@@ -244,13 +247,12 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_integegral_v)
 {
   test_and_benchmark_int(static_cast<int8_t>(0));
-  test_and_benchmark_int(static_cast<int16_t>(0));
-  test_and_benchmark_int(static_cast<int32_t>(0));
-  test_and_benchmark_int(static_cast<int64_t>(0));
-
   test_and_benchmark_int(static_cast<uint8_t>(0));
+  test_and_benchmark_int(static_cast<int16_t>(0));
   test_and_benchmark_int(static_cast<uint16_t>(0));
+  test_and_benchmark_int(static_cast<int32_t>(0));
   test_and_benchmark_int(static_cast<uint32_t>(0));
+  test_and_benchmark_int(static_cast<int64_t>(0));
   test_and_benchmark_int(static_cast<uint64_t>(0));
 }
 

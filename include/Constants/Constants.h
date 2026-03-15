@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <type_traits>
 
@@ -55,10 +56,12 @@ struct Constants
   struct IntegralDigitsTable
   {
   private:
-  public:
     static const constexpr auto SIZE = 1000;
     static const constexpr auto BASE = 10;
-    char table[SIZE][3]{};
+
+  public:
+    char table[SIZE][3];
+
     consteval IntegralDigitsTable()
     {
       for(int i = 0; i < SIZE; ++i)
@@ -67,7 +70,9 @@ struct Constants
         const char tens = '0' + (i / BASE) % BASE;
         const char ones = '0' + i % BASE;
 
-        Helpers::Templating::Fillers::fill_char_array(table, i, hundreds, tens, ones);
+        table[i][0] = hundreds;
+        table[i][1] = tens;
+        table[i][2] = ones;
       }
     }
   };
