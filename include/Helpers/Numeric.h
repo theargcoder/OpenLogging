@@ -74,13 +74,15 @@ public:
     return std::make_pair(i, buff);
   }
 
-  template <typename T, int PRECISION = Constants::FloatingDigitsTable<T>::MAX_DIGITS10>
+  template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
-  static std::string ToStr(const T &input)
+  static std::string ToStr(const T &input, const size_t &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
+    using Floating = Constants::Tables::Floating<T>;
+    using Truncate = Constants::Tables::Truncate<Floating::MAX_DIGITS10, typename Floating::smallest_underlying>;
+
     const static constinit T LOG_10_2 = std::log10(T{ 2 });
-    using FloatingStruct = Constants::FloatingDigitsTable<T>;
-    static const auto &table = FloatingStruct().table;
+    static const auto &table = Floating().DIGITS;
 
     if(input == 0)
     {
@@ -95,20 +97,23 @@ public:
       return (input < 0) ? std::string{ "-inf" } : std::string{ "inf" };
     }
 
-    char buff[PRECISION + FloatingStruct::MAX_EXP_DIGITS10 + 6];
+    char buff[Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 6];
 
     int exp = 0;
     T mantissa = std::frexp(input, &exp);
 
-    const auto exp_2 = table[exp + FloatingStruct::BIAS];
+    const auto exp_2 = table[exp + Floating::BIAS];
 
-    const auto digits_10 = static_cast<FloatingStruct::smallest_underlying>(mantissa * exp_2);
+    const auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
 
-    const constexpr auto DIGITS_10_PRES = FloatingStruct::MAX_DIGITS10 - PRECISION;
-    const constexpr auto take_off_precision = Helpers::Math::Constexpr::pow(static_cast<FloatingStruct::smallest_underlying>(10), DIGITS_10_PRES);
-    const constexpr auto precision = Helpers::Math::Constexpr::pow(static_cast<FloatingStruct::smallest_underlying>(10), PRECISION);
+    const auto DIGITS_10_PRES = Floating::MAX_DIGITS10 - PRECISION;
 
-    typename FloatingStruct::smallest_underlying res = digits_10 / take_off_precision;
+    const auto &trunc_table = Truncate().EXP_TO_RES;
+
+    const auto &take_off_precision = trunc_table[DIGITS_10_PRES];
+    const auto &precision = trunc_table[PRECISION];
+
+    typename Floating::smallest_underlying res = digits_10 / take_off_precision;
 
     int exp_shf = 0;
     if(res < precision)

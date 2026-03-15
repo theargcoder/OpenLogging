@@ -262,14 +262,14 @@ namespace
     requires std::is_floating_point_v<T>
   (T)
   {
-    const constexpr auto FloatTable = Constants::FloatingDigitsTable<T>();
-    const auto &table = FloatTable.table;
+    const constexpr auto FloatTable = Constants::Tables::Floating<T>();
+    const auto &table = FloatTable.DIGITS;
 
-    constexpr int BIAS = Constants::FloatingDigitsTable<T>::BIAS;
-    constexpr int MAX_DIGITS10 = Constants::FloatingDigitsTable<T>::MAX_DIGITS10;
-    constexpr int ACTUAL_DIGITS10 = Constants::FloatingDigitsTable<T>::ACTUAL_DIGITS10;
-    constexpr auto MIN_SIG_FIGS = Constants::FloatingDigitsTable<T>::MIN_SIG_FIGS;
-    constexpr auto MAX_SIG_FIGS = Constants::FloatingDigitsTable<T>::MAX_SIG_FIGS;
+    constexpr int BIAS = Constants::Tables::Floating<T>::BIAS;
+    constexpr int MAX_DIGITS10 = Constants::Tables::Floating<T>::MAX_DIGITS10;
+    constexpr int ACTUAL_DIGITS10 = Constants::Tables::Floating<T>::ACTUAL_DIGITS10;
+    constexpr auto MIN_SIG_FIGS = Constants::Tables::Floating<T>::MIN_SIG_FIGS;
+    constexpr auto MAX_SIG_FIGS = Constants::Tables::Floating<T>::MAX_SIG_FIGS;
 
     const double scale = std::pow(10.0, MAX_DIGITS10);
 
@@ -341,14 +341,33 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      const constexpr int FP_PREC = std::numeric_limits<Type>::digits10;
+      std::string log, num_to_str;
+
       const auto st_log = std::chrono::high_resolution_clock::now();
-      const auto log = logger.format("{}", i);
-      // const auto log = Helpers::Numeric::ToStr(i);
+
+      if constexpr(std::is_same_v<Type, double>)
+      {
+        log = logger.format("{15}", i);
+        // const auto log = Helpers::Numeric::ToStr(i);
+      }
+      else
+      {
+        // six in reality should be 5
+        log = logger.format("{6}", i);
+        // const auto log = Helpers::Numeric::ToStr(i);
+      }
+
       const auto en_log = std::chrono::high_resolution_clock::now();
 
       const auto st_fmt = std::chrono::high_resolution_clock::now();
-      const auto num_to_str = std::format("{:.{}e}", i, FP_PREC);
+      if constexpr(std::is_same_v<Type, double>)
+      {
+        num_to_str = std::format("{:.14e}", i);
+      }
+      else
+      {
+        num_to_str = std::format("{:.5e}", i);
+      }
       const auto en_fmt = std::chrono::high_resolution_clock::now();
 
       log_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);

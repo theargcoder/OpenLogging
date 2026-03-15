@@ -4,6 +4,8 @@
 
 #include "include/Helpers/Numeric.h"
 #include "include/Helpers/Templating.h"
+#include <limits>
+#include <type_traits>
 
 struct Helpers::Print
 {
@@ -11,9 +13,17 @@ struct Helpers::Print
     requires(Helpers::Templating::Types::is_numeric_v<T>())
   static std::string WithFormat(const T &var, const char (&format)[M])
   {
-    std::string number_in_str = Helpers::Numeric::ToStr(var);
+    std::string number_in_str;
 
-    // @@@ do the .3f or 3d logic bs here ....
+    if constexpr(std::is_floating_point_v<T>)
+    {
+      const auto prescicion = (format[0] != '\0') ? std::stoi(format) : std::numeric_limits<T>::digits10;
+      number_in_str += Helpers::Numeric::ToStr(var, prescicion);
+    }
+    else
+    {
+      number_in_str += Helpers::Numeric::ToStr(var);
+    }
 
     return number_in_str;
   }
