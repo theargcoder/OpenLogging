@@ -1,17 +1,17 @@
 #pragma once
 
+#include <charconv>
 #include <cmath>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
 #include <limits>
 #include <string>
 #include <type_traits>
 
+#include "include/Helpers/Helpers.h"
+
+#include "include/Helpers/Math.h"
+
 #include "include/Constants/Constants.h"
 
-#include "include/Helpers/Helpers.h"
-#include "include/Helpers/Math.h"
 #include "include/Helpers/Templating.h"
 
 extern "C"
@@ -173,7 +173,6 @@ public:
     using Floating = Constants::Tables::Floating<T>;
     using Truncate = Constants::Tables::Truncate<Floating::MAX_DIGITS10, typename Floating::smallest_underlying>;
 
-    const static constexpr T LOG_10_2 = std::log10(T{ 2 });
     static const auto &table = Floating().DIGITS;
 
     const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 6;
@@ -203,8 +202,13 @@ public:
       return std::pair(2 + shft, buff);
     }
 
-    int exp = 0;
-    T mantissa = std::frexp(input, &exp);
+    /*
+    int exp;
+    const T mantissa = std::frexp(input, &exp);
+    */
+    const auto frexpp = Helpers::Math::IEEE754(input);
+    const auto &exp = frexpp.exponent;
+    const auto &mantissa = frexpp.mantissa;
 
     const auto exp_2 = table[exp + Floating::BIAS];
 
@@ -217,7 +221,7 @@ public:
     const auto &take_off_precision = trunc_table[DIGITS_10_PRES];
     const auto &precision = trunc_table[PRECISION];
 
-    typename Floating::smallest_underlying res = digits_10 / take_off_precision;
+    const typename Floating::smallest_underlying res = digits_10 / take_off_precision;
 
     int exp_shf = 0;
     if(res < precision)
@@ -225,7 +229,7 @@ public:
       exp_shf--;
     }
 
-    const auto exp_base_10_int = static_cast<int>(std::floor(exp * LOG_10_2)) + exp_shf;
+    const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shf;
 
     auto exp_idx = Numeric::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
 

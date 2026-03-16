@@ -20,7 +20,6 @@ struct Helpers::Math
   };
 
   template <typename T>
-    requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
   struct IEEE754
   {
   private:
@@ -34,11 +33,13 @@ struct Helpers::Math
     static constexpr underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
 
     static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
+    static constexpr auto MANTISSA_OFFSET_BITS = (IS_DOUBLE ? 64 : 32) - EXPONENT_ST;
 
     static constexpr underlying SIGN_ONLY = IS_DOUBLE ? 0x8000000000000000ULL : 0x80000000U;
 
-    static constexpr underlying HALF_EXP = (EXPONENT_BIAS - 1) << EXPONENT_ST;
-    static constexpr underlying ZERO_EXP = (EXPONENT_BIAS) << EXPONENT_ST;
+    static constexpr underlying HALF_EXP = (EXPONENT_BIAS - 1) << EXPONENT_ST; // exponent = 126
+
+    // static constexpr underlying MANTISSA_AND_SIGN_ONLY = IS_DOUBLE ? 0x800FFFFFFFFFFFFFULL : 0x807FFFFFU;
 
   public:
     T mantissa;
@@ -58,16 +59,25 @@ struct Helpers::Math
       {
         mantissa = std::bit_cast<T>(man | SIGN | HALF_EXP);
         exponent = exp - EXPONENT_BIAS + 1;
+
+        return;
+      }
+
+      const auto man_popct = std::popcount(man);
+
+      if(man_popct == 1)
+      {
+        const auto shf = std::countl_zero(man) - MANTISSA_OFFSET_BITS;
+
+        mantissa = T{ 1 };
+        exponent = 0 - EXPONENT_BIAS - shf;
+        std::cout << " 0 the bug is here 0 " << '\n';
       }
       else
       {
-        // @@@ IDFK
-
-        int shift = EXPONENT_ST - std::countl_zero(man) - 1;
-
-        mantissa = std::bit_cast<T>(man | SIGN | ZERO_EXP);
-        exponent = -EXPONENT_BIAS - shift;
-        // exponent = -EXPONENT_BIAS - EXPONENT_ST + 2;
+        mantissa = std::bit_cast<T>(man | SIGN | HALF_EXP);
+        exponent = 0 - EXPONENT_BIAS;
+        std::cout << " 1 the bug is here 1 " << '\n';
       }
     }
   };

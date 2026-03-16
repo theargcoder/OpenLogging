@@ -2,12 +2,10 @@
 
 #include <cmath>
 #include <cstdint>
-#include <iostream>
 #include <limits>
 #include <type_traits>
 
 #include "include/Helpers/Math.h"
-#include "include/Helpers/Templating.h"
 
 struct Constants
 {
