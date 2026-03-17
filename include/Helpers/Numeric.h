@@ -1,7 +1,9 @@
 #pragma once
 
 #include <charconv>
-#include <cmath>
+
+#include <charconv>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -179,37 +181,28 @@ public:
 
     char_array<SIZE_OF_BUFF> buff;
 
-    if(input == 0)
-    {
-      buff.array[0] = '0';
-      return std::pair(0, buff);
-    }
-    else if(std::isfinite(input) == false)
-    {
-      if(std::isnan(input))
-      {
-        buff.array[0] = 'n';
-        buff.array[1] = 'a';
-        buff.array[2] = 'n';
-        return std::pair(2, buff);
-      }
-
-      bool shft = input < 0;
-      buff.array[0] = '-';
-      buff.array[0 + shft] = 'i';
-      buff.array[1 + shft] = 'n';
-      buff.array[2 + shft] = 'f';
-      return std::pair(2 + shft, buff);
-    }
-
-    /*
-    int exp;
-    const T mantissa = std::frexp(input, &exp);
-    */
-
     const auto frexpp = Helpers::Math::IEEE754(input);
     const auto &exp = frexpp.exponent;
     const auto &mantissa = frexpp.mantissa;
+
+    if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max())
+    {
+      if(mantissa == T{ 0 })
+      {
+        std::memcpy(&buff.array[0], "nan", 3);
+      }
+      else if(mantissa > T{ 0 })
+      {
+        std::memcpy(&buff.array[0], "inf", 3);
+      }
+      else
+      {
+        std::memcpy(&buff.array[0], "-inf", 4);
+        return std::pair(3, buff);
+      }
+
+      return std::pair(2, buff);
+    }
 
     const auto exp_2 = table[exp + Floating::BIAS];
 
