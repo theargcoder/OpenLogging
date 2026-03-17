@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bit>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -31,9 +32,11 @@ struct Helpers::Math
 
     static constexpr underlying EXPONENT_ONLY = IS_DOUBLE ? 0x7FF0000000000000ULL : 0x7F800000U;
     static constexpr underlying EXPONENT_ST = IS_DOUBLE ? 52 : 23;
-    static constexpr underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
+    static constexpr signed_underlying EXP_LEFT_OFFSET = sizeof(T) * 8 - EXPONENT_ST - 1;
+    static constexpr signed_underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
 
     static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
+    static constexpr underlying LEADING_1 = underlying(1) << (EXPONENT_ST - 1);
 
     static constexpr underlying SIGN_ONLY = IS_DOUBLE ? 0x8000000000000000ULL : 0x80000000U;
 
@@ -61,13 +64,10 @@ struct Helpers::Math
       }
       else
       {
-        // @@@ IDFK
+        const int shift = std::countl_zero(man) - EXP_LEFT_OFFSET;
 
-        int shift = EXPONENT_ST - std::countl_zero(man) - 1;
-
-        mantissa = std::bit_cast<T>(man | SIGN | ZERO_EXP);
-        exponent = -EXPONENT_BIAS - shift;
-        // exponent = -EXPONENT_BIAS - EXPONENT_ST + 2;
+        mantissa = std::bit_cast<T>(((man << shift) & MANTISSA_ONLY) | SIGN | HALF_EXP);
+        exponent = -EXPONENT_BIAS - shift + 2;
       }
     }
   };

@@ -206,6 +206,7 @@ public:
     int exp;
     const T mantissa = std::frexp(input, &exp);
     */
+
     const auto frexpp = Helpers::Math::IEEE754(input);
     const auto &exp = frexpp.exponent;
     const auto &mantissa = frexpp.mantissa;
