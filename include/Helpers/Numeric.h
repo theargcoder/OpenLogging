@@ -2,13 +2,12 @@
 
 #include <charconv>
 
+#include <array>
 #include <charconv>
 #include <cstring>
 #include <limits>
 #include <string>
 #include <type_traits>
-
-#include "include/Helpers/Helpers.h"
 
 #include "include/Helpers/Math.h"
 
@@ -21,76 +20,68 @@ extern "C"
 #include "../ryu/ryu/ryu.h"
 }
 
-struct Helpers::Numeric
+namespace Helpers::Numeric::Std
 {
-public:
-  struct Std
+  template <typename Type>
+  static auto to_string(Type value)
   {
-    template <typename Type>
-    static std::string to_string(Type value)
+    std::array<char, 64> buf;
+
+    if constexpr(std::is_floating_point_v<Type>)
     {
-      std::array<char, 64> buf;
+      int precision;
+      if constexpr(std::is_same_v<Type, double>)
+        precision = 14;
+      else
+        precision = 5;
 
-      if constexpr(std::is_floating_point_v<Type>)
+      auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::scientific, precision);
+
+      if(ec != std::errc{})
       {
-        int precision;
-        if constexpr(std::is_same_v<Type, double>)
-          precision = 14;
-        else
-          precision = 5;
-
-        auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::scientific, precision);
-
-        if(ec != std::errc{})
-          return {};
-
-        return std::string(buf.data(), ptr);
+        return std::string{};
       }
-      else if constexpr(std::is_integral_v<Type>)
-      {
-        auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value);
 
-        if(ec != std::errc{})
-          return {};
-
-        return std::string(buf.data(), ptr);
-      }
+      return std::string(buf.data(), ptr);
     }
-  };
+    else if constexpr(std::is_integral_v<Type>)
+    {
+      auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value);
 
-public:
-  struct Ryu
+      if(ec != std::errc{})
+      {
+        return std::string{};
+      }
+
+      return std::string(buf.data(), ptr);
+    }
+  }
+} // namespace Helpers::Numeric::Std
+
+namespace Helpers::Numeric::Ryu
+{
+  static auto ToStr(double v)
   {
-    static std::string ToStr(double v)
-    {
-      char buffer[32];
-      int len = d2s_buffered_n(v, buffer);
-      return std::string(buffer, len);
-    }
+    char buffer[32];
+    int len = d2s_buffered_n(v, &buffer[0]);
+    return std::string(&buffer[0], len);
+  }
 
-    static std::string ToStr(float v)
-    {
-      char buffer[32];
-      int len = f2s_buffered_n(v, buffer);
-      return std::string(buffer, len);
-    }
-  };
+  static auto ToStr(float v)
+  {
+    char buffer[32];
+    int len = f2s_buffered_n(v, &buffer[0]);
+    return std::string(&buffer[0], len);
+  }
+} // namespace Helpers::Numeric::Ryu
 
-private:
+namespace Helpers::Numeric::OpenLogging
+{
   template <int N>
   struct char_array
   {
     char array[N];
   };
-
-public:
-  template <bool FORCE_SIGN = false, typename T>
-    requires std::is_integral_v<T>
-  static std::string ToStr(const T &input)
-  {
-    const auto &[st, buff] = Helpers::Numeric::ToStrCharArray<FORCE_SIGN>(input);
-    return std::string(&buff.array[st], sizeof(buff.array) - st);
-  }
 
   template <bool FORCE_SIGN = false, typename T>
     requires std::is_integral_v<T>
@@ -128,6 +119,14 @@ public:
     return std::make_pair(it - &buff.array[0], buff);
   }
 
+  template <bool FORCE_SIGN = false, typename T>
+    requires std::is_integral_v<T>
+  static std::string ToStr(const T &input)
+  {
+    const auto &[st, buff] = Helpers::Numeric::OpenLogging::ToStrCharArray<FORCE_SIGN>(input);
+    return std::string(&buff.array[st], sizeof(buff.array) - st);
+  }
+
   template <bool FORCE_SIGN = false, int N, typename T>
     requires std::is_integral_v<T>
   static int ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char, const int &st_idx)
@@ -160,20 +159,12 @@ public:
 
     return it - &out_char.array[0];
   }
-  template <typename T>
-    requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
-  static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
-  {
-    const auto &[st, buff] = Helpers::Numeric::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[st], sizeof(buff.array) - st);
-  }
 
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static auto ToStrCharArray(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<T>;
-    using Truncate = Constants::Tables::Truncate<Floating::MAX_DIGITS10, typename Floating::smallest_underlying>;
 
     static const auto &table = Floating().DIGITS;
 
@@ -208,43 +199,36 @@ public:
 
     const auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
 
-    const auto DIGITS_10_PRES = Floating::MAX_DIGITS10 - PRECISION;
+    const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
 
-    const auto &trunc_table = Truncate().EXP_TO_RES;
+    int exp_shft = (digits_10 < precision) ? -1 : 0;
 
-    const auto &take_off_precision = trunc_table[DIGITS_10_PRES];
-    const auto &precision = trunc_table[PRECISION];
+    const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
 
-    const typename Floating::smallest_underlying res = digits_10 / take_off_precision;
-
-    int exp_shf = 0;
-    if(res < precision)
-    {
-      exp_shf--;
-    }
-
-    const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shf;
-
-    auto exp_idx = Numeric::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
+    auto exp_idx = Helpers::Numeric::OpenLogging::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
 
     buff.array[--exp_idx] = 'e';
 
-    auto res_idx = Numeric::ToStrReverseWriteToCharArray<false>(res, buff, exp_idx);
+    auto [res_st_idx, res_buff] = Helpers::Numeric::OpenLogging::ToStrCharArray<false>(digits_10);
 
-    const auto var_len = res_idx - exp_idx;
+    exp_idx -= PRECISION;
+    std::memcpy(&buff.array[exp_idx--], &res_buff.array[res_st_idx], PRECISION);
 
-    if(var_len < PRECISION + 1)
-    {
-      buff.array[--res_idx] = '0';
-    }
+    buff.array[exp_idx] = '.';
 
-    buff.array[res_idx] = '.';
+    std::swap(buff.array[exp_idx], buff.array[exp_idx + 1]);
 
-    std::swap(buff.array[res_idx], buff.array[res_idx + 1]);
-
-    return std::make_pair(res_idx, buff);
+    return std::make_pair(exp_idx, buff);
   }
-};
+
+  template <typename T>
+    requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
+  static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
+  {
+    const auto &[st, buff] = Helpers::Numeric::OpenLogging::ToStrCharArray(input, PRECISION);
+    return std::string(&buff.array[st], sizeof(buff.array) - st);
+  }
+} // namespace Helpers::Numeric::OpenLogging
 
 //
 ///

@@ -1,25 +1,176 @@
 #pragma once
 
 #include <bit>
-#include <cmath>
 #include <cstdint>
-#include <iostream>
 #include <limits>
+#include <numbers>
 #include <type_traits>
 
-#include "include/Helpers/Helpers.h"
-
-struct Helpers::Math
+namespace Helpers::Math::Constexpr
 {
-  struct Constexpr
+  template <typename T>
+  static constexpr T abs(T x)
   {
-    template <typename T>
-    static constexpr T pow(T base, int exp)
-    {
-      return exp == 0 ? 1 : base * Helpers::Math::Constexpr::pow(base, exp - 1);
-    }
-  };
+    return x < 0 ? -x : x;
+  }
 
+  template <typename BaseType, typename ExpType>
+    requires std::is_integral_v<ExpType>
+  static constexpr BaseType ipow(BaseType base, ExpType exp)
+  {
+    if(exp < 0)
+    {
+      if constexpr(std::is_floating_point_v<BaseType>)
+      {
+        base = BaseType{ 1 } / base;
+        exp = -exp;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+
+    BaseType res = 1;
+    while(exp > 0)
+    {
+      if(exp % 2 == 1)
+      {
+        res *= base;
+      }
+
+      exp /= 2;
+
+      // FIX: Prevent squaring base on the final step to avoid constexpr overflow!
+      if(exp > 0)
+      {
+        base *= base;
+      }
+    }
+    return res;
+  }
+
+  // --- Natural Logarithm (ln x) ---
+  template <typename T>
+  static constexpr T ln(T x)
+  {
+    if(x <= 0)
+    {
+      return std::numeric_limits<T>::quiet_NaN();
+    }
+    if(x == 1)
+    {
+      return 0;
+    }
+
+    int k = 0;
+    while(x > 1.5)
+    {
+      x /= 2;
+      k++;
+    }
+    while(x < 0.75)
+    {
+      x *= 2;
+      k--;
+    }
+
+    T z = x;
+    const constexpr T ln2 = std::numbers::ln2_v<long double>;
+
+    T y = (z - 1) / (z + 1);
+    T y2 = y * y;
+    T term = y;
+    T sum = y;
+    for(int i = 3; i < 70; i += 2)
+    {
+      term *= y2;
+      sum += term / i;
+    }
+    return 2 * sum + (T)k * ln2;
+  }
+
+  // --- Exponential (e^x) ---
+  template <typename T>
+  static constexpr T exp(T x)
+  {
+    if(x == 0)
+    {
+      return 1;
+    }
+
+    const constexpr T ln2 = std::numbers::ln2_v<T>;
+    int k = static_cast<int>(x / ln2);
+    T f = x - static_cast<T>(k) * ln2;
+
+    T term = 1;
+    T sum = 1;
+    for(int i = 1; i < 50; ++i)
+    {
+      term *= f / i;
+      sum += term;
+    }
+
+    // FIXED: ipow now handles negatives cleanly
+    return sum * ipow(T{ 2 }, k);
+  }
+
+  // --- The Full Pow (Floating Point Exponent) ---
+  template <typename T>
+    requires std::is_floating_point_v<T>
+  static constexpr T pow(T base, T exp_val)
+  {
+    if(exp_val == 0)
+    {
+      return 1;
+    }
+    if(base == 0)
+    {
+      return 0;
+    }
+    if(base < 0)
+    {
+      auto i_exp = static_cast<long long>(exp_val);
+      if(static_cast<T>(i_exp) == exp_val)
+      {
+        T res = exp(exp_val * ln(abs(base)));
+        return (i_exp % 2 == 0) ? res : -res;
+      }
+      return std::numeric_limits<T>::quiet_NaN();
+    }
+
+    return exp(exp_val * ln(base));
+  }
+
+  template <typename BaseType, typename ExpType>
+    requires std::is_integral_v<ExpType>
+  static consteval BaseType pow(BaseType base, ExpType exp_val)
+  {
+    return ipow(base, exp_val);
+  }
+
+  template <typename T>
+  static consteval T log10(T x)
+  {
+    if(x <= 0)
+    {
+      return std::numeric_limits<T>::quiet_NaN();
+    }
+    if(x == 1)
+    {
+      return 0;
+    }
+
+    // Multiply by 1 / ln(10)
+    const constexpr T inv_ln10 = std::numbers::log10e_v<T>;
+
+    return ln(x) * inv_ln10;
+  }
+
+} // namespace Helpers::Math::Constexpr
+
+namespace Helpers::Math
+{
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
   struct IEEE754
@@ -47,6 +198,7 @@ struct Helpers::Math
     T mantissa;
     signed_underlying exponent;
 
+  public:
     explicit IEEE754(const T &input)
     {
       const underlying bits = std::bit_cast<underlying>(input);
@@ -79,4 +231,4 @@ struct Helpers::Math
       }
     }
   };
-};
+} // namespace Helpers::Math

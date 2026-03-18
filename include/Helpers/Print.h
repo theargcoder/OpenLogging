@@ -1,13 +1,11 @@
 #pragma once
 
-#include "include/Helpers/Helpers.h"
-
 #include "include/Helpers/Numeric.h"
 #include "include/Helpers/Templating.h"
 #include <limits>
 #include <type_traits>
 
-struct Helpers::Print
+namespace Helpers::Print
 {
   template <size_t M, typename T>
     requires(Helpers::Templating::Types::is_numeric_v<T>())
@@ -18,11 +16,11 @@ struct Helpers::Print
     if constexpr(std::is_floating_point_v<T>)
     {
       const auto prescicion = (format[0] != '\0') ? std::stoi(format) : std::numeric_limits<T>::digits10;
-      number_in_str += Helpers::Numeric::ToStr(var, prescicion);
+      number_in_str += Helpers::Numeric::OpenLogging::ToStr(var, prescicion);
     }
     else
     {
-      number_in_str += Helpers::Numeric::ToStr(var);
+      number_in_str += Helpers::Numeric::OpenLogging::ToStr(var);
     }
 
     return number_in_str;
@@ -40,4 +38,4 @@ struct Helpers::Print
   {
     return "NOT IMPLEMENTED YET";
   }
-};
+} // namespace Helpers::Print

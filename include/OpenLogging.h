@@ -8,8 +8,6 @@
 
 #include "include/Structures/Structures.h"
 
-#include "include/Helpers/Helpers.h"
-
 #include "include/Helpers/String.h"
 
 class OpenLogging

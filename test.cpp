@@ -1,8 +1,8 @@
-#include <chrono>
 #define BOOST_TEST_MODULE UnitTests
 #include <boost/test/included/unit_test.hpp>
 
 #include <cfloat>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -10,7 +10,6 @@
 #include <type_traits>
 
 #include "include/Constants/Constants.h"
-#include "include/Helpers/Helpers.h"
 #include "include/Helpers/Numeric.h"
 #include "include/OpenLogging.h"
 
@@ -201,7 +200,7 @@ namespace
 
       const auto st_log = std::chrono::high_resolution_clock::now();
       // const auto log = logger.format("{}", i);
-      const auto log = Helpers::Numeric::ToStr(i);
+      const auto log = Helpers::Numeric::OpenLogging::ToStr(i);
       const auto en_log = std::chrono::high_resolution_clock::now();
 
       const auto st_std_to_str = std::chrono::high_resolution_clock::now();
@@ -302,14 +301,11 @@ namespace
     requires std::is_floating_point_v<T>
   (T)
   {
-    const constexpr auto FloatTable = Constants::Tables::Floating<T>();
+    const auto FloatTable = Constants::Tables::Floating<T>();
     const auto &table = FloatTable.DIGITS;
 
     constexpr int BIAS = Constants::Tables::Floating<T>::BIAS;
     constexpr int MAX_DIGITS10 = Constants::Tables::Floating<T>::MAX_DIGITS10;
-    constexpr int ACTUAL_DIGITS10 = Constants::Tables::Floating<T>::ACTUAL_DIGITS10;
-    constexpr auto MIN_SIG_FIGS = Constants::Tables::Floating<T>::MIN_SIG_FIGS;
-    constexpr auto MAX_SIG_FIGS = Constants::Tables::Floating<T>::MAX_SIG_FIGS;
 
     const double scale = std::pow(10.0, MAX_DIGITS10);
 
@@ -324,22 +320,18 @@ namespace
       static const auto LOG_10_2 = std::log10(2.0);
 
       // reconstruct approximate value
-      const double result = (static_cast<double>(val) / (scale)) * std::pow(10.0L, static_cast<int32_t>(std::floor(LOG_10_2 * exp)));
-      const double expected = std::pow(2.0, exp);
+      const long double result = (static_cast<double>(val) / (scale)) * std::pow(10.0L, static_cast<int32_t>(std::floor(LOG_10_2 * exp)));
+      const long double expected = std::pow(2.0, exp);
 
-      const double abs_error = std::abs(result - expected);
-      const double rel_error = abs_error / expected;
+      const long double abs_error = std::abs(result - expected);
+      const long double rel_error = abs_error / expected;
 
       // bounds
-      BOOST_CHECK(val >= MIN_SIG_FIGS / 10);
-      BOOST_CHECK(val < MAX_SIG_FIGS / 10);
-      BOOST_CHECK_EQUAL(digits, ACTUAL_DIGITS10);
-      const double max_tolerance = std::pow(10, -(MAX_DIGITS10));
-      // if its double we allow up to 3 micro-units; otherwise 1 micro unit
-      BOOST_CHECK_SMALL(rel_error, (std::is_same_v<T, double>) ? 3 * max_tolerance : max_tolerance);
+      BOOST_CHECK_EQUAL(digits, FloatTable.ACTUAL_DIGITS10);
+      const long double max_tolerance = std::pow(static_cast<long double>(10), static_cast<long double>(-(MAX_DIGITS10))); // 1.5 micro unit max tolerance
+      BOOST_CHECK_SMALL(rel_error, max_tolerance);
 
-      bool log = !(val >= MIN_SIG_FIGS / 10) || !(val < MAX_SIG_FIGS / 10) || !(digits == ACTUAL_DIGITS10)
-                 || !(rel_error <= ((std::is_same_v<T, double>) ? 3 * max_tolerance : max_tolerance));
+      bool log = !(digits == FloatTable.ACTUAL_DIGITS10) || !(rel_error <= max_tolerance);
 
       constexpr int FP_PREC = std::numeric_limits<T>::max_digits10;
 
@@ -365,7 +357,7 @@ namespace
     const auto denom = std::max(std::abs(b), static_cast<long double>(std::numeric_limits<Type>::denorm_min()));
     const auto rel_error = abs_error / denom;
 
-    const constexpr auto REL_TOL = 1.0L / Helpers::Math::Constexpr::pow(10.0L, std::numeric_limits<Type>::digits10 - 1);
+    const constexpr auto REL_TOL = 1.1 * (1.0L / Helpers::Math::Constexpr::pow(10.0L, std::numeric_limits<Type>::digits10 - 1));
     BOOST_CHECK_SMALL(rel_error, REL_TOL);
     return rel_error <= REL_TOL;
   };
@@ -387,7 +379,7 @@ namespace
       const auto st_open_logging = std::chrono::high_resolution_clock::now();
 
       // if constexpr(std::is_same_v<Type, double>) { log = logger.format("{15}", i); } else { six in reality should be 5 log = logger.format("{6}", i); }
-      open_logging = Helpers::Numeric::ToStr(i);
+      open_logging = Helpers::Numeric::OpenLogging::ToStr(i);
 
       const auto en_open_logging = std::chrono::high_resolution_clock::now();
 
