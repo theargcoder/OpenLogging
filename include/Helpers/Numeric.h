@@ -181,7 +181,7 @@ namespace Helpers::Numeric::OpenLogging
 
     if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max())
     {
-      buff.start_idx = SIZE_OF_BUFF - 4;
+      buff.start_idx = SIZE_OF_BUFF - 3;
       if(mantissa == T{ 0 })
       {
         std::memcpy(&buff.array[buff.start_idx], "nan", 3);
