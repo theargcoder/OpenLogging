@@ -186,7 +186,7 @@ namespace Helpers::Math
     static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(T) * 8 - EXPONENT_ST - 1;
     static constexpr signed_underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
 
-    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = std::numeric_limits<T>::max_exponent * 2 - 1;
+    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2046 : 255; // as defined in IEEE-754
 
     static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
 

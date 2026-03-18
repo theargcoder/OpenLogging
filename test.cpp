@@ -351,7 +351,7 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
 
 namespace
 {
-  const auto almost_equal = []<typename Type>(const Type &type, const long double &a, const long double &b) -> bool
+  const auto almost_equal = []<typename Type>(const Type &, const long double &a, const long double &b) -> bool
   {
     const auto abs_error = std::abs(a - b);
     const auto denom = std::max(std::abs(b), static_cast<long double>(std::numeric_limits<Type>::denorm_min()));

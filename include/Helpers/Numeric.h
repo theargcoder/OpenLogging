@@ -80,6 +80,7 @@ namespace Helpers::Numeric::OpenLogging
   template <int N>
   struct char_array
   {
+    int start_idx;
     char array[N];
   };
 
@@ -87,10 +88,10 @@ namespace Helpers::Numeric::OpenLogging
     requires std::is_integral_v<T>
   static auto ToStrCharArray(const T &input)
   {
-    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 1;
+    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
 
-    char_array<MAX_DIGITS10 + 1> buff;
-    char *__restrict__ it = &buff.array[MAX_DIGITS10 + 1];
+    char_array<MAX_DIGITS10> buff;
+    char *__restrict__ it = &buff.array[MAX_DIGITS10];
 
     const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
@@ -116,20 +117,22 @@ namespace Helpers::Numeric::OpenLogging
       *--it = '+';
     }
 
-    return std::make_pair(it - &buff.array[0], buff);
+    buff.start_idx = it - &buff.array[0];
+
+    return buff;
   }
 
   template <bool FORCE_SIGN = false, typename T>
     requires std::is_integral_v<T>
   static std::string ToStr(const T &input)
   {
-    const auto &[st, buff] = Helpers::Numeric::OpenLogging::ToStrCharArray<FORCE_SIGN>(input);
-    return std::string(&buff.array[st], sizeof(buff.array) - st);
+    const auto buff = Helpers::Numeric::OpenLogging::ToStrCharArray<FORCE_SIGN>(input);
+    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>
     requires std::is_integral_v<T>
-  static int ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char, const int &st_idx)
+  static void ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char, const int &st_idx)
   {
     char *__restrict__ it = &out_char.array[st_idx];
 
@@ -157,7 +160,7 @@ namespace Helpers::Numeric::OpenLogging
       *--it = '+';
     }
 
-    return it - &out_char.array[0];
+    out_char.start_idx = it - &out_char.array[0];
   }
 
   template <typename T>
@@ -178,21 +181,22 @@ namespace Helpers::Numeric::OpenLogging
 
     if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max())
     {
+      buff.start_idx = SIZE_OF_BUFF - 4;
       if(mantissa == T{ 0 })
       {
-        std::memcpy(&buff.array[0], "nan", 3);
+        std::memcpy(&buff.array[buff.start_idx], "nan", 3);
       }
       else if(mantissa > T{ 0 })
       {
-        std::memcpy(&buff.array[0], "inf", 3);
+        std::memcpy(&buff.array[buff.start_idx], "inf", 3);
       }
       else
       {
-        std::memcpy(&buff.array[0], "-inf", 4);
-        return std::pair(3, buff);
+        buff.start_idx--;
+        std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
       }
 
-      return std::pair(2, buff);
+      return buff;
     }
 
     const auto exp_2 = table[exp + Floating::BIAS];
@@ -205,28 +209,28 @@ namespace Helpers::Numeric::OpenLogging
 
     const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
 
-    auto exp_idx = Helpers::Numeric::OpenLogging::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
+    Helpers::Numeric::OpenLogging::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
 
-    buff.array[--exp_idx] = 'e';
+    buff.array[--buff.start_idx] = 'e';
 
-    auto [res_st_idx, res_buff] = Helpers::Numeric::OpenLogging::ToStrCharArray<false>(digits_10);
+    auto res_buff = Helpers::Numeric::OpenLogging::ToStrCharArray<false>(digits_10);
 
-    exp_idx -= PRECISION;
-    std::memcpy(&buff.array[exp_idx--], &res_buff.array[res_st_idx], PRECISION);
+    buff.start_idx -= PRECISION;
+    std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], PRECISION);
 
-    buff.array[exp_idx] = '.';
+    buff.array[buff.start_idx] = '.';
 
-    std::swap(buff.array[exp_idx], buff.array[exp_idx + 1]);
+    std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
 
-    return std::make_pair(exp_idx, buff);
+    return buff;
   }
 
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
-    const auto &[st, buff] = Helpers::Numeric::OpenLogging::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[st], sizeof(buff.array) - st);
+    const auto buff = Helpers::Numeric::OpenLogging::ToStrCharArray(input, PRECISION);
+    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
 } // namespace Helpers::Numeric::OpenLogging
 
