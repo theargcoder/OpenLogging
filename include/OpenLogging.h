@@ -140,7 +140,7 @@ public:
   };
 
 private:
-  static constexpr std::string time_formatted(long &time_v)
+  static std::string time_formatted(long &time_v)
   {
     struct tm *timeinfo = nullptr;
 
@@ -154,7 +154,7 @@ private:
     return { buffer.data() };
   }
 
-  static constexpr std::string time_mili_format(long &time_v)
+  static std::string time_mili_format(long &time_v)
   {
     const constexpr uint8_t buffsize = 4;
     const constexpr uint8_t BASE = 10;
@@ -170,7 +170,7 @@ private:
       cpy /= BASE;
     }
 
-    return { buffer.data() };
+    return std::string(buffer.data(), buffer.size());
   }
 
   template <bool ANSI_SCAPE_SEQUENCES, size_t M, typename T>
