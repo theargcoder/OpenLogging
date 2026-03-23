@@ -35,7 +35,20 @@ target_include_directories(OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                                                  /home/lucca/Work/ryu)
 
 # Test executable
-add_executable(test test.cpp)
+add_executable(test_logging ${CMAKE_CURRENT_SOURCE_DIR}/test/logging.cpp)
+add_executable(test_constants ${CMAKE_CURRENT_SOURCE_DIR}/test/constants.cpp)
+add_executable(test_numeric_integers
+               ${CMAKE_CURRENT_SOURCE_DIR}/test/numeric/integers.cpp)
+add_executable(test_numeric_floating
+               ${CMAKE_CURRENT_SOURCE_DIR}/test/numeric/floating.cpp)
 
-target_link_libraries(test PRIVATE OpenLogging
-                                   /home/lucca/Work/ryu/build/libryu.a)
+target_link_libraries(test_logging PRIVATE OpenLogging
+                                           /home/lucca/Work/ryu/build/libryu.a)
+target_link_libraries(test_constants
+                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
+
+target_link_libraries(test_numeric_integers
+                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
+
+target_link_libraries(test_numeric_floating
+                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
