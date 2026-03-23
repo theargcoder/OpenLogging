@@ -1,6 +1,7 @@
 #pragma once
 
-#include "include/Helpers/Numeric.h"
+#include "include/Algos/Floating.h"
+#include "include/Algos/Integer.h"
 #include "include/Helpers/Templating.h"
 #include <limits>
 #include <type_traits>

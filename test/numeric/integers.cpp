@@ -8,7 +8,8 @@
 #include <limits>
 #include <type_traits>
 
-#include "include/Helpers/Numeric.h"
+#include "include/Algos/Competition.h"
+#include "include/Algos/Integer.h"
 
 namespace
 {
