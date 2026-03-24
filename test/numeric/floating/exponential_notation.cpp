@@ -140,7 +140,7 @@ namespace
       const auto st_open_logging = std::chrono::high_resolution_clock::now();
 
       // if constexpr(std::is_same_v<Type, double>) { log = logger.format("{15}", i); } else { six in reality should be 5 log = logger.format("{6}", i); }
-      open_logging = Helpers::Numeric::OpenLogging::ToStr(i);
+      open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(i);
 
       const auto en_open_logging = std::chrono::high_resolution_clock::now();
 

@@ -13,7 +13,7 @@
 
 #include "include/Helpers/Templating.h"
 
-namespace Helpers::Numeric::OpenLogging
+namespace Helpers::Numeric::Floating::ExponentialNotation
 {
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
@@ -25,7 +25,7 @@ namespace Helpers::Numeric::OpenLogging
 
     const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 6;
 
-    char_array<SIZE_OF_BUFF> buff;
+    Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
 
     const auto frexpp = Helpers::Math::IEEE754(input);
     const auto &exp = frexpp.exponent;
@@ -61,11 +61,11 @@ namespace Helpers::Numeric::OpenLogging
 
     const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
 
-    Helpers::Numeric::OpenLogging::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
 
     buff.array[--buff.start_idx] = 'e';
 
-    auto res_buff = Helpers::Numeric::OpenLogging::ToStrCharArray<false>(digits_10);
+    auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
 
     buff.start_idx -= PRECISION;
     std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], PRECISION);
@@ -81,7 +81,7 @@ namespace Helpers::Numeric::OpenLogging
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
-    const auto buff = Helpers::Numeric::OpenLogging::ToStrCharArray(input, PRECISION);
+    const auto buff = Helpers::Numeric::Floating::ExponentialNotation::ToStrCharArray(input, PRECISION);
     return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
-} // namespace Helpers::Numeric::OpenLogging
+} // namespace Helpers::Numeric::Floating::ExponentialNotation

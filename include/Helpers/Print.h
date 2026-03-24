@@ -17,11 +17,11 @@ namespace Helpers::Print
     if constexpr(std::is_floating_point_v<T>)
     {
       const auto prescicion = (format[0] != '\0') ? std::stoi(format) : std::numeric_limits<T>::digits10;
-      number_in_str += Helpers::Numeric::OpenLogging::ToStr(var, prescicion);
+      number_in_str += Helpers::Numeric::Floating::ExponentialNotation::ToStr(var, prescicion);
     }
     else
     {
-      number_in_str += Helpers::Numeric::OpenLogging::ToStr(var);
+      number_in_str += Helpers::Numeric::Integral::ToStr(var);
     }
 
     return number_in_str;

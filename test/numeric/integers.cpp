@@ -128,7 +128,7 @@ namespace
 
       const auto st_log = std::chrono::high_resolution_clock::now();
       // const auto log = logger.format("{}", i);
-      const auto log = Helpers::Numeric::OpenLogging::ToStr(i);
+      const auto log = Helpers::Numeric::Integral::ToStr(i);
       const auto en_log = std::chrono::high_resolution_clock::now();
 
       const auto st_std_to_str = std::chrono::high_resolution_clock::now();

@@ -1,10 +1,11 @@
 #pragma once
 
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <type_traits>
 
-namespace Helpers::Numeric::OpenLogging
+namespace Helpers::Numeric::Integral
 {
   template <int N>
   struct char_array
@@ -20,33 +21,30 @@ namespace Helpers::Numeric::OpenLogging
     const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
 
     char_array<MAX_DIGITS10> buff;
-    char *__restrict__ it = &buff.array[MAX_DIGITS10];
+    buff.start_idx = MAX_DIGITS10;
 
     const constexpr auto BASE = 10;
-    const bool NEGATIVE = input < 0;
 
     using UT = std::make_unsigned_t<T>;
-    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+    UT val = (input < 0) ? static_cast<UT>(~(input + 1)) + 1 : static_cast<UT>(input);
 
     do
     {
       const auto rem = val % BASE;
       val /= BASE;
 
-      *--it = '0' + rem;
+      buff.array[--buff.start_idx] = '0' + rem;
 
     } while(val);
 
-    if(NEGATIVE)
+    if(input < 0)
     {
-      *--it = '-';
+      buff.array[--buff.start_idx] = '-';
     }
     else if constexpr(FORCE_SIGN)
     {
-      *--it = '+';
+      buff.array[--buff.start_idx] = '+';
     }
-
-    buff.start_idx = it - &buff.array[0];
 
     return buff;
   }
@@ -55,7 +53,7 @@ namespace Helpers::Numeric::OpenLogging
     requires std::is_integral_v<T>
   static std::string ToStr(const T &input)
   {
-    const auto buff = Helpers::Numeric::OpenLogging::ToStrCharArray<FORCE_SIGN>(input);
+    const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
     return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
 
@@ -91,7 +89,7 @@ namespace Helpers::Numeric::OpenLogging
 
     out_char.start_idx = it - &out_char.array[0];
   }
-} // namespace Helpers::Numeric::OpenLogging
+} // namespace Helpers::Numeric::Integral
 
 //
 ///
