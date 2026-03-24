@@ -34,29 +34,6 @@ add_library(OpenLogging INTERFACE)
 target_include_directories(OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                                                  /home/lucca/Work/ryu)
 
-# Test executable
-add_executable(test_logging ${CMAKE_CURRENT_SOURCE_DIR}/test/logging.cpp)
-add_executable(test_constants ${CMAKE_CURRENT_SOURCE_DIR}/test/constants.cpp)
-add_executable(test_numeric_integers
-               ${CMAKE_CURRENT_SOURCE_DIR}/test/numeric/integers.cpp)
-add_executable(
-  test_numeric_floating_exponential_notation
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/numeric/floating/exponential_notation.cpp)
-
-add_executable(
-  test_numeric_floating_n_digits_precision
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/numeric/floating/n_digits_precision.cpp)
-
-target_link_libraries(test_logging PRIVATE OpenLogging
-                                           /home/lucca/Work/ryu/build/libryu.a)
-target_link_libraries(test_constants
-                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
-
-target_link_libraries(test_numeric_integers
-                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
-
-target_link_libraries(test_numeric_floating_exponential_notation
-                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
-
-target_link_libraries(test_numeric_floating_n_digits_precision
-                      PRIVATE OpenLogging /home/lucca/Work/ryu/build/libryu.a)
+# Descend into the test directory
+enable_testing()
+add_subdirectory(test)
