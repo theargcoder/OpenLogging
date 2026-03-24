@@ -26,7 +26,7 @@ namespace Helpers::Numeric::Integral
     const constexpr auto BASE = 10;
 
     using UT = std::make_unsigned_t<T>;
-    UT val = (input < 0) ? static_cast<UT>(~(input + 1)) + 1 : static_cast<UT>(input);
+    UT val = (input < 0) ? static_cast<UT>(~(input) + 1) : static_cast<UT>(input);
 
     do
     {

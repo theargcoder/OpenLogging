@@ -7,7 +7,7 @@
 #include <type_traits>
 
 #include "include/Algos/Competition.h"
-#include "include/Algos/Floating.h"
+#include "include/Algos/Floating/Exponential.h"
 
 namespace
 {

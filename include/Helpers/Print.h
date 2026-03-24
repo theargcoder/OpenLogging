@@ -1,6 +1,6 @@
 #pragma once
 
-#include "include/Algos/Floating.h"
+#include "include/Algos/Floating/Exponential.h"
 #include "include/Algos/Integer.h"
 #include "include/Helpers/Templating.h"
 #include <limits>
