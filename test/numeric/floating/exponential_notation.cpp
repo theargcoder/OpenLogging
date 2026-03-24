@@ -146,7 +146,7 @@ namespace
 
       const auto st_std_fmt = std::chrono::high_resolution_clock::now();
 
-      std_format = Helpers::Numeric::Std::to_string(i);
+      std_format = Helpers::Numeric::Std::to_string<(std::is_same_v<double, double> ? 14 : 5)>(i);
 
       const auto en_std_fmt = std::chrono::high_resolution_clock::now();
 

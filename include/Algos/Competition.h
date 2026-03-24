@@ -4,6 +4,7 @@
 
 #include <array>
 #include <charconv>
+#include <cstdint>
 #include <string>
 #include <type_traits>
 
@@ -14,20 +15,14 @@ extern "C"
 
 namespace Helpers::Numeric::Std
 {
-  template <typename Type>
+  template <uint32_t PRECISION, typename Type>
   static auto to_string(Type value)
   {
     std::array<char, 64> buf;
 
     if constexpr(std::is_floating_point_v<Type>)
     {
-      int precision;
-      if constexpr(std::is_same_v<Type, double>)
-        precision = 14;
-      else
-        precision = 5;
-
-      auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::scientific, precision);
+      auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::fixed, PRECISION);
 
       if(ec != std::errc{})
       {
