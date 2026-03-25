@@ -57,7 +57,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
 
-    int exp_shft = (digits_10 < precision) ? -1 : 0;
+    const int exp_shft = (digits_10 < precision) ? -1 : 0;
 
     const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
 

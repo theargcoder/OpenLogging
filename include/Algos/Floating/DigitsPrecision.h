@@ -203,20 +203,19 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       const constexpr auto precision_min = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
       const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10 + 1);
 
-      int exp_shft = (digits_10 < precision_min) ? -1 : 0;
+      const int exp_shft = (digits_10 < precision_min) ? -1 : 0;
 
       const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
-      auto exp_10_abs = std::abs(exp_base_10_int + 1);
-      auto quantity = PRECISION - exp_10_abs;
+      const auto exp_10_abs = std::abs(exp_base_10_int);
+      const auto quantity = PRECISION - exp_10_abs;
 
       const constexpr auto rounding_table = GetRoundingTable<T>();
 
-      if(quantity >= 0 && quantity < Floating::MAX_DIGITS10)
+      if(quantity >= 0 && quantity <= Floating::MAX_DIGITS10)
       {
         const auto &rounding_factor = rounding_table[quantity - exp_shft];
         digits_10 += rounding_factor;
-        quantity -= digits_10 > precision_max;
-        exp_10_abs += digits_10 > precision_max;
+        // quantity += digits_10 > precision_max;
       }
 
       auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
@@ -227,17 +226,18 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         {
           buff.start_idx -= PRECISION;
           std::memset(&buff.array[buff.start_idx--], '0', PRECISION);
+          buff.array[buff.start_idx--] = '0';
         }
         else
         {
           buff.start_idx -= quantity;
           std::memcpy(&buff.array[buff.start_idx], &res_buff.array[res_buff.start_idx], quantity);
           buff.start_idx -= exp_10_abs;
-          std::memset(&buff.array[buff.start_idx--], '0', exp_10_abs);
+          std::memset(&buff.array[buff.start_idx--], '0', exp_base_10_int);
         }
 
-        buff.array[buff.start_idx--] = '.';
-        buff.array[buff.start_idx] = '0';
+        buff.array[buff.start_idx] = '.';
+        std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
       }
       else
       {
