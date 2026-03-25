@@ -233,7 +233,8 @@ namespace Helpers::Math
 
         if(exponent == MIN_EXPONENT && mantissa) [[unlikely]]
         {
-          mantissa = 0, exponent = 0;
+          mantissa = -2;
+          exponent = std::numeric_limits<signed_underlying>::max();
         }
       }
     }

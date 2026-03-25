@@ -146,7 +146,7 @@ namespace
 
       const auto st_std_fmt = std::chrono::high_resolution_clock::now();
 
-      std_format = Helpers::Numeric::Std::to_string<(std::is_same_v<double, double> ? 14 : 5), true>(i);
+      std_format = Helpers::Numeric::Std::to_string<(std::is_same_v<Type, double> ? 14 : 5), true>(i);
 
       const auto en_std_fmt = std::chrono::high_resolution_clock::now();
 
@@ -167,7 +167,6 @@ namespace
 
         if(!almost_equal(i, log_val, ref_val))
         {
-          open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(i);
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
           lim++;

@@ -18,34 +18,39 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T>
   static auto ToStrCharArray(const T &input)
   {
-    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 4;
+    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
 
     char_array<MAX_DIGITS10> buff;
-    buff.start_idx = MAX_DIGITS10 - 1;
-    buff.array[buff.start_idx--] = '\0';
+    buff.start_idx = MAX_DIGITS10;
 
     const constexpr auto BASE = 10;
 
+    char *__restrict__ it = &buff.array[buff.start_idx];
+
+    const bool NEGATIVE = input < 0;
+
     using UT = std::make_unsigned_t<T>;
-    UT val = (input < 0) ? static_cast<UT>(~(input) + 1) : static_cast<UT>(input);
+    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
 
     do
     {
       const auto rem = val % BASE;
       val /= BASE;
 
-      buff.array[--buff.start_idx] = '0' + rem;
+      *--it = '0' + rem;
 
     } while(val);
 
-    if(input < 0)
+    if(NEGATIVE)
     {
-      buff.array[--buff.start_idx] = '-';
+      *--it = '-';
     }
     else if constexpr(FORCE_SIGN)
     {
-      buff.array[--buff.start_idx] = '+';
+      *--it = '+';
     }
+
+    buff.start_idx = it - &buff.array[0];
 
     return buff;
   }
@@ -55,7 +60,7 @@ namespace Helpers::Numeric::Integral
   static std::string ToStr(const T &input)
   {
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
-    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx - 1);
+    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>
