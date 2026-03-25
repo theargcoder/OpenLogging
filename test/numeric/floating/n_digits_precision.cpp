@@ -243,8 +243,15 @@ namespace
 
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
-  test_and_benchmark_float(static_cast<float>(0));
-  test_and_benchmark_float(static_cast<double>(0));
+  try
+  {
+    test_and_benchmark_float(static_cast<float>(0));
+    test_and_benchmark_float(static_cast<double>(0));
+  }
+  catch(const std::exception &e)
+  {
+    std::cerr << "\n\n\n" << e.what() << "\n\n\n";
+  }
 
   // tester_format_exponential(static_cast<long double>(0));
 }

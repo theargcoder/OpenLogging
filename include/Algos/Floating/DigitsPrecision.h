@@ -200,27 +200,29 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
 
-      const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
+      const constexpr auto precision_min = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
+      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10 + 1);
 
-      int exp_shft = (digits_10 < precision) ? -1 : 0;
+      int exp_shft = (digits_10 < precision_min) ? -1 : 0;
 
       const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
-      const auto exp_10_abs = std::abs(exp_base_10_int + 1);
-      const auto quantity = PRECISION - exp_10_abs;
+      auto exp_10_abs = std::abs(exp_base_10_int + 1);
+      auto quantity = PRECISION - exp_10_abs;
 
       const constexpr auto rounding_table = GetRoundingTable<T>();
 
       if(quantity >= 0 && quantity < Floating::MAX_DIGITS10)
       {
-        const auto &rounding_factor = rounding_table[quantity];
+        const auto &rounding_factor = rounding_table[quantity - exp_shft];
         digits_10 += rounding_factor;
+        quantity -= digits_10 > precision_max;
+        exp_10_abs += digits_10 > precision_max;
       }
 
       auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
 
       if(exp_base_10_int < 0)
       {
-
         if(exp_10_abs > PRECISION)
         {
           buff.start_idx -= PRECISION;
@@ -229,7 +231,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         else
         {
           buff.start_idx -= quantity;
-          std::memcpy(&buff.array[buff.start_idx], &res_buff.array[res_buff.start_idx], quantity + 1);
+          std::memcpy(&buff.array[buff.start_idx], &res_buff.array[res_buff.start_idx], quantity);
           buff.start_idx -= exp_10_abs;
           std::memset(&buff.array[buff.start_idx--], '0', exp_10_abs);
         }
