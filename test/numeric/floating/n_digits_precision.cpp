@@ -140,7 +140,7 @@ namespace
       const auto st_open_logging = std::chrono::high_resolution_clock::now();
 
       // if constexpr(std::is_same_v<Type, double>) { log = logger.format("{15}", i); } else { six in reality should be 5 log = logger.format("{6}", i); }
-      open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<5>(i);
+      open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, 5>(i);
 
       const auto en_open_logging = std::chrono::high_resolution_clock::now();
 
@@ -164,6 +164,8 @@ namespace
       {
         const auto log_val = std::strtold(open_logging.c_str(), nullptr);
         const auto ref_val = std::strtold(std_format.c_str(), nullptr);
+
+        open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, 5>(i);
 
         if(!almost_equal(i, log_val, ref_val))
         {
