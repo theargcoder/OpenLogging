@@ -1,4 +1,4 @@
-#define BOOST_TEST_MODULE FloatingTests
+#define BOOST_TEST_MODULE FloatingWDigitsTests
 #include <boost/test/included/unit_test.hpp>
 
 #include <chrono>
@@ -146,7 +146,7 @@ namespace
 
       const auto st_std_fmt = std::chrono::high_resolution_clock::now();
 
-      std_format = Helpers::Numeric::Std::to_string<5>(i);
+      std_format = Helpers::Numeric::Std::to_string<5, false>(i);
 
       const auto en_std_fmt = std::chrono::high_resolution_clock::now();
 

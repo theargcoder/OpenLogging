@@ -137,7 +137,7 @@ namespace
       const auto en_std_to_str = std::chrono::high_resolution_clock::now();
 
       const auto st_std_to_char = std::chrono::high_resolution_clock::now();
-      const auto num_to_char = Helpers::Numeric::Std::to_string<0>(i);
+      const auto num_to_char = Helpers::Numeric::Std::to_string<0, false>(i);
       const auto en_std_to_char = std::chrono::high_resolution_clock::now();
 
       open_logging += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -21,11 +22,14 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   {
     using Floating = Constants::Tables::Floating<T>;
 
-    static const auto &table = Floating().DIGITS;
+    const auto &table = Floating().DIGITS;
 
-    const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 6;
+    const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
     Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
+
+    buff.start_idx = SIZE_OF_BUFF - 1;
+    buff.array[buff.start_idx--] = '\0';
 
     const auto frexpp = Helpers::Math::IEEE754(input);
     const auto &exp = frexpp.exponent;
@@ -33,7 +37,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max())
     {
-      buff.start_idx = SIZE_OF_BUFF - 3;
+      buff.start_idx -= 3;
       if(mantissa == T{ 0 })
       {
         std::memcpy(&buff.array[buff.start_idx], "nan", 3);
@@ -61,11 +65,11 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, SIZE_OF_BUFF);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
 
     buff.array[--buff.start_idx] = 'e';
 
-    auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
+    const auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
 
     buff.start_idx -= PRECISION;
     std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], PRECISION);
@@ -82,6 +86,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     const auto buff = Helpers::Numeric::Floating::ExponentialNotation::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx - 1);
   }
 } // namespace Helpers::Numeric::Floating::ExponentialNotation

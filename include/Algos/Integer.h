@@ -18,10 +18,11 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T>
   static auto ToStrCharArray(const T &input)
   {
-    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
+    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 4;
 
     char_array<MAX_DIGITS10> buff;
-    buff.start_idx = MAX_DIGITS10;
+    buff.start_idx = MAX_DIGITS10 - 1;
+    buff.array[buff.start_idx--] = '\0';
 
     const constexpr auto BASE = 10;
 
@@ -54,7 +55,7 @@ namespace Helpers::Numeric::Integral
   static std::string ToStr(const T &input)
   {
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
-    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx - 1);
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>

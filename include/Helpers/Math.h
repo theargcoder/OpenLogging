@@ -186,6 +186,8 @@ namespace Helpers::Math
     static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(T) * 8 - EXPONENT_ST - 1;
     static constexpr signed_underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
 
+    static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits;
+
     static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2046 : 255; // as defined in IEEE-754
 
     static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
@@ -209,7 +211,7 @@ namespace Helpers::Math
 
       const underlying SIGN = bits & SIGN_ONLY;
 
-      if(exp == EXPONENT_ALL_BITS_ON)
+      if(exp == EXPONENT_ALL_BITS_ON) [[unlikely]]
       {
         exponent = std::numeric_limits<signed_underlying>::max();
         (man == underlying(0)) ? mantissa = (SIGN) ? T{ -1 } : T{ 1 } : mantissa = T{ 0 };
@@ -217,7 +219,7 @@ namespace Helpers::Math
         return;
       }
 
-      if(exp > 0)
+      if(exp > 0) [[likely]]
       {
         mantissa = std::bit_cast<T>(man | SIGN | HALF_EXP);
         exponent = exp + 1 - EXPONENT_BIAS;
@@ -228,6 +230,11 @@ namespace Helpers::Math
 
         mantissa = std::bit_cast<T>(((man << shift) & MANTISSA_ONLY) | SIGN | HALF_EXP);
         exponent = 2 - EXPONENT_BIAS - shift;
+
+        if(exponent == MIN_EXPONENT && mantissa) [[unlikely]]
+        {
+          mantissa = 0, exponent = 0;
+        }
       }
     }
   };

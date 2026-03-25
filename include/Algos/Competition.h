@@ -15,21 +15,33 @@ extern "C"
 
 namespace Helpers::Numeric::Std
 {
-  template <uint32_t PRECISION, typename Type>
+  template <uint32_t PRECISION, bool SCIENTIFIC, typename Type>
   static auto to_string(Type value)
   {
     std::array<char, 64> buf;
 
     if constexpr(std::is_floating_point_v<Type>)
     {
-      auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::fixed, PRECISION);
-
-      if(ec != std::errc{})
+      if constexpr(SCIENTIFIC)
       {
-        return std::string{};
-      }
+        auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::scientific, PRECISION);
+        if(ec != std::errc{})
+        {
+          return std::string{};
+        }
 
-      return std::string(buf.data(), ptr);
+        return std::string(buf.data(), ptr);
+      }
+      else
+      {
+        auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::fixed, PRECISION);
+        if(ec != std::errc{})
+        {
+          return std::string{};
+        }
+
+        return std::string(buf.data(), ptr);
+      }
     }
     else if constexpr(std::is_integral_v<Type>)
     {

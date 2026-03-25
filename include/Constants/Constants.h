@@ -80,9 +80,9 @@ namespace Constants::Tables
   {
   public:
     static const constexpr T BASE = T{ 10 };
-    static constexpr auto MIN_BIN_EXP = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits + 1; // Smallest binary exponent (subnormal limit)
-    static constexpr auto MAX_BIN_EXP = std::numeric_limits<T>::max_exponent - 1;                                  // Largest binary exponent
-    static constexpr auto BIAS = -MIN_BIN_EXP;                                                                     // Offset so that table[BIAS] corresponds to 2^0
+    static constexpr auto MIN_BIN_EXP = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits; // Smallest binary exponent (subnormal limit)
+    static constexpr auto MAX_BIN_EXP = std::numeric_limits<T>::max_exponent - 1;                              // Largest binary exponent
+    static constexpr auto BIAS = -MIN_BIN_EXP;                                                                 // Offset so that table[BIAS] corresponds to 2^0
     static constexpr auto SIZE = MAX_BIN_EXP - MIN_BIN_EXP + 1;
 
     static constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10;
