@@ -45,7 +45,8 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
     {
       using Floating = Constants::Tables::Floating<T>;
 
-      static const auto &table = Floating().DIGITS;
+      static const constinit auto FloatingStruct = Floating();
+      static const constinit auto &table = FloatingStruct.DIGITS;
 
       // 1 for '+/-' also 1 for '.' also 1 for whatever
       const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
@@ -168,12 +169,13 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
   {
     static auto ToStr(const T &input)
     {
-      using Floating = Constants::Tables::Floating<T>;
+      using FloatingStruct = Constants::Tables::Floating<T>;
 
-      static const auto &table = Floating().DIGITS;
+      static const constinit auto FloatingRounding = FloatingStruct();
+      static const constinit auto &table = FloatingRounding.DIGITS;
 
       // 1 for '+/-' also 1 for '.' also 1 for whatever
-      const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
+      const constexpr auto SIZE_OF_BUFF = FloatingStruct::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
 
       Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
 
@@ -211,34 +213,37 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         return buff;
       }
 
-      const auto exp_2 = table[exp + Floating::BIAS];
+      const auto exp_2 = table[exp + FloatingStruct::BIAS];
 
-      auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
+      auto digits_10 = static_cast<FloatingStruct::smallest_underlying>(mantissa * exp_2);
 
       const auto exp_base_10_int = ((exp * 78'913) >> 18);
-      auto exp_10_abs = std::abs(exp_base_10_int);
+      auto exp_10_abs = std::abs(exp_base_10_int) - 1;
       auto quantity = PRECISION - exp_10_abs;
 
-      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10 + 1);
+      const constexpr auto precision_min = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10);
+      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10 + 1);
       const constexpr auto rounding_table = GetRoundingTable<T>();
 
-      if(quantity >= 0 && quantity <= Floating::MAX_DIGITS10)
+      if(quantity >= 0 && quantity <= FloatingStruct::MAX_DIGITS10)
       {
         const auto &rounding_factor = rounding_table[quantity];
         digits_10 += rounding_factor;
-        // exp_10_abs -= digits_10 > precision_max;
-        // quantity += digits_10 > precision_max;
+        exp_10_abs -= digits_10 > precision_max;
+        quantity += digits_10 > precision_max;
+        // case of < MAX_DIGITS10
+        exp_10_abs += digits_10 < precision_min;
+        quantity -= digits_10 < precision_min;
       }
 
       auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
 
       if(exp_base_10_int < 0)
       {
-        if(exp_10_abs > PRECISION)
+        if(exp_10_abs >= PRECISION)
         {
           buff.start_idx -= PRECISION;
           std::memset(&buff.array[buff.start_idx--], '0', PRECISION);
-          buff.array[buff.start_idx--] = '0';
         }
         else
         {
@@ -248,17 +253,17 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
           std::memset(&buff.array[buff.start_idx--], '0', exp_10_abs);
         }
 
-        buff.array[buff.start_idx] = '.';
-        std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
+        buff.array[buff.start_idx--] = '.';
+        buff.array[buff.start_idx] = '0';
       }
       else
       {
-        if(exp_base_10_int <= Floating::MAX_DIGITS10)
+        if(exp_base_10_int <= FloatingStruct::MAX_DIGITS10)
         {
           std::cout << "WE are HEREEE \n\n";
           buff.start_idx -= PRECISION;
           std::memset(&buff.array[buff.start_idx], '0', PRECISION);
-          const auto pres_after_dot = Floating::MAX_DIGITS10 - exp_base_10_int;
+          const auto pres_after_dot = FloatingStruct::MAX_DIGITS10 - exp_base_10_int;
           std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx + exp_base_10_int], pres_after_dot);
           buff.array[buff.start_idx--] = '.';
           buff.start_idx -= exp_base_10_int;
@@ -269,11 +274,11 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
           buff.start_idx -= PRECISION;
           std::memset(&buff.array[buff.start_idx], '0', PRECISION);
           buff.array[buff.start_idx--] = '.';
-          const auto missing = Floating::MAX_DIGITS10 - exp_base_10_int;
+          const auto missing = FloatingStruct::MAX_DIGITS10 - exp_base_10_int;
           buff.start_idx -= missing;
           std::memset(&buff.array[buff.start_idx--], '0', missing);
-          buff.start_idx -= Floating::MAX_DIGITS10;
-          std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], Floating::MAX_DIGITS10);
+          buff.start_idx -= FloatingStruct::MAX_DIGITS10;
+          std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], FloatingStruct::MAX_DIGITS10);
         }
       }
 
