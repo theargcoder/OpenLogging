@@ -58,9 +58,9 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       const auto &exp = frexpp.exponent;
       const auto &mantissa = frexpp.mantissa;
 
-      if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max())
+      if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max()) [[unlikely]]
       {
-        buff.start_idx = SIZE_OF_BUFF - 3;
+        buff.start_idx -= 3;
         if(mantissa == T{ 0 })
         {
           std::memcpy(&buff.array[buff.start_idx], "nan", 3);
@@ -69,10 +69,17 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         {
           std::memcpy(&buff.array[buff.start_idx], "inf", 3);
         }
-        else
+        else if(mantissa == T{ -1 })
         {
           buff.start_idx--;
           std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
+        }
+        else
+        {
+          buff.start_idx -= PRECISION;
+          std::memset(&buff.array[buff.start_idx], '0', PRECISION);
+          buff.array[--buff.start_idx] = '.';
+          buff.array[--buff.start_idx] = '0';
         }
 
         return buff;
@@ -176,21 +183,29 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       const auto &exp = frexpp.exponent;
       const auto &mantissa = frexpp.mantissa;
 
-      if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max())
+      if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max()) [[unlikely]]
       {
-        buff.start_idx = SIZE_OF_BUFF - 3;
         if(mantissa == T{ 0 })
         {
+          buff.start_idx -= 3;
           std::memcpy(&buff.array[buff.start_idx], "nan", 3);
         }
         else if(mantissa > T{ 0 })
         {
+          buff.start_idx -= 3;
           std::memcpy(&buff.array[buff.start_idx], "inf", 3);
+        }
+        else if(mantissa == T{ -1 })
+        {
+          buff.start_idx -= 4;
+          std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
         }
         else
         {
-          buff.start_idx--;
-          std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
+          buff.start_idx -= PRECISION;
+          std::memset(&buff.array[buff.start_idx], '0', PRECISION);
+          buff.array[--buff.start_idx] = '.';
+          buff.array[--buff.start_idx] = '0';
         }
 
         return buff;
@@ -201,15 +216,17 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
 
       const auto exp_base_10_int = ((exp * 78'913) >> 18);
-      const auto exp_10_abs = std::abs(exp_base_10_int);
-      const auto quantity = PRECISION - exp_10_abs;
+      auto exp_10_abs = std::abs(exp_base_10_int);
+      auto quantity = PRECISION - exp_10_abs;
 
+      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10 + 1);
       const constexpr auto rounding_table = GetRoundingTable<T>();
 
       if(quantity >= 0 && quantity <= Floating::MAX_DIGITS10)
       {
         const auto &rounding_factor = rounding_table[quantity];
         digits_10 += rounding_factor;
+        // exp_10_abs -= digits_10 > precision_max;
         // quantity += digits_10 > precision_max;
       }
 

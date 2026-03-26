@@ -1,3 +1,4 @@
+#include <boost/test/tools/old/interface.hpp>
 #define BOOST_TEST_MODULE FloatingWDigitsTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -112,17 +113,6 @@ namespace
 
 namespace
 {
-  const auto almost_equal = []<typename Type>(const Type &, const long double &a, const long double &b) -> bool
-  {
-    const auto abs_error = std::abs(a - b);
-    const auto denom = std::max(std::abs(b), static_cast<long double>(std::numeric_limits<Type>::denorm_min()));
-    const auto rel_error = abs_error / denom;
-
-    const constexpr auto REL_TOL = 1.1 * (1.0L / Helpers::Math::Constexpr::pow(10.0L, std::numeric_limits<Type>::digits10 - 1));
-    BOOST_CHECK_SMALL(rel_error, REL_TOL);
-    return rel_error <= REL_TOL;
-  };
-
   const auto lopper_format_exponential
       = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took, auto &std_fmt_took, auto &ryu_took) -> void
   {
@@ -160,19 +150,14 @@ namespace
       std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_fmt - st_std_fmt);
       ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_ryu - st_ryu);
 
+      BOOST_CHECK_EQUAL(open_logging, std_format);
       if(open_logging != std_format)
       {
-        const auto log_val = std::strtold(open_logging.c_str(), nullptr);
-        const auto ref_val = std::strtold(std_format.c_str(), nullptr);
-
         open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, 5>(i);
 
-        if(!almost_equal(i, log_val, ref_val))
-        {
-          log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
+        log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
-          lim++;
-        }
+        lim++;
       }
     }
   };
