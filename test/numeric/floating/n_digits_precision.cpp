@@ -1,4 +1,3 @@
-#include <boost/test/tools/old/interface.hpp>
 #define BOOST_TEST_MODULE FloatingWDigitsTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -9,6 +8,9 @@
 
 #include "include/Algos/Competition.h"
 #include "include/Algos/Floating/DigitsPrecision.h"
+#include "include/Constants/Constants.h"
+#include "include/Helpers/Cout.h"
+#include "include/Helpers/Math.h"
 
 namespace
 {
@@ -154,6 +156,23 @@ namespace
       if(open_logging != std_format)
       {
         open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, 5>(i);
+
+        const auto frexp_ours = Helpers::Math::IEEE754<Type>(i);
+
+        const auto exp_table_val = Constants::Tables::Floating<Type>().DIGITS[frexp_ours.exponent + Constants::Tables::Floating<Type>::BIAS];
+        const auto non_floating_digits_encoding = exp_table_val * frexp_ours.mantissa;
+
+        Helpers::Cout::print_binary("input_original               ", i);
+        Helpers::Cout::print_binary("frex_mantissa                ", frexp_ours.mantissa);
+        Helpers::Cout::print_binary("exp_table_val                ", static_cast<Type>(exp_table_val));
+        Helpers::Cout::print_binary("non_floating_digits_encoding ", non_floating_digits_encoding);
+
+        std::cout << "input_original                              = " << i << '\n';
+        std::cout << "frex_mantissa                               = " << frexp_ours.mantissa << '\n';
+        std::cout << "exp_table_val (as Integral)                 = " << static_cast<Constants::Tables::Floating<Type>::smallest_underlying>(exp_table_val) << '\n';
+        std::cout << "exp_table_val (as Type)                     = " << static_cast<Type>(exp_table_val) << '\n';
+        std::cout << "non_floating_digits_encoding (as Integral)  = " << static_cast<Constants::Tables::Floating<Type>::smallest_underlying>(non_floating_digits_encoding) << '\n';
+        std::cout << "non_floating_digits_encoding (as Type)      = " << non_floating_digits_encoding << '\n';
 
         log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 

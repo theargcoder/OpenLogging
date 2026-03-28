@@ -5,6 +5,7 @@
 #include <limits>
 #include <numbers>
 #include <type_traits>
+#include <utility>
 
 namespace Helpers::Math::Constexpr
 {
@@ -186,6 +187,8 @@ namespace Helpers::Math
     static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(T) * 8 - EXPONENT_ST - 1;
     static constexpr signed_underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
 
+    static constexpr underlying BIAS_IN_EXP_POS = EXPONENT_BIAS << ((IS_DOUBLE) ? 52 : 23);
+
     static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits;
 
     static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2046 : 255; // as defined in IEEE-754
@@ -195,6 +198,8 @@ namespace Helpers::Math
     static constexpr underlying SIGN_ONLY = IS_DOUBLE ? 0x8000000000000000ULL : 0x80000000U;
 
     static constexpr underlying HALF_EXP = (EXPONENT_BIAS - 1) << EXPONENT_ST; // half == 0.5 aka 2^-1
+
+    using wide_underlying = std::conditional_t<IS_DOUBLE, __uint128_t, uint64_t>;
 
   public:
     T mantissa;
@@ -238,5 +243,61 @@ namespace Helpers::Math
         }
       }
     }
+
+    //                                                    0, 1, 2,  3, 4,  5,  6,  7,  8,   9, 10  11, 12  13, 14, 15  16
+    static const constexpr uint8_t precision_shifts[] = { 0, 4, 7, 10, 14, 17, 20, 24, 27, 30, 34, 37, 40, 44, 47, 50, 54 };
+
+    static auto multiply(const T &A, const underlying &B, const underlying &precision)
+    {
+      if(precision < 0 || precision > std::numeric_limits<T>::digits10)
+      {
+        return underlying{ 0 };
+      }
+      const underlying A_bits = std::bit_cast<underlying>(A);
+
+      const underlying exp_field = (A_bits & EXPONENT_ONLY) >> EXPONENT_ST; // will always be bias!!
+      underlying sig = A_bits & MANTISSA_ONLY;
+
+      // always true
+      /*
+      // normal numbers have the hidden 1
+      if(exp_field != 0)
+      {
+        sig |= (underlying(1) << EXPONENT_ST);
+      }
+      */
+      sig |= (underlying(1) << EXPONENT_ST);
+
+      const wide_underlying prod = wide_underlying(sig) * wide_underlying(B);
+
+      // For float: value = sig * 2^(exp_field - BIAS - EXPONENT_ST) so floor(A * B) = prod >> (BIAS + EXPONENT_ST - exp_field)
+      int shift = int(EXPONENT_BIAS + EXPONENT_ST + 2); // + (EXPONENT_ST - precision_shifts[precision]);
+
+      // we will never input subnormals, guaranteed by frexp
+      /*
+      // subnormals have no hidden bit, so they need one extra right shift
+      if(exp_field == 0)
+      {
+        --shift;
+      }
+      */
+
+      underlying digits_10{};
+      wide_underlying remainder{};
+
+      if(shift >= 0)
+      {
+        digits_10 = underlying(prod >> shift);
+        remainder = prod & ((wide_underlying(1) << shift) - 1);
+      }
+      else
+      {
+        digits_10 = underlying(prod << (-shift));
+        remainder = 0;
+      }
+
+      return digits_10;
+    }
   };
+
 } // namespace Helpers::Math

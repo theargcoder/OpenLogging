@@ -125,4 +125,56 @@ namespace Constants::Tables
       loop<true, 2, 0, MAX_BIN_EXP>(); // positive exponents: multiply by 2 each step but scale as needed
     }
   };
+
+  template <typename T>
+    requires std::is_floating_point_v<T>
+  struct FloatingNotExactTable
+  {
+  public:
+    static const constexpr T BASE = T{ 10 };
+    static constexpr auto MIN_BIN_EXP = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits; // Smallest binary exponent (subnormal limit)
+    static constexpr auto MAX_BIN_EXP = std::numeric_limits<T>::max_exponent - 1;                              // Largest binary exponent
+    static constexpr auto BIAS = -MIN_BIN_EXP;                                                                 // Offset so that table[BIAS] corresponds to 2^0
+    static constexpr auto SIZE = MAX_BIN_EXP - MIN_BIN_EXP + 1;
+
+    static constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10;
+    static constexpr auto ACTUAL_DIGITS10 = MAX_DIGITS10 + 1; // we need that extra digit to avoid rounding errors (errors can happen after our min precision is met)
+    static constexpr auto MAX_EXP_DIGITS10 = static_cast<decltype(MIN_BIN_EXP)>(Helpers::Math::Constexpr::log10(T{ std::numeric_limits<T>::max_exponent10 }));
+
+  private:
+    // loop multiplies incrementally and guards against overflow by dividing as needed
+    template <bool INCREMENT, int SUB_BASE, int ST_PT, int DELIM>
+    consteval void loop()
+    {
+      using LDBL = long double;
+
+      for(int k = ST_PT; (INCREMENT ? (k <= DELIM) : (k >= DELIM)); (INCREMENT) ? (k++) : (k--))
+      {
+        const auto idx = k + BIAS;
+
+        const static constexpr T LOG_10_2 = Helpers::Math::Constexpr::log10(T{ 2.0 });
+
+        long double pow_2 = Helpers::Math::Constexpr::pow(LDBL{ 2 }, k);
+
+        long double pow_10 = Helpers::Math::Constexpr::pow(
+            LDBL{ BASE }, static_cast<smallest_underlying>(static_cast<smallest_underlying>(k * LOG_10_2) - LDBL{ MAX_DIGITS10 } - (INCREMENT == false)));
+        pow_10 = (pow_10 == LDBL{ 0 }) ? LDBL{ 1 } : pow_10;
+
+        DIGITS[idx] = static_cast<smallest_underlying>(pow_2 / pow_10);
+      }
+    }
+
+  public:
+    using smallest_underlying = std::conditional_t<(MAX_DIGITS10 < std::numeric_limits<int>::digits10), int32_t, int64_t>;
+
+    smallest_underlying DIGITS[SIZE]{};
+
+  public:
+    consteval FloatingNotExactTable()
+    {
+      loop<false, 5, 0, MIN_BIN_EXP>(); // negative exponents: multiply by 5 each step but scale as needed
+
+      loop<true, 2, 0, MAX_BIN_EXP>(); // positive exponents: multiply by 2 each step but scale as needed
+    }
+  };
 } // namespace Constants::Tables

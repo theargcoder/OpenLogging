@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -149,18 +150,19 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
     }
   };
 
-  template <typename T, size_t... I>
+  template <typename T, uint32_t BASE, size_t... I>
   static constexpr auto GetRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<T, N>{ 5 * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I)... };
+    return std::array<T, N>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I)... };
   }
 
-  template <typename T>
+  template <typename T, uint32_t BASE>
   static constexpr auto GetRoundingTable()
   {
     constexpr auto N = std::numeric_limits<T>::digits10;
-    return GetRoundingTableImpl<T>(std::make_index_sequence<N>());
+    using IntType = Constants::Tables::Floating<T>::smallest_underlying;
+    return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N>());
   }
 
   template <int32_t PRECISION, typename T>
@@ -169,7 +171,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
   {
     static auto ToStr(const T &input)
     {
-      using FloatingStruct = Constants::Tables::Floating<T>;
+      using FloatingStruct = Constants::Tables::FloatingNotExactTable<T>;
 
       static const constinit auto FloatingRounding = FloatingStruct();
       static const constinit auto &table = FloatingRounding.DIGITS;
@@ -214,33 +216,21 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       }
 
       const auto exp_2 = table[exp + FloatingStruct::BIAS];
-
-      auto digits_10 = static_cast<FloatingStruct::smallest_underlying>(mantissa * exp_2);
-
       const auto exp_base_10_int = ((exp * 78'913) >> 18);
       auto exp_10_abs = std::abs(exp_base_10_int) - 1;
       auto quantity = PRECISION - exp_10_abs;
 
-      const constexpr auto precision_min = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10);
-      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10 + 1);
-      const constexpr auto rounding_table = GetRoundingTable<T>();
+      const auto digits_10 = Helpers::Math::IEEE754<T>::multiply(mantissa, exp_2, quantity);
 
-      if(quantity >= 0 && quantity <= FloatingStruct::MAX_DIGITS10)
-      {
-        const auto &rounding_factor = rounding_table[quantity];
-        digits_10 += rounding_factor;
-        exp_10_abs -= digits_10 > precision_max;
-        quantity += digits_10 > precision_max;
-        // case of < MAX_DIGITS10
-        exp_10_abs += digits_10 < precision_min;
-        quantity -= digits_10 < precision_min;
-      }
+      const constexpr auto precision_min = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10);
+
+      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10 + 1);
 
       auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
 
       if(exp_base_10_int < 0)
       {
-        if(exp_10_abs >= PRECISION)
+        if(exp_10_abs > PRECISION)
         {
           buff.start_idx -= PRECISION;
           std::memset(&buff.array[buff.start_idx--], '0', PRECISION);
