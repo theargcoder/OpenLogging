@@ -177,4 +177,19 @@ namespace Constants::Tables
       loop<true, 2, 0, MAX_BIN_EXP>(); // positive exponents: multiply by 2 each step but scale as needed
     }
   };
+
+  template <typename T, uint32_t BASE, size_t... I>
+  static constexpr auto GetRoundingTableImpl(std::index_sequence<I...> /*unused*/)
+  {
+    constexpr auto N = sizeof...(I);
+    return std::array<T, N>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I - 1)... };
+  }
+
+  template <typename T, uint32_t BASE>
+  static constexpr auto GetRoundingTable()
+  {
+    constexpr auto N = std::numeric_limits<T>::digits10;
+    using IntType = Constants::Tables::Floating<T>::smallest_underlying;
+    return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N + 1>());
+  }
 } // namespace Constants::Tables

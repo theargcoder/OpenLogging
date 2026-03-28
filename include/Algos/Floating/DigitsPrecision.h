@@ -50,7 +50,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       static const constinit auto &table = FloatingStruct.DIGITS;
 
       // 1 for '+/-' also 1 for '.' also 1 for whatever
-      const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
+      static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
 
       Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
 
@@ -91,7 +91,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       const auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
 
-      const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
+      static const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
 
       int exp_shft = (digits_10 < precision) ? -1 : 0;
 
@@ -150,21 +150,6 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
     }
   };
 
-  template <typename T, uint32_t BASE, size_t... I>
-  static constexpr auto GetRoundingTableImpl(std::index_sequence<I...> /*unused*/)
-  {
-    constexpr auto N = sizeof...(I);
-    return std::array<T, N>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I)... };
-  }
-
-  template <typename T, uint32_t BASE>
-  static constexpr auto GetRoundingTable()
-  {
-    constexpr auto N = std::numeric_limits<T>::digits10;
-    using IntType = Constants::Tables::Floating<T>::smallest_underlying;
-    return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N>());
-  }
-
   template <int32_t PRECISION, typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   struct CharArrayImpl<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, PRECISION, T>
@@ -177,7 +162,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       static const constinit auto &table = FloatingRounding.DIGITS;
 
       // 1 for '+/-' also 1 for '.' also 1 for whatever
-      const constexpr auto SIZE_OF_BUFF = FloatingStruct::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
+      static const constexpr auto SIZE_OF_BUFF = FloatingStruct::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
 
       Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
 
@@ -215,16 +200,19 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         return buff;
       }
 
-      const auto exp_2 = table[exp + FloatingStruct::BIAS];
+      auto exp_2 = table[exp + FloatingStruct::BIAS];
       const auto exp_base_10_int = ((exp * 78'913) >> 18);
       auto exp_10_abs = std::abs(exp_base_10_int) - 1;
       auto quantity = PRECISION - exp_10_abs;
 
-      const auto digits_10 = Helpers::Math::IEEE754<T>::multiply(mantissa, exp_2, quantity);
+      static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();
 
-      const constexpr auto precision_min = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10);
+      if(quantity >= 0 && quantity < FloatingStruct::MAX_DIGITS10)
+      {
+        exp_2 /= base_10_rounding_table[quantity + 2];
+      }
 
-      const constexpr auto precision_max = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), FloatingStruct::MAX_DIGITS10 + 1);
+      const auto digits_10 = Helpers::Math::IEEE754<T>::multiplyandround(mantissa, exp_2, quantity, exp_10_abs);
 
       auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
 

@@ -24,7 +24,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constinit auto FloatingStruct = Floating();
     static const constinit auto &table = FloatingStruct.DIGITS;
 
-    const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
+    static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
     Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
 
@@ -61,9 +61,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const auto exp_2 = table[exp + Floating::BIAS];
 
-    const auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
+    const auto digits_10 = Helpers::Math::IEEE754<T>::multiply(mantissa, exp_2); // static_cast<Floating::smallest_underlying>(mantissa * exp_2);
 
-    const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
+    static const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
 
     const int exp_shft = (digits_10 < precision) ? -1 : 0;
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "include/Helpers/Math.h"
 #include <cstdint>
 #include <string>
 #include <type_traits>

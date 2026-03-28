@@ -155,7 +155,6 @@ namespace
       BOOST_CHECK_EQUAL(open_logging, std_format);
       if(open_logging != std_format)
       {
-        open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, 5>(i);
 
         const auto frexp_ours = Helpers::Math::IEEE754<Type>(i);
 
@@ -175,6 +174,8 @@ namespace
         std::cout << "non_floating_digits_encoding (as Type)      = " << non_floating_digits_encoding << '\n';
 
         log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
+
+        open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND, 5>(i);
 
         lim++;
       }
