@@ -270,6 +270,8 @@ namespace Helpers::Math
 
       return digits_10;
     }
+
+  public:
     enum RoundingResults : uint8_t
     {
       NO_ROUNDING,
