@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -8,7 +7,6 @@
 #include <limits>
 #include <string>
 #include <type_traits>
-#include <utility>
 
 #include "include/Helpers/Math.h"
 
@@ -156,7 +154,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
   {
     static auto ToStr(const T &input)
     {
-      using FloatingStruct = Constants::Tables::FloatingNotExactTable<T>;
+      using FloatingStruct = Constants::Tables::Floating<T>;
 
       static const constinit auto FloatingRounding = FloatingStruct();
       static const constinit auto &table = FloatingRounding.DIGITS;
@@ -205,16 +203,36 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       auto exp_10_abs = std::abs(exp_base_10_int) - 1;
       auto quantity = PRECISION - exp_10_abs;
 
+      static const constexpr auto base_5_rounding_table = Constants::Tables::GetRoundingTable<T, 5>();
       static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();
 
-      if(quantity >= 0 && quantity < FloatingStruct::MAX_DIGITS10)
+      static const constexpr auto min_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), std::numeric_limits<T>::digits10);
+      static const constexpr auto max_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), std::numeric_limits<T>::digits10 + 1);
+
+      const auto &rounding_factor_10s = (quantity >= 0 && quantity < FloatingStruct::MAX_DIGITS10) ? base_10_rounding_table[quantity] : 1;
+      const auto &rounding_factor_5s = (quantity >= 0 && quantity < FloatingStruct::MAX_DIGITS10) ? base_5_rounding_table[quantity] : 1;
+
+      auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::multiplyandround(mantissa, exp_2);
+
+      const auto remainder = digits_10 % rounding_factor_10s;
+
+      if(remainder > rounding_factor_5s
+         || ((rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::NO_ROUNDING) && (remainder == rounding_factor_5s && ((digits_10 & 1U) == false))))
       {
-        exp_2 /= base_10_rounding_table[quantity + 2];
+        digits_10 += rounding_factor_5s;
       }
 
-      const auto digits_10 = Helpers::Math::IEEE754<T>::multiplyandround(mantissa, exp_2, quantity, exp_10_abs);
+      const auto overflow = digits_10 > max_precision;
+      quantity += overflow;
+      exp_10_abs -= overflow;
 
-      auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
+      const auto underflow = digits_10 < min_precision;
+      quantity -= underflow;
+      exp_10_abs += underflow;
+
+      const auto digits = digits_10 / rounding_factor_10s;
+
+      auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits);
 
       if(exp_base_10_int < 0)
       {

@@ -5,6 +5,7 @@
 #include <limits>
 #include <numbers>
 #include <type_traits>
+#include <utility>
 
 namespace Helpers::Math::Constexpr
 {
@@ -269,47 +270,59 @@ namespace Helpers::Math
 
       return digits_10;
     }
+    enum RoundingResults : uint8_t
+    {
+      NO_ROUNDING,
+      ROUNDED,
+      EXACT
+    };
 
   public:
-    static auto multiplyandround(const T &A, const underlying &B, auto &quantity, auto &exp_10_abs)
+    static auto multiplyandround(const T &A, const underlying &B)
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
 
       underlying sig = A_bits & MANTISSA_ONLY;
+
       sig |= (underlying{ 1 } << EXPONENT_ST);
 
       const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
 
-      constexpr int shift = static_cast<int>(EXPONENT_BIAS + EXPONENT_ST + 2);
+      int shift = static_cast<int>(EXPONENT_ST + 1);
 
-      underlying digits_10{};
-      wide_underlying remainder{};
+      underlying digits_10;
+      wide_underlying remainder;
 
       if(shift >= 0)
       {
         digits_10 = underlying{ prod >> shift };
-        remainder = prod & ((wide_underlying{ 1 } << shift) - 1);
+        // remainder = prod - digits_10;
+        remainder = (prod & ((wide_underlying{ 1 } << shift) - 1));
       }
       else
       {
         digits_10 = underlying{ prod << (-shift) };
-        remainder = 0;
+        remainder = wide_underlying{ 0 };
       }
 
-      if(shift > 0)
+      if(remainder == 0)
+      {
+        return std::make_pair(RoundingResults::EXACT, digits_10);
+      }
+
+      if(shift >= 0)
       {
         const wide_underlying half = wide_underlying{ 1 } << (shift - 1);
-
-        if(remainder > half || (remainder == half && (digits_10 & 1u)))
+        // tie → bankers rounding
+        if(remainder > half || (remainder == half && digits_10 & 1U))
         {
-          exp_10_abs--, quantity++;
           digits_10++;
+          return std::make_pair(RoundingResults::ROUNDED, digits_10);
         }
       }
 
-      return digits_10;
+      return std::make_pair(RoundingResults::NO_ROUNDING, digits_10);
     }
-    //
   };
 
 } // namespace Helpers::Math

@@ -182,7 +182,7 @@ namespace Constants::Tables
   static constexpr auto GetRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<T, N>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I - 1)... };
+    return std::array<T, N>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I)... };
   }
 
   template <typename T, uint32_t BASE>
@@ -190,6 +190,6 @@ namespace Constants::Tables
   {
     constexpr auto N = std::numeric_limits<T>::digits10;
     using IntType = Constants::Tables::Floating<T>::smallest_underlying;
-    return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N + 1>());
+    return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N>());
   }
 } // namespace Constants::Tables
