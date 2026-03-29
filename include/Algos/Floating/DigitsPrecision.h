@@ -204,7 +204,12 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::multiplyandround(mantissa, exp_2);
 
-      const auto exp_shft = (digits_10 < min_precision) ? 1 : 0;
+      auto exp_shft = 0;
+      if(digits_10 < min_precision)
+      {
+        digits_10 *= 10;
+        exp_shft++;
+      }
 
       const auto exp_base_10_int = ((exp * 78'913) >> 18) - exp_shft;
       auto exp_10_abs = std::abs(exp_base_10_int) + ((exp_base_10_int < 0) ? -1 : 0);
@@ -215,8 +220,8 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         static const constexpr auto base_5_rounding_table = Constants::Tables::GetRoundingTable<T, 5>();
         static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();
 
-        const auto &rounding_factor_10s = base_10_rounding_table[quantity + exp_shft];
-        const auto &rounding_factor_5s = base_5_rounding_table[quantity + exp_shft];
+        const auto &rounding_factor_10s = base_10_rounding_table[quantity];
+        const auto &rounding_factor_5s = base_5_rounding_table[quantity];
 
         const auto remainder = digits_10 % rounding_factor_10s;
 
@@ -229,10 +234,6 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         const auto overflow = digits_10 > max_precision;
         quantity += overflow;
         exp_10_abs -= overflow;
-
-        const auto underflow = digits_10 < min_precision;
-        quantity -= underflow;
-        exp_10_abs += underflow;
 
         digits_10 /= rounding_factor_10s;
       }
