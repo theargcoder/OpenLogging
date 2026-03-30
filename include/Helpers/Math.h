@@ -151,6 +151,19 @@ namespace Helpers::Math::Constexpr
   }
 
   template <typename T>
+    requires std::is_integral_v<T>
+  consteval T log10(T x)
+  {
+    T count = 0;
+    while(x >= 10)
+    {
+      x /= 10;
+      ++count;
+    }
+    return count;
+  }
+
+  template <typename T>
   static consteval T log10(T x)
   {
     if(x <= 0)
@@ -255,17 +268,17 @@ namespace Helpers::Math
 
       const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
 
-      int shift = static_cast<int>(EXPONENT_BIAS + EXPONENT_ST + 2);
+      int shift = static_cast<int>(EXPONENT_ST + 1);
 
       underlying digits_10;
 
       if(shift >= 0)
       {
-        digits_10 = underlying{ prod >> shift };
+        digits_10 = static_cast<underlying>(prod >> shift);
       }
       else
       {
-        digits_10 = underlying{ prod << (-shift) };
+        digits_10 = static_cast<underlying>(prod << (-shift));
       }
 
       return digits_10;
@@ -297,13 +310,13 @@ namespace Helpers::Math
 
       if(shift >= 0)
       {
-        digits_10 = underlying{ prod >> shift };
+        digits_10 = static_cast<underlying>(prod >> shift);
         // remainder = prod - digits_10;
         remainder = (prod & ((wide_underlying{ 1 } << shift) - 1));
       }
       else
       {
-        digits_10 = underlying{ prod << (-shift) };
+        digits_10 = static_cast<underlying>(prod << (-shift));
         remainder = wide_underlying{ 0 };
       }
 

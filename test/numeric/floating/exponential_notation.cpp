@@ -169,6 +169,8 @@ namespace
         {
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
+          open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(i);
+
           lim++;
         }
       }

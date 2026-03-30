@@ -197,6 +197,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
         return buff;
       }
+
       static const constexpr auto min_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), std::numeric_limits<T>::digits10);
       static const constexpr auto max_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), std::numeric_limits<T>::digits10 + 1);
 

@@ -1,13 +1,20 @@
-set(RYU_LIB /home/lucca/Work/ryu/build/libryu.a)
+# Remove find_package(ryu REQUIRED)
+
+# Set library manually
+set(RYU_INCLUDE_DIR /usr/local/include)
+set(RYU_LIB /usr/local/lib/libryu.a)
 
 # Test: Logging
 add_executable(test_logging logging.cpp)
+target_include_directories(test_logging PRIVATE ${RYU_INCLUDE_DIR})
 target_link_libraries(test_logging PRIVATE OpenLogging ${RYU_LIB})
 add_test(NAME LoggingTest COMMAND test_logging)
 
 # Test: Constants
 add_executable(test_constants constants.cpp)
+target_include_directories(test_constants PRIVATE ${RYU_INCLUDE_DIR})
 target_link_libraries(test_constants PRIVATE OpenLogging ${RYU_LIB})
 add_test(NAME ConstantsTest COMMAND test_constants)
 
+# Numeric subdirectory
 add_subdirectory(numeric)
