@@ -268,11 +268,11 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
           const int after_pt_ct = FloatingStruct::MAX_DIGITS10 - exp_base_10_int;
           const int max_prescision = PRECISION < after_pt_ct ? PRECISION : after_pt_ct;
           const int qty = quantity < max_prescision ? quantity : max_prescision;
-          std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx + exp_base_10_int], qty);
+          std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx + exp_base_10_int + 1], qty - 1);
           buff.array[buff.start_idx--] = '.';
           if(exp_base_10_int == 0)
           {
-            buff.array[buff.start_idx] = '0';
+            buff.array[buff.start_idx] = res_buff.array[res_buff.start_idx];
           }
           else
           {
