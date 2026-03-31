@@ -213,11 +213,13 @@ namespace Constants::Tables
     }
   };
 
-  template <typename T, uint32_t BASE, size_t... I>
+  template <typename T, uint32_t BASE, std::size_t... I>
   static constexpr auto GetRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<T, N>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I)... };
+    auto array = std::array<T, N + 1>{ BASE * Helpers::Math::Constexpr::ipow(T{ 10 }, N - I)... };
+    array[N] = BASE;
+    return array;
   }
 
   template <typename T, uint32_t BASE>

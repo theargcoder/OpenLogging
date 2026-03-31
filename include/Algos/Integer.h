@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -18,12 +20,12 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T>
   static auto ToStrCharArray(const T &input)
   {
-    const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
+    static const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
 
     char_array<MAX_DIGITS10> buff;
     buff.start_idx = MAX_DIGITS10;
 
-    const constexpr auto BASE = 10;
+    static const constexpr auto BASE = 10;
 
     char *__restrict__ it = &buff.array[buff.start_idx];
 
@@ -69,7 +71,7 @@ namespace Helpers::Numeric::Integral
   {
     char *__restrict__ it = &out_char.array[st_idx];
 
-    const constexpr auto BASE = 10;
+    static const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
 
     using UT = std::make_unsigned_t<T>;
@@ -91,6 +93,84 @@ namespace Helpers::Numeric::Integral
     else if constexpr(FORCE_SIGN)
     {
       *--it = '+';
+    }
+
+    out_char.start_idx = it - &out_char.array[0];
+  }
+
+  template <uint32_t FORCE_LENGTH, int N, typename T>
+    requires std::is_integral_v<T>
+  static void ToStrReverseWriteToCharArrayForceAndCapLength(const T &input, char_array<N> &out_char, const int &st_idx)
+  {
+    static_assert(N > FORCE_LENGTH, "cant force more chars than number of chars that can fit in the buffer bruh");
+
+    char *__restrict__ it = &out_char.array[st_idx];
+
+    static const constexpr auto BASE = 10;
+    const bool NEGATIVE = input < 0;
+
+    using UT = std::make_unsigned_t<T>;
+    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+
+    uint32_t i = 0;
+    do
+    {
+      i++;
+      const auto rem = val % BASE;
+      val /= BASE;
+
+      *--it = '0' + rem;
+
+    } while(val && i < FORCE_LENGTH);
+
+    const auto len = FORCE_LENGTH - i;
+
+    it -= len;
+
+    std::memset(it, '0', len);
+
+    if(NEGATIVE)
+    {
+      *--it = '-';
+    }
+
+    out_char.start_idx = it - &out_char.array[0];
+  }
+
+  template <uint32_t FORCE_LENGTH, int N, typename T>
+    requires std::is_integral_v<T>
+  static void ToStrReverseWriteToCharArrayStopAtPtr(const T &input, char_array<N> &out_char, const int &st_idx)
+  {
+    static_assert(N > FORCE_LENGTH, "cant force more chars than number of chars that can fit in the buffer bruh");
+
+    char *__restrict__ it = &out_char.array[st_idx];
+
+    static const constexpr auto BASE = 10;
+    const bool NEGATIVE = input < 0;
+
+    using UT = std::make_unsigned_t<T>;
+    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+
+    uint32_t i = 0;
+    do
+    {
+      i++;
+      const auto rem = val % BASE;
+      val /= BASE;
+
+      *--it = '0' + rem;
+
+    } while(val && i < FORCE_LENGTH);
+
+    const auto len = FORCE_LENGTH - i;
+
+    it -= len;
+
+    std::memset(it, '0', len);
+
+    if(NEGATIVE)
+    {
+      *--it = '-';
     }
 
     out_char.start_idx = it - &out_char.array[0];
