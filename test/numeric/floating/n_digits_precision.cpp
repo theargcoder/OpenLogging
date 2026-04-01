@@ -138,7 +138,7 @@ namespace
 
       const auto st_std_fmt = std::chrono::high_resolution_clock::now();
 
-      std_format = Helpers::Numeric::Std::to_string<5, false>(i);
+      std_format = Helpers::Numeric::Std::to_string<false>(i, 5);
 
       const auto en_std_fmt = std::chrono::high_resolution_clock::now();
 

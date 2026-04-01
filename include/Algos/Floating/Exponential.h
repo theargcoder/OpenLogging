@@ -22,7 +22,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     using Floating = Constants::Tables::Floating<T>;
 
     static const constinit auto FloatingStruct = Floating();
-    static const constinit auto &table = FloatingStruct.DIGITS;
+    static const constinit auto &exp_table = FloatingStruct.DIGITS;
 
     static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
@@ -59,26 +59,36 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
-    const auto exp_2 = table[exp + Floating::BIAS];
+    int exp_base_10_int = ((exp * 78'913) >> 18);
 
-    const auto digits_10 = Helpers::Math::IEEE754<T>::multiply(mantissa, exp_2); // static_cast<Floating::smallest_underlying>(mantissa * exp_2);
+    const auto exp_table_val = exp_table[exp + Floating::BIAS];
 
-    static const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
+    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<T, 5>();
+    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<T, 10>();
 
-    const auto exp_shft = (digits_10 < precision) ? -1 : 0;
+    static const constexpr auto precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying{ 10 }, Floating::MAX_DIGITS10);
 
-    const auto exp_base_10_int = ((exp * 78'913) >> 18) + exp_shft;
+    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
+    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
+
+    auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::MultiplyRoundNormalize(mantissa, exp_table_val, exp_base_10_int, precision);
+
+    const auto remainder = digits_10 % rounding_factor_10s;
+
+    if(remainder > rounding_factor_5s || (remainder == rounding_factor_5s && rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::NO_ROUNDING))
+    {
+      digits_10 += rounding_factor_5s;
+    }
+
+    digits_10 /= rounding_factor_10s;
 
     Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
 
     buff.array[--buff.start_idx] = 'e';
 
-    const auto res_buff = Helpers::Numeric::Integral::ToStrCharArray<false>(digits_10);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<false>(digits_10, buff, buff.start_idx);
 
-    buff.start_idx -= PRECISION;
-    std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], PRECISION);
-
-    buff.array[buff.start_idx] = '.';
+    buff.array[--buff.start_idx] = '.';
 
     std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
 

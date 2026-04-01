@@ -258,7 +258,7 @@ namespace Helpers::Math
     }
 
   public:
-    static auto multiply(const T &A, const underlying &B)
+    static auto Multiply(const T &A, const underlying &B)
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
 
@@ -293,7 +293,7 @@ namespace Helpers::Math
     };
 
   public:
-    static auto multiplyandround(const T &A, const underlying &B)
+    static auto MultiplyRound(const T &A, const underlying &B)
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
 
@@ -337,6 +337,55 @@ namespace Helpers::Math
       }
 
       return std::make_pair(RoundingResults::NO_ROUNDING, digits_10);
+    }
+
+  public:
+    static auto MultiplyRoundNormalize(const T &A, const underlying &B, int &exp, const auto &selected_prescision)
+    {
+      const underlying A_bits = std::bit_cast<underlying>(A);
+
+      underlying sig = A_bits & MANTISSA_ONLY;
+
+      sig |= (underlying{ 1 } << EXPONENT_ST);
+
+      const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
+
+      int shift = static_cast<int>(EXPONENT_ST + 1);
+
+      underlying digits_10;
+
+      RoundingResults rounding_result{ RoundingResults::NO_ROUNDING };
+
+      if(shift >= 0)
+      {
+        wide_underlying remainder;
+
+        digits_10 = static_cast<underlying>(prod >> shift);
+        // remainder = prod - digits_10;
+        remainder = (prod & ((wide_underlying{ 1 } << shift) - 1));
+
+        const wide_underlying half = wide_underlying{ 1 } << (shift - 1);
+
+        // exactly as specified in IEEE754
+        if(remainder > half || (remainder == half && digits_10 & 1U))
+        {
+          rounding_result = RoundingResults::ROUNDED;
+          digits_10++;
+        }
+      }
+      else
+      {
+        digits_10 = static_cast<underlying>(prod << (-shift));
+        rounding_result = RoundingResults::EXACT;
+      }
+
+      if(digits_10 < selected_prescision)
+      {
+        digits_10 *= 10;
+        exp--;
+      }
+
+      return std::make_pair(rounding_result, digits_10);
     }
   };
 

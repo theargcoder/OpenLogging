@@ -98,11 +98,11 @@ namespace Helpers::Numeric::Integral
     out_char.start_idx = it - &out_char.array[0];
   }
 
-  template <uint32_t FORCE_LENGTH, int N, typename T>
+  template <uint32_t CAP_FORCE_LENGTH, int N, typename T>
     requires std::is_integral_v<T>
   static void ToStrReverseWriteToCharArrayForceAndCapLength(const T &input, char_array<N> &out_char, const int &st_idx)
   {
-    static_assert(N > FORCE_LENGTH, "cant force more chars than number of chars that can fit in the buffer bruh");
+    static_assert(N > CAP_FORCE_LENGTH, "cant force more chars than number of chars that can fit in the buffer bruh");
 
     char *__restrict__ it = &out_char.array[st_idx];
 
@@ -121,9 +121,9 @@ namespace Helpers::Numeric::Integral
 
       *--it = '0' + rem;
 
-    } while(val && i < FORCE_LENGTH);
+    } while(val && i < CAP_FORCE_LENGTH);
 
-    const auto len = FORCE_LENGTH - i;
+    const auto len = CAP_FORCE_LENGTH - i;
 
     it -= len;
 
@@ -137,36 +137,29 @@ namespace Helpers::Numeric::Integral
     out_char.start_idx = it - &out_char.array[0];
   }
 
-  template <uint32_t FORCE_LENGTH, int N, typename T>
+  template <uint32_t CAP_LENGTH, int N, typename T>
     requires std::is_integral_v<T>
-  static void ToStrReverseWriteToCharArrayStopAtPtr(const T &input, char_array<N> &out_char, const int &st_idx)
+  static auto ToStrReverseWriteToCharArrayCapLengthStopAtNthCharReturnRemainder(const T &input, char_array<N> &out_char, const uint32_t &st_idx, const uint32_t stp_idx)
   {
-    static_assert(N > FORCE_LENGTH, "cant force more chars than number of chars that can fit in the buffer bruh");
-
-    char *__restrict__ it = &out_char.array[st_idx];
-
     static const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
 
+    char *__restrict__ it = &out_char.array[st_idx];
+
     using UT = std::make_unsigned_t<T>;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+    UT rem;
 
     uint32_t i = 0;
     do
     {
       i++;
-      const auto rem = val % BASE;
+      rem = val % BASE;
       val /= BASE;
 
       *--it = '0' + rem;
 
-    } while(val && i < FORCE_LENGTH);
-
-    const auto len = FORCE_LENGTH - i;
-
-    it -= len;
-
-    std::memset(it, '0', len);
+    } while(val && i < stp_idx && i < CAP_LENGTH);
 
     if(NEGATIVE)
     {
@@ -174,6 +167,8 @@ namespace Helpers::Numeric::Integral
     }
 
     out_char.start_idx = it - &out_char.array[0];
+
+    return (val) ? val % BASE : 0;
   }
 } // namespace Helpers::Numeric::Integral
 

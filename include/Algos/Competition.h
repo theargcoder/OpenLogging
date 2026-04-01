@@ -15,8 +15,8 @@ extern "C"
 
 namespace Helpers::Numeric::Std
 {
-  template <uint32_t PRECISION, bool SCIENTIFIC, typename Type>
-  static auto to_string(Type value)
+  template <bool SCIENTIFIC, typename Type>
+  static auto to_string(Type value, const auto &PRECISION)
   {
     std::array<char, 64> buf;
 

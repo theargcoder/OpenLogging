@@ -204,7 +204,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       const auto exp_2 = table[exp + FloatingStruct::BIAS];
 
-      auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::multiplyandround(mantissa, exp_2);
+      const auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::MultiplyRound(mantissa, exp_2);
 
       /*
       auto exp_shft = 0;
@@ -215,88 +215,64 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       }
       */
 
+      static const constexpr auto base_5_rounding_table = Constants::Tables::GetRoundingTable<T, 5>();
+      static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();
+
       const int exp_base_10_int = ((exp * 78'913) >> 18); //- exp_shft;
-      const auto exp_10_abs = std::abs(exp_base_10_int) + ((exp_base_10_int <= PRECISION) ? -1 : 0);
-      const auto quantity = PRECISION - exp_10_abs;
 
-      if(exp_10_abs > PRECISION)
-      {
-        buff.start_idx -= PRECISION;
-        std::memset(&buff.array[buff.start_idx], '0', PRECISION);
-        buff.array[--buff.start_idx] = '.';
-        buff.array[--buff.start_idx] = '0';
-        return buff;
-      }
-
-      if(quantity >= 0 && quantity <= FloatingStruct::MAX_DIGITS10)
-      {
-        static const constexpr auto base_5_rounding_table = Constants::Tables::GetRoundingTable<T, 5>();
-        static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();
-
-        const auto &rounding_factor_10s = base_10_rounding_table[quantity];
-        const auto &rounding_factor_5s = base_5_rounding_table[quantity];
-
-        const auto remainder = digits_10 % rounding_factor_10s;
-
-        if(remainder > rounding_factor_5s || (remainder == rounding_factor_5s && rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::NO_ROUNDING))
-        {
-          digits_10 += rounding_factor_5s;
-        }
-
-        digits_10 /= rounding_factor_10s;
-      }
+      typename FloatingStruct::smallest_underlying left, right;
 
       if(exp_base_10_int < 0)
       {
-        Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayForceAndCapLength<PRECISION>(digits_10, buff, buff.start_idx);
-        buff.array[--buff.start_idx] = '.';
-        buff.array[--buff.start_idx] = '0';
+        const auto exp_10_abs = std::abs(exp_base_10_int) - 1; // since its 0.DIGITS we need to take off 1 exponent
+        const auto quantity = PRECISION - exp_10_abs;
+
+        left = 0;
+        right = (exp_10_abs > PRECISION) ? 0 : digits_10;
+
+        if(quantity >= 0 && quantity <= FloatingStruct::MAX_DIGITS10)
+        {
+          const auto &rounding_factor_10s = base_10_rounding_table[quantity];
+          const auto &rounding_factor_5s = base_5_rounding_table[quantity];
+
+          const auto remainder = right % rounding_factor_10s;
+
+          if(remainder > rounding_factor_5s || (remainder == rounding_factor_5s && rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::NO_ROUNDING))
+          {
+            right += rounding_factor_5s;
+          }
+
+          right /= rounding_factor_10s;
+        }
+      }
+      else if(exp_base_10_int >= 0 && exp_base_10_int <= FloatingStruct::MAX_DIGITS10)
+      {
+        const auto &rounding_factor_10s = base_10_rounding_table[exp_base_10_int];
+
+        left = digits_10 / rounding_factor_10s;
+        right = digits_10 % rounding_factor_10s;
+
+        // convert internal digit scale -> output precision scale
+        if constexpr(std::numeric_limits<T>::digits10 > PRECISION)
+        {
+          right /= base_10_rounding_table[std::numeric_limits<T>::digits10 - PRECISION];
+        }
+
+        if(right >= min_precision)
+        {
+          left += right / min_precision;
+          right %= min_precision;
+        }
       }
       else
       {
-        if(exp_base_10_int < FloatingStruct::MAX_DIGITS10)
-        {
-          buff.start_idx -= PRECISION;
-          std::memset(&buff.array[buff.start_idx], '0', PRECISION);
-          buff.array[--buff.start_idx] = '.';
-          Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayForceAndCapLength<PRECISION>(digits_10, buff, buff.start_idx - exp_base_10_int);
-        }
-        else
-        {
-          buff.array[--buff.start_idx] = '\0';
-        }
-
-        /*
-        if(exp_base_10_int < FloatingStruct::MAX_DIGITS10)
-        {
-          buff.start_idx -= PRECISION;
-          std::memset(&buff.array[buff.start_idx], '0', PRECISION);
-          const int after_pt_ct = FloatingStruct::MAX_DIGITS10 - exp_base_10_int;
-          const int qty = std::min({ static_cast<int>(sizeof(res_buff.array) - res_buff.start_idx - 1), quantity, after_pt_ct, static_cast<int>(PRECISION) });
-          std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx + exp_base_10_int + 1], qty);
-          buff.array[buff.start_idx--] = '.';
-          if(exp_base_10_int == 0)
-          {
-            buff.array[buff.start_idx] = res_buff.array[res_buff.start_idx];
-          }
-          else
-          {
-            std::memcpy(&buff.array[buff.start_idx], &res_buff.array[res_buff.start_idx], exp_base_10_int);
-          }
-        }
-        else
-        {
-          buff.start_idx -= PRECISION;
-          std::memset(&buff.array[buff.start_idx], '0', PRECISION);
-          buff.array[buff.start_idx--] = '.';
-          const auto missing = exp_base_10_int - FloatingStruct::MAX_DIGITS10;
-          buff.start_idx -= missing;
-          std::memset(&buff.array[buff.start_idx--], '0', missing);
-          buff.start_idx -= FloatingStruct::MAX_DIGITS10;
-          std::memcpy(&buff.array[buff.start_idx--], &res_buff.array[res_buff.start_idx], sizeof(res_buff.array) - res_buff.start_idx);
-        }
-        */
+        left = digits_10;
+        right = 0;
       }
+
+      Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayForceAndCapLength<PRECISION>(right, buff, buff.start_idx);
+      buff.array[--buff.start_idx] = '.';
+      Helpers::Numeric::Integral::ToStrReverseWriteToCharArray(left, buff, buff.start_idx);
 
       return buff;
     }
