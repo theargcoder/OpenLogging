@@ -66,18 +66,43 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<T, 5>();
     static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<T, 10>();
 
-    static const constexpr auto precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying{ 10 }, Floating::MAX_DIGITS10);
+    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying_unsigned{ 10 }, Floating::ACTUAL_DIGITS10);
+    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying_unsigned{ 10 }, Floating::ACTUAL_DIGITS10 - 1);
 
     const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
 
-    auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::MultiplyRoundNormalize(mantissa, exp_table_val, exp_base_10_int, precision);
+    auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::MultiplyRoundNormalize(mantissa, exp_table_val, exp_base_10_int, min_precision);
 
     const auto remainder = digits_10 % rounding_factor_10s;
+    const auto rem_greater = remainder > rounding_factor_5s;
+    const auto rem_ties = remainder == rounding_factor_5s;
 
-    if(remainder > rounding_factor_5s || (remainder == rounding_factor_5s && rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::NO_ROUNDING))
+    if(rem_greater)
     {
       digits_10 += rounding_factor_5s;
+    }
+    else if(rem_ties)
+    {
+      if(rounding_results != Helpers::Math::IEEE754<T>::RoundingResults::EXACT)
+      {
+        digits_10 += rounding_factor_5s;
+      }
+      else
+      {
+        // Pure mathematical tie. Use standard Ties-to-Even logic.
+        const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
+        if(last_digit_is_odd)
+        {
+          digits_10 += rounding_factor_5s;
+        }
+      }
+    }
+
+    if(digits_10 >= max_precision)
+    {
+      digits_10 /= 10;
+      exp_base_10_int++;
     }
 
     digits_10 /= rounding_factor_10s;

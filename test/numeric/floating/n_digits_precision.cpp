@@ -168,9 +168,10 @@ namespace
 
         std::cout << "input_original                              = " << i << '\n';
         std::cout << "frex_mantissa                               = " << frexp_ours.mantissa << '\n';
-        std::cout << "exp_table_val (as Integral)                 = " << static_cast<Constants::Tables::Floating<Type>::smallest_underlying>(exp_table_val) << '\n';
+        std::cout << "exp_table_val (as Integral)                 = " << static_cast<Constants::Tables::Floating<Type>::smallest_underlying_unsigned>(exp_table_val) << '\n';
         std::cout << "exp_table_val (as Type)                     = " << static_cast<Type>(exp_table_val) << '\n';
-        std::cout << "non_floating_digits_encoding (as Integral)  = " << static_cast<Constants::Tables::Floating<Type>::smallest_underlying>(non_floating_digits_encoding) << '\n';
+        std::cout << "non_floating_digits_encoding (as Integral)  = " << static_cast<Constants::Tables::Floating<Type>::smallest_underlying_unsigned>(non_floating_digits_encoding)
+                  << '\n';
         std::cout << "non_floating_digits_encoding (as Type)      = " << non_floating_digits_encoding << '\n';
 
         log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));

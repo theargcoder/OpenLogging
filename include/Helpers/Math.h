@@ -151,19 +151,20 @@ namespace Helpers::Math::Constexpr
   }
 
   template <typename T>
-    requires std::is_integral_v<T>
-  consteval T log10(T x)
+    requires(std::is_integral_v<T> || std::is_same_v<T, __uint128_t>)
+  static consteval int log10(T x)
   {
-    T count = 0;
+    int digits = 0;
     while(x >= 10)
     {
       x /= 10;
-      ++count;
+      ++digits;
     }
-    return count;
+    return digits;
   }
 
   template <typename T>
+    requires std::is_floating_point_v<T>
   static consteval T log10(T x)
   {
     if(x <= 0)
@@ -207,6 +208,7 @@ namespace Helpers::Math
     static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2046 : 255; // as defined in IEEE-754
 
     static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
+    static constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
 
     static constexpr underlying SIGN_ONLY = IS_DOUBLE ? 0x8000000000000000ULL : 0x80000000U;
 
@@ -287,9 +289,9 @@ namespace Helpers::Math
   public:
     enum RoundingResults : uint8_t
     {
-      NO_ROUNDING,
-      ROUNDED,
-      EXACT
+      EXACT,
+      INEXACT_TRUNCATED, // Decimal is SMALLER than binary bits (True remainder > 0.5)
+      INEXACT_ROUNDED_UP // when remainder > half (aka 0.5), it has leftover precision
     };
 
   public:
@@ -332,11 +334,11 @@ namespace Helpers::Math
         if(remainder > half || (remainder == half && digits_10 & 1U))
         {
           digits_10++;
-          return std::make_pair(RoundingResults::ROUNDED, digits_10);
+          // return std::make_pair(RoundingResults::ROUNDED, digits_10);
         }
       }
 
-      return std::make_pair(RoundingResults::NO_ROUNDING, digits_10);
+      return std::make_pair(RoundingResults::INEXACT_TRUNCATED, digits_10);
     }
 
   public:
@@ -344,39 +346,40 @@ namespace Helpers::Math
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
 
-      underlying sig = A_bits & MANTISSA_ONLY;
-
-      sig |= (underlying{ 1 } << EXPONENT_ST);
+      underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
       const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
 
-      int shift = static_cast<int>(EXPONENT_ST + 1);
+      static const constexpr auto shift = EXPONENT_ST + 1;
+      static const constexpr auto half = wide_underlying{ 1 } << (shift - 1);
 
-      underlying digits_10;
+      RoundingResults rounding_result{ RoundingResults::EXACT };
 
-      RoundingResults rounding_result{ RoundingResults::NO_ROUNDING };
+      auto digits_10 = static_cast<underlying>(prod >> shift);
+      auto remainder = (prod & ((half << 1) - 1));
 
-      if(shift >= 0)
+      // digitss_10 = 12345.half.quarter.eith.etc.etc
+
+      if(remainder > half)
       {
-        wide_underlying remainder;
-
-        digits_10 = static_cast<underlying>(prod >> shift);
-        // remainder = prod - digits_10;
-        remainder = (prod & ((wide_underlying{ 1 } << shift) - 1));
-
-        const wide_underlying half = wide_underlying{ 1 } << (shift - 1);
-
-        // exactly as specified in IEEE754
-        if(remainder > half || (remainder == half && digits_10 & 1U))
-        {
-          rounding_result = RoundingResults::ROUNDED;
-          digits_10++;
-        }
+        digits_10++;
+        // We rounded UP to get to this decimal. The true value is slightly lower.
+        rounding_result = RoundingResults::INEXACT_ROUNDED_UP;
+      }
+      else if(remainder == half && (digits_10 & 1U))
+      {
+        digits_10++;
+        // exact rounding makes us happy
+        rounding_result = RoundingResults::EXACT;
+      }
+      else if(remainder == wide_underlying{ 0 })
+      {
+        rounding_result = RoundingResults::EXACT;
       }
       else
       {
-        digits_10 = static_cast<underlying>(prod << (-shift));
-        rounding_result = RoundingResults::EXACT;
+        // We truncated to get to this decimal. The true value is slightly higher.
+        rounding_result = RoundingResults::INEXACT_TRUNCATED;
       }
 
       if(digits_10 < selected_prescision)
@@ -387,6 +390,8 @@ namespace Helpers::Math
 
       return std::make_pair(rounding_result, digits_10);
     }
+
+    //
   };
 
 } // namespace Helpers::Math

@@ -21,18 +21,19 @@ namespace
 
     constexpr int BIAS = Constants::Tables::Floating<T>::BIAS;
     constexpr int MAX_DIGITS10 = Constants::Tables::Floating<T>::MAX_DIGITS10;
+    constexpr int ACTUAL_DIGITS10 = Constants::Tables::Floating<T>::ACTUAL_DIGITS10;
 
     // Use Boost's 100-decimal-digit precision float for the test bounds
     using BigFloat = boost::multiprecision::cpp_bin_float_100;
 
-    const BigFloat scale = boost::multiprecision::pow(BigFloat(10), MAX_DIGITS10);
     const BigFloat LOG_10_2_BF("0.301029995663981195213738894724493026768"); // Hardcoded for exactness or calculate via Boost
 
     for(int i = 0; i < FloatTable.SIZE; ++i)
     {
       const int exp = i - BIAS;
-      const auto val = table[i];
-      const int digits = std::to_string(val).size();
+      const auto &val = table[i];
+      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
+      const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
       // Calculate power of 10 safely
       int32_t p10 = static_cast<int32_t>(std::floor(0.3010299956639812 * exp)); // Standard double is fine for the integer exponent

@@ -88,9 +88,9 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       const auto exp_2 = table[exp + Floating::BIAS];
 
-      const auto digits_10 = static_cast<Floating::smallest_underlying>(mantissa * exp_2);
+      const auto digits_10 = static_cast<Floating::smallest_underlying_unsigned>(mantissa * exp_2);
 
-      static const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying(10), Floating::MAX_DIGITS10);
+      static const constexpr auto precision = Helpers::Math::Constexpr::pow(typename Floating::smallest_underlying_unsigned(10), Floating::MAX_DIGITS10);
 
       int exp_shft = (digits_10 < precision) ? -1 : 0;
 
@@ -199,8 +199,8 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         return buff;
       }
 
-      static const constexpr auto min_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), std::numeric_limits<T>::digits10);
-      static const constexpr auto max_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying(10), std::numeric_limits<T>::digits10 + 1);
+      static const constexpr auto min_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying_unsigned(10), std::numeric_limits<T>::digits10);
+      static const constexpr auto max_precision = Helpers::Math::Constexpr::pow(typename FloatingStruct::smallest_underlying_unsigned(10), std::numeric_limits<T>::digits10 + 1);
 
       const auto exp_2 = table[exp + FloatingStruct::BIAS];
 
@@ -220,7 +220,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       const int exp_base_10_int = ((exp * 78'913) >> 18); //- exp_shft;
 
-      typename FloatingStruct::smallest_underlying left, right;
+      typename FloatingStruct::smallest_underlying_unsigned left, right;
 
       if(exp_base_10_int < 0)
       {
@@ -237,7 +237,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
           const auto remainder = right % rounding_factor_10s;
 
-          if(remainder > rounding_factor_5s || (remainder == rounding_factor_5s && rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::NO_ROUNDING))
+          if(remainder > rounding_factor_5s || (remainder == rounding_factor_5s && rounding_results == Helpers::Math::IEEE754<T>::RoundingResults::EXACT))
           {
             right += rounding_factor_5s;
           }
