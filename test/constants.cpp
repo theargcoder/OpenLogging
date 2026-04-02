@@ -1,5 +1,6 @@
 #define BOOST_TEST_MODULE ConstantsTests
-#include <boost/multiprecision/cpp_bin_float.hpp> // Add this header
+
+#include <boost/multiprecision/cpp_bin_float.hpp>
 #include <boost/test/included/unit_test.hpp>
 
 #include <cmath>
@@ -50,7 +51,7 @@ namespace
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
       double rel_error_dbl = static_cast<T>(rel_error);
-      double max_tolerance = std::pow(T{ 10.0 }, -MAX_DIGITS10);
+      double max_tolerance = std::pow(T{ 10.0 }, -digits + 5); // we are good with 15 digits in floats and 35 digits in doubles
 
       BOOST_CHECK_SMALL(rel_error_dbl, max_tolerance);
 

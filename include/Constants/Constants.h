@@ -167,79 +167,80 @@ namespace Constants::Tables
       }
     }
 
-    template <typename UInt, typename Exp>
-      requires((std::is_unsigned_v<UInt> || std::is_same_v<UInt, __uint128_t>) && std::is_integral_v<Exp>)
-    consteval UInt pow_trim10(UInt base, Exp exp) noexcept
+    static consteval smallest_underlying_unsigned ipow10(std::size_t n) noexcept
     {
-      UInt result = 1;
-      auto e = cabs(exp);
-
-      while(e != 0)
+      smallest_underlying_unsigned r = 1;
+      for(std::size_t i = 0; i < n; ++i)
       {
-        if(e & 1U)
-        {
-          result = mul_trim10(result, base);
-        }
+        r *= BASE;
+      }
+      return r;
+    }
 
-        e >>= 1U;
+    static consteval smallest_underlying_unsigned trim_to_actual_digits(smallest_underlying_unsigned v) noexcept
+    {
+      constexpr auto lower = ipow10(ACTUAL_DIGITS10 - 1);
+      constexpr auto upper = ipow10(ACTUAL_DIGITS10);
 
-        if(e != 0)
-        {
-          base = mul_trim10(base, base);
-        }
+      while(v < lower)
+      {
+        v *= BASE;
       }
 
-      return result;
-    }
-    consteval auto compute(const auto &k_pow)
-    {
-      smallest_underlying_unsigned res = 1;
-      if(k_pow >= 0)
+      if(v >= upper)
       {
-        res = pow_trim10(smallest_underlying_unsigned{ 2 }, k_pow);
+        v /= BASE;
+      }
+
+      return v;
+    }
+
+    template <typename UInt>
+      requires(std::is_unsigned_v<UInt> || std::is_same_v<UInt, __uint128_t>)
+    consteval UInt step_and_trim(UInt v, UInt factor) noexcept
+    {
+      v = mul_trim10(v, factor);
+
+      constexpr UInt upper = ipow10(ACTUAL_DIGITS10);
+      if(v >= upper)
+      {
+        v /= BASE;
+      }
+
+      return v;
+    }
+
+    template <bool NEGATIVE>
+    consteval void build_side() noexcept
+    {
+      using U = smallest_underlying_unsigned;
+
+      U value = trim_to_actual_digits(U{ 1 });
+      DIGITS[0 + BIAS] = value;
+
+      if constexpr(NEGATIVE)
+      {
+        for(int k = -1; k >= MIN_BIN_EXP; --k)
+        {
+          value = step_and_trim(value, U{ 5 });
+          DIGITS[k + BIAS] = value;
+        }
       }
       else
       {
-        // For 2^-n, your leading digits come from 5^n when decimal places are ignored.
-        res = pow_trim10(smallest_underlying_unsigned{ 5 }, k_pow);
-      }
-
-      const auto n_digits = Helpers::Math::Constexpr::log10(res) + 1;
-
-      if(n_digits >= ACTUAL_DIGITS10)
-      {
-        const auto digits_reduction = n_digits - ACTUAL_DIGITS10;
-        res /= Helpers::Math::Constexpr::ipow(smallest_underlying_unsigned{ BASE }, digits_reduction);
-      }
-
-      if(n_digits < ACTUAL_DIGITS10)
-      {
-        const auto digits_reduction = ACTUAL_DIGITS10 - n_digits;
-        res *= Helpers::Math::Constexpr::ipow(smallest_underlying_unsigned{ BASE }, digits_reduction);
-      }
-
-      return res;
-    }
-
-    template <bool INCREMENT, int SUB_BASE, int ST_PT, int DELIM>
-    consteval void loop()
-    {
-      for(int k = ST_PT; (INCREMENT ? (k <= DELIM) : (k >= DELIM)); (INCREMENT) ? (k++) : (k--))
-      {
-        const auto idx = k + BIAS;
-
-        const auto res = compute(k);
-
-        DIGITS[idx] = res;
+        for(int k = 1; k <= MAX_BIN_EXP; ++k)
+        {
+          value = step_and_trim(value, U{ 2 });
+          DIGITS[k + BIAS] = value;
+        }
       }
     }
 
   public:
-    consteval Floating()
+    consteval Floating() noexcept
     {
-      loop<false, 5, 0, MIN_BIN_EXP>(); // negative exponents: multiply by 5 each step but scale as needed
-
-      loop<true, 2, 0, MAX_BIN_EXP>(); // positive exponents: multiply by 2 each step but scale as needed
+      build_side<true>();  // k = -1, -2, ...
+      build_side<false>(); // k = +1, +2, ...
     }
   };
 
