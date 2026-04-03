@@ -1,12 +1,11 @@
 #pragma once
 
+#include "include/Helpers/Math.h"
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <type_traits>
-
-#include "include/Helpers/Math.h"
 
 namespace Constants
 {
@@ -94,7 +93,8 @@ namespace Constants::Tables
     // we need that extra digit to avoid rounding errors (errors can happen after our min precision is met)
     static constexpr auto ACTUAL_DIGITS10 = std::numeric_limits<smallest_underlying_unsigned>::digits10;
 
-    smallest_underlying_unsigned DIGITS[SIZE]{};
+  public:
+    Helpers::Math::int_96bit DIGITS[SIZE];
 
   private:
     template <typename Type>
@@ -110,61 +110,43 @@ namespace Constants::Tables
     consteval UInt mul_trim10(UInt a, UInt b) noexcept
     {
       // --- 128-bit Path ---
-      if constexpr(std::is_same_v<UInt, __uint128_t>)
+      static const constexpr auto width = 64U;
+      // Split inputs into 64-bit high and low parts
+      auto a0 = static_cast<uint64_t>(a);
+      auto a1 = static_cast<uint64_t>(a >> width);
+      auto b0 = static_cast<uint64_t>(b);
+      auto b1 = static_cast<uint64_t>(b >> width);
+
+      // Cross multiplications
+      __uint128_t p00 = static_cast<__uint128_t>(a0) * b0;
+      __uint128_t p01 = static_cast<__uint128_t>(a0) * b1;
+      __uint128_t p10 = static_cast<__uint128_t>(a1) * b0;
+      __uint128_t p11 = static_cast<__uint128_t>(a1) * b1;
+
+      // Accumulate into a 256-bit array: {x0, x1, x2, x3}
+      auto r0 = static_cast<uint64_t>(p00);
+      __uint128_t c1 = (p00 >> width) + static_cast<uint64_t>(p01) + static_cast<uint64_t>(p10);
+      auto r1 = static_cast<uint64_t>(c1);
+      __uint128_t c2 = (c1 >> width) + (p01 >> width) + (p10 >> width) + static_cast<uint64_t>(p11);
+      auto r2 = static_cast<uint64_t>(c2);
+      auto r3 = static_cast<uint64_t>((c2 >> width) + (p11 >> width));
+
+      std::array<uint64_t, 4> x = { r0, r1, r2, r3 };
+
+      // Trim decimal overflow: divide the 256-bit number by 10 until the top 128 bits are empty
+      while(x[2] != 0 || x[3] != 0)
       {
-        static const constexpr auto width = 64U;
-        // Split inputs into 64-bit high and low parts
-        auto a0 = static_cast<uint64_t>(a);
-        auto a1 = static_cast<uint64_t>(a >> width);
-        auto b0 = static_cast<uint64_t>(b);
-        auto b1 = static_cast<uint64_t>(b >> width);
-
-        // Cross multiplications
-        __uint128_t p00 = static_cast<__uint128_t>(a0) * b0;
-        __uint128_t p01 = static_cast<__uint128_t>(a0) * b1;
-        __uint128_t p10 = static_cast<__uint128_t>(a1) * b0;
-        __uint128_t p11 = static_cast<__uint128_t>(a1) * b1;
-
-        // Accumulate into a 256-bit array: {x0, x1, x2, x3}
-        auto r0 = static_cast<uint64_t>(p00);
-        __uint128_t c1 = (p00 >> width) + static_cast<uint64_t>(p01) + static_cast<uint64_t>(p10);
-        auto r1 = static_cast<uint64_t>(c1);
-        __uint128_t c2 = (c1 >> width) + (p01 >> width) + (p10 >> width) + static_cast<uint64_t>(p11);
-        auto r2 = static_cast<uint64_t>(c2);
-        auto r3 = static_cast<uint64_t>((c2 >> width) + (p11 >> width));
-
-        std::array<uint64_t, 4> x = { r0, r1, r2, r3 };
-
-        // Trim decimal overflow: divide the 256-bit number by 10 until the top 128 bits are empty
-        while(x[2] != 0 || x[3] != 0)
+        uint64_t rem = 0;
+        for(int i = 3; i >= 0; --i)
         {
-          uint64_t rem = 0;
-          for(int i = 3; i >= 0; --i)
-          {
-            __uint128_t val = (static_cast<__uint128_t>(rem) << width) | x[i];
-            x[i] = static_cast<uint64_t>(val / BASE);
-            rem = static_cast<uint64_t>(val % BASE);
-          }
+          __uint128_t val = (static_cast<__uint128_t>(rem) << width) | x[i];
+          x[i] = static_cast<uint64_t>(val / BASE);
+          rem = static_cast<uint64_t>(val % BASE);
         }
-
-        // Pack the remaining 128 bits back together
-        return (static_cast<__uint128_t>(x[1]) << width) | x[0];
       }
-      // --- 32-bit / 64-bit Path ---
-      else
-      {
-        using Wide = __uint128_t;
-        constexpr Wide maxv = static_cast<Wide>(std::numeric_limits<UInt>::max());
 
-        Wide x = static_cast<Wide>(a) * static_cast<Wide>(b);
-
-        while(x > maxv)
-        {
-          x /= BASE;
-        }
-
-        return static_cast<UInt>(x);
-      }
+      // Pack the remaining 128 bits back together
+      return (static_cast<__uint128_t>(x[1]) << width) | x[0];
     }
 
     static consteval smallest_underlying_unsigned ipow10(std::size_t n) noexcept
@@ -213,25 +195,25 @@ namespace Constants::Tables
     template <bool NEGATIVE>
     consteval void build_side() noexcept
     {
-      using U = smallest_underlying_unsigned;
+      using U = __uint128_t;
 
-      U value = trim_to_actual_digits(U{ 1 });
-      DIGITS[0 + BIAS] = value;
+      U full_value = trim_to_actual_digits(U{ 1 });
+      DIGITS[0 + BIAS] = Helpers::Math::int_96bit(full_value);
 
       if constexpr(NEGATIVE)
       {
         for(int k = -1; k >= MIN_BIN_EXP; --k)
         {
-          value = step_and_trim(value, U{ 5 });
-          DIGITS[k + BIAS] = value;
+          full_value = step_and_trim(full_value, U{ 5 });
+          DIGITS[k + BIAS] = Helpers::Math::int_96bit(full_value);
         }
       }
       else
       {
         for(int k = 1; k <= MAX_BIN_EXP; ++k)
         {
-          value = step_and_trim(value, U{ 2 });
-          DIGITS[k + BIAS] = value;
+          full_value = step_and_trim(full_value, U{ 2 });
+          DIGITS[k + BIAS] = Helpers::Math::int_96bit(full_value);
         }
       }
     }

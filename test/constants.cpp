@@ -21,8 +21,6 @@ namespace
     const auto &table = FloatTable.DIGITS;
 
     constexpr int BIAS = Constants::Tables::Floating<T>::BIAS;
-    constexpr int MAX_DIGITS10 = Constants::Tables::Floating<T>::MAX_DIGITS10;
-    constexpr int ACTUAL_DIGITS10 = Constants::Tables::Floating<T>::ACTUAL_DIGITS10;
 
     // Use Boost's 100-decimal-digit precision float for the test bounds
     using BigFloat = boost::multiprecision::cpp_bin_float_100;
@@ -33,14 +31,16 @@ namespace
     {
       const int exp = i - BIAS;
       const auto &val = table[i];
-      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
+      const auto log10_low = static_cast<int>(std::log10(val.low));
+      const auto val_result = (static_cast<__uint128_t>(val.hi) * Helpers::Math::ipow(__uint128_t{ 10 }, log10_low)) + val.low;
+      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val_result }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
       // Calculate power of 10 safely
       int32_t p10 = static_cast<int32_t>(std::floor(0.3010299956639812 * exp)); // Standard double is fine for the integer exponent
 
       // Reconstruct approximate value using BigFloat
-      BigFloat result = (static_cast<BigFloat>(val) / scale) * boost::multiprecision::pow(BigFloat(10), p10);
+      BigFloat result = (static_cast<BigFloat>(val_result) / scale) * boost::multiprecision::pow(BigFloat(10), p10);
       BigFloat expected = boost::multiprecision::pow(BigFloat(2), exp);
 
       BigFloat abs_error = boost::multiprecision::abs(result - expected);
@@ -61,7 +61,7 @@ namespace
       {
         constexpr int FP_PREC = std::numeric_limits<T>::max_digits10;
         // Note: You may need to format BigFloat as a string for std::format
-        std::cout << std::format("table[{:+4}] = {} \t| rel_err {:.{}e}\n", exp, val, rel_error_dbl, FP_PREC);
+        std::cout << std::format("table[{:+4}] = {} \t| rel_err {:.{}e}\n", exp, val_result, rel_error_dbl, FP_PREC);
       }
     }
   };

@@ -26,17 +26,6 @@ namespace Structures
       {
         parse_fmts(in_str);
       }
-
-      /*
-      for(int i = 0; i < N_VALIDICS; i++)
-      {
-        for(int j = 0; j < Constants::Size::MAX_FMT_SIZE; j++)
-        {
-          std::cout << fmts[i][j];
-        }
-        std::cout << '\n';
-      }
-      */
     }
 
   private:

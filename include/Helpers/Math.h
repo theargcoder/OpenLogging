@@ -186,6 +186,41 @@ namespace Helpers::Math::Constexpr
 
 namespace Helpers::Math
 {
+  struct int_96bit
+  {
+    uint64_t hi;
+    uint32_t low;
+
+    int_96bit() = default;
+
+    consteval explicit int_96bit(const __uint128_t &input)
+    {
+      const auto log10_input = static_cast<int>(Helpers::Math::Constexpr::log10(input) + 1);
+      const auto top_only_pow_exp = std::numeric_limits<decltype(hi)>::digits10;
+      const auto top_only = Helpers::Math::Constexpr::pow(__uint128_t{ 10 }, log10_input - top_only_pow_exp);
+      hi = input / top_only;
+      const auto remainder = input % top_only;
+      const auto log10_rem = static_cast<int>(Helpers::Math::Constexpr::log10(remainder) + 1);
+      const auto bottom_only = Helpers::Math::Constexpr::pow(__uint128_t{ 10 }, log10_rem);
+      low = remainder / bottom_only;
+    }
+  };
+
+  template <typename T>
+  T ipow(T base, int exp)
+  {
+    T result = 1;
+    while(exp > 0)
+    {
+      if(exp & 1)
+        result *= base;
+
+      base *= base;
+      exp >>= 1;
+    }
+    return result;
+  }
+
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
   struct IEEE754
@@ -400,7 +435,7 @@ namespace Helpers::Math
       return v.lo << s;
     }
 
-    static auto MultiplyReturnHighLow(const T &A, const wide_underlying &B, const auto &expected_precision, int &exponent)
+    static auto MultiplyReturnHighLow(const T &A, const Helpers::Math::int_96bit &B, const auto &expected_precision, int &exponent)
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
       const wide_underlying sig = (static_cast<wide_underlying>(A_bits & MANTISSA_ONLY)) | static_cast<wide_underlying>(MANTISSA_IMPLICIT_1);
@@ -412,12 +447,12 @@ namespace Helpers::Math
 
       if constexpr(size == 8)
       {
-        const auto prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B);
+        const auto prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B.hi);
         result = prod >> shift;
       }
       else
       {
-        const u256 prod = mul_u128(sig, B);
+        const u256 prod = mul_u128(sig, B.hi);
 
         result = shr_u256(prod, static_cast<unsigned>(shift));
       }
