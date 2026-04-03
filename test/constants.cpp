@@ -13,6 +13,40 @@
 
 namespace
 {
+  namespace Tests
+  {
+    template <typename T>
+      requires(std::is_integral_v<T> || std::is_same_v<T, __uint128_t>)
+    static int log10(T x)
+    {
+      int digits = 0;
+      while(x >= 10)
+      {
+        x /= 10;
+        ++digits;
+      }
+      return digits;
+    }
+
+    template <typename T>
+      requires std::is_integral_v<T>
+    static T pow(T base, int exp)
+    {
+      T result = 1;
+      while(exp > 0)
+      {
+        if(exp & 1)
+        {
+          result *= base;
+        }
+
+        base *= base;
+        exp >>= 1;
+      }
+      return result;
+    }
+  }
+
   const auto test_float_table = []<typename T>
     requires std::is_floating_point_v<T>
   (T)
@@ -31,10 +65,17 @@ namespace
     {
       const int exp = i - BIAS;
       const auto &val = table[i];
-      const auto log10_low = static_cast<int>(std::log10(val.low));
-      const auto val_result = (static_cast<__uint128_t>(val.hi) * Helpers::Math::ipow(__uint128_t{ 10 }, log10_low)) + val.low;
-      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val_result }))) + 1;
-      const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
+      __uint128_t val_result;
+      if constexpr(std::is_same_v<T, double>)
+      {
+        val_result = (static_cast<__uint128_t>(val.hig) * Tests::pow(__uint128_t{ 10 }, std::numeric_limits<decltype(val.low)>::digits10 - 1)) + val.low;
+      }
+      else
+      {
+        val_result = static_cast<__uint128_t>(val.hig);
+      }
+      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val_result })) + (std::is_same_v<double, T> ? +1 : +0));
+      const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits);
 
       // Calculate power of 10 safely
       int32_t p10 = static_cast<int32_t>(std::floor(0.3010299956639812 * exp)); // Standard double is fine for the integer exponent
@@ -51,7 +92,7 @@ namespace
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
       double rel_error_dbl = static_cast<T>(rel_error);
-      double max_tolerance = std::pow(T{ 10.0 }, -digits + 5); // we are good with 15 digits in floats and 35 digits in doubles
+      double max_tolerance = std::pow(T{ 10.0 }, FloatTable.ACTUAL_DIGITS10);
 
       BOOST_CHECK_SMALL(rel_error_dbl, max_tolerance);
 

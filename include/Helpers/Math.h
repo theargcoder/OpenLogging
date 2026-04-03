@@ -144,7 +144,6 @@ namespace Helpers::Math::Constexpr
   }
 
   template <typename BaseType, typename ExpType>
-    requires std::is_integral_v<ExpType>
   static consteval BaseType pow(BaseType base, ExpType exp_val)
   {
     return ipow(base, exp_val);
@@ -161,6 +160,24 @@ namespace Helpers::Math::Constexpr
       ++digits;
     }
     return digits;
+  }
+
+  template <typename T>
+    requires std::is_integral_v<T>
+  static consteval T pow(T base, int exp)
+  {
+    T result = 1;
+    while(exp > 0)
+    {
+      if(exp & 1)
+      {
+        result *= base;
+      }
+
+      base *= base;
+      exp >>= 1;
+    }
+    return result;
   }
 
   template <typename T>
@@ -186,40 +203,44 @@ namespace Helpers::Math::Constexpr
 
 namespace Helpers::Math
 {
+
+  template <typename T>
+    requires std::is_floating_point_v<T>
   struct int_96bit
   {
-    uint64_t hi;
+    uint64_t hig;
     uint32_t low;
 
     int_96bit() = default;
 
     consteval explicit int_96bit(const __uint128_t &input)
     {
-      const auto log10_input = static_cast<int>(Helpers::Math::Constexpr::log10(input) + 1);
-      const auto top_only_pow_exp = std::numeric_limits<decltype(hi)>::digits10;
-      const auto top_only = Helpers::Math::Constexpr::pow(__uint128_t{ 10 }, log10_input - top_only_pow_exp);
-      hi = input / top_only;
-      const auto remainder = input % top_only;
-      const auto log10_rem = static_cast<int>(Helpers::Math::Constexpr::log10(remainder) + 1);
-      const auto bottom_only = Helpers::Math::Constexpr::pow(__uint128_t{ 10 }, log10_rem);
-      low = remainder / bottom_only;
+      if constexpr(std::is_same_v<double, std::remove_cvref_t<T>>)
+      {
+        constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
+        constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 9 === 18)
+
+        // 1. Remove the bottom 12 digits (discard them)
+        __uint128_t remaining = input / DISCARD_POWER;
+
+        // 2. Extract the next 8 digits for 'low'
+        low = static_cast<decltype(low)>(remaining % LOW_PART_POWER);
+
+        // 3. The rest goes into 'hig'
+        hig = static_cast<decltype(hig)>(remaining / LOW_PART_POWER);
+      }
+      else
+      {
+        // 11 digits (38 - 11 === 27 - 9 digits (27 - 9 === 18)
+        constexpr __uint128_t DISCARD_POWER = 100'000'000'000;
+        constexpr __uint128_t LOW_PART_POWER = 100'000'000;
+
+        low = static_cast<decltype(low)>(0);
+        // 3. The top 18 goes into high
+        hig = static_cast<decltype(hig)>(static_cast<__uint128_t>(input / DISCARD_POWER) / LOW_PART_POWER);
+      }
     }
   };
-
-  template <typename T>
-  T ipow(T base, int exp)
-  {
-    T result = 1;
-    while(exp > 0)
-    {
-      if(exp & 1)
-        result *= base;
-
-      base *= base;
-      exp >>= 1;
-    }
-    return result;
-  }
 
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
@@ -435,7 +456,7 @@ namespace Helpers::Math
       return v.lo << s;
     }
 
-    static auto MultiplyReturnHighLow(const T &A, const Helpers::Math::int_96bit &B, const auto &expected_precision, int &exponent)
+    static auto MultiplyReturnHighLow(const T &A, const Helpers::Math::int_96bit<T> &B, const auto &expected_precision, int &exponent)
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
       const wide_underlying sig = (static_cast<wide_underlying>(A_bits & MANTISSA_ONLY)) | static_cast<wide_underlying>(MANTISSA_IMPLICIT_1);
@@ -447,12 +468,12 @@ namespace Helpers::Math
 
       if constexpr(size == 8)
       {
-        const auto prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B.hi);
+        const auto prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B.hig);
         result = prod >> shift;
       }
       else
       {
-        const u256 prod = mul_u128(sig, B.hi);
+        const u256 prod = mul_u128(sig, B.hig);
 
         result = shr_u256(prod, static_cast<unsigned>(shift));
       }

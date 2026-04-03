@@ -88,13 +88,16 @@ namespace Constants::Tables
     static const constexpr auto MAX_EXP_DIGITS10 = static_cast<decltype(MIN_BIN_EXP)>(Helpers::Math::Constexpr::log10(T{ std::numeric_limits<T>::max_exponent10 }));
 
   public:
-    using smallest_underlying_unsigned = std::conditional_t<std::is_same_v<T, float>, uint64_t, __uint128_t>;
-
+    using smallest_underlying_unsigned = uint64_t;
     // we need that extra digit to avoid rounding errors (errors can happen after our min precision is met)
-    static constexpr auto ACTUAL_DIGITS10 = std::numeric_limits<smallest_underlying_unsigned>::digits10;
+    static constexpr auto ACTUAL_DIGITS10 = std::numeric_limits<decltype(Helpers::Math::int_96bit<T>::hig)>::digits10 - 1
+                                            + ((std::is_same_v<T, double>) ? +std::numeric_limits<decltype(Helpers::Math::int_96bit<T>::low)>::digits10 : 0);
+
+  private:
+    static constexpr auto INTERNAL_DIGITS10 = std::numeric_limits<__uint128_t>::digits10;
 
   public:
-    Helpers::Math::int_96bit DIGITS[SIZE];
+    Helpers::Math::int_96bit<T> DIGITS[SIZE];
 
   private:
     template <typename Type>
@@ -149,9 +152,9 @@ namespace Constants::Tables
       return (static_cast<__uint128_t>(x[1]) << width) | x[0];
     }
 
-    static consteval smallest_underlying_unsigned ipow10(std::size_t n) noexcept
+    static consteval __uint128_t ipow10(std::size_t n) noexcept
     {
-      smallest_underlying_unsigned r = 1;
+      __uint128_t r = 1;
       for(std::size_t i = 0; i < n; ++i)
       {
         r *= BASE;
@@ -159,10 +162,10 @@ namespace Constants::Tables
       return r;
     }
 
-    static consteval smallest_underlying_unsigned trim_to_actual_digits(smallest_underlying_unsigned v) noexcept
+    static consteval __uint128_t trim_to_actual_digits(__uint128_t v) noexcept
     {
-      constexpr auto lower = ipow10(ACTUAL_DIGITS10 - 1);
-      constexpr auto upper = ipow10(ACTUAL_DIGITS10);
+      constexpr auto lower = ipow10(INTERNAL_DIGITS10 - 1);
+      constexpr auto upper = ipow10(INTERNAL_DIGITS10);
 
       while(v < lower)
       {
@@ -183,7 +186,7 @@ namespace Constants::Tables
     {
       v = mul_trim10(v, factor);
 
-      constexpr UInt upper = ipow10(ACTUAL_DIGITS10);
+      constexpr UInt upper = ipow10(INTERNAL_DIGITS10);
       if(v >= upper)
       {
         v /= BASE;
@@ -198,14 +201,14 @@ namespace Constants::Tables
       using U = __uint128_t;
 
       U full_value = trim_to_actual_digits(U{ 1 });
-      DIGITS[0 + BIAS] = Helpers::Math::int_96bit(full_value);
+      DIGITS[0 + BIAS] = Helpers::Math::int_96bit<T>(full_value);
 
       if constexpr(NEGATIVE)
       {
         for(int k = -1; k >= MIN_BIN_EXP; --k)
         {
           full_value = step_and_trim(full_value, U{ 5 });
-          DIGITS[k + BIAS] = Helpers::Math::int_96bit(full_value);
+          DIGITS[k + BIAS] = Helpers::Math::int_96bit<T>(full_value);
         }
       }
       else
@@ -213,7 +216,7 @@ namespace Constants::Tables
         for(int k = 1; k <= MAX_BIN_EXP; ++k)
         {
           full_value = step_and_trim(full_value, U{ 2 });
-          DIGITS[k + BIAS] = Helpers::Math::int_96bit(full_value);
+          DIGITS[k + BIAS] = Helpers::Math::int_96bit<T>(full_value);
         }
       }
     }
