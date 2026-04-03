@@ -1,5 +1,6 @@
 #pragma once
 
+#include "include/Helpers/Templating.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -17,7 +18,7 @@ namespace Helpers::Numeric::Integral
   };
 
   template <bool FORCE_SIGN = false, typename T>
-    requires std::is_integral_v<T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
   static auto ToStrCharArray(const T &input)
   {
     static const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10 + 2;
@@ -31,7 +32,7 @@ namespace Helpers::Numeric::Integral
 
     const bool NEGATIVE = input < 0;
 
-    using UT = std::make_unsigned_t<T>;
+    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
 
     do
@@ -58,7 +59,7 @@ namespace Helpers::Numeric::Integral
   }
 
   template <bool FORCE_SIGN = false, typename T>
-    requires std::is_integral_v<T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
   static std::string ToStr(const T &input)
   {
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
@@ -66,7 +67,7 @@ namespace Helpers::Numeric::Integral
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>
-    requires std::is_integral_v<T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
   static void ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char, const int &st_idx)
   {
     char *__restrict__ it = &out_char.array[st_idx];
@@ -74,7 +75,7 @@ namespace Helpers::Numeric::Integral
     static const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
 
-    using UT = std::make_unsigned_t<T>;
+    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
 
     do
@@ -99,7 +100,7 @@ namespace Helpers::Numeric::Integral
   }
 
   template <uint32_t CAP_FORCE_LENGTH, int N, typename T>
-    requires std::is_integral_v<T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
   static void ToStrReverseWriteToCharArrayForceAndCapLength(const T &input, char_array<N> &out_char, const int &st_idx)
   {
     static_assert(N > CAP_FORCE_LENGTH, "cant force more chars than number of chars that can fit in the buffer bruh");
@@ -109,7 +110,7 @@ namespace Helpers::Numeric::Integral
     static const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
 
-    using UT = std::make_unsigned_t<T>;
+    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
 
     uint32_t i = 0;
@@ -138,7 +139,7 @@ namespace Helpers::Numeric::Integral
   }
 
   template <uint32_t CAP_LENGTH, int N, typename T>
-    requires std::is_integral_v<T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
   static auto ToStrReverseWriteToCharArrayCapLengthStopAtNthCharReturnRemainder(const T &input, char_array<N> &out_char, const uint32_t &st_idx, const uint32_t stp_idx)
   {
     static const constexpr auto BASE = 10;
@@ -146,7 +147,7 @@ namespace Helpers::Numeric::Integral
 
     char *__restrict__ it = &out_char.array[st_idx];
 
-    using UT = std::make_unsigned_t<T>;
+    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
     UT rem;
 

@@ -46,6 +46,28 @@ namespace Helpers::Templating::Types
   {
     return sizeof(T) <= 8 && std::numeric_limits<T>::radix == 2;
   }
+
+  template <typename T>
+  struct make_unsigned
+  {
+    using type = std::make_unsigned_t<T>;
+  };
+
+  template <>
+  struct make_unsigned<__int128>
+  {
+    using type = __uint128_t;
+  };
+
+  template <>
+  struct make_unsigned<__uint128_t>
+  {
+    using type = __uint128_t;
+  };
+
+  template <typename T>
+  using make_unsigned_t = typename make_unsigned<T>::type;
+
 } // namespace Helpers::Templating::Types
 
 namespace Helpers::Templating::Assert
