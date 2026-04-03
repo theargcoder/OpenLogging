@@ -218,7 +218,7 @@ namespace Helpers::Math
 
   public:
     T mantissa;
-    signed_underlying exponent;
+    int exponent;
 
   public:
     explicit IEEE754(const T &input)
@@ -233,7 +233,7 @@ namespace Helpers::Math
 
       if(exp == EXPONENT_ALL_BITS_ON) [[unlikely]]
       {
-        exponent = std::numeric_limits<signed_underlying>::max();
+        exponent = std::numeric_limits<decltype(exponent)>::max();
         (man == underlying(0)) ? mantissa = (SIGN) ? T{ -1 } : T{ 1 } : mantissa = T{ 0 };
 
         return;
@@ -254,33 +254,31 @@ namespace Helpers::Math
         if(exponent == MIN_EXPONENT && mantissa) [[unlikely]]
         {
           mantissa = -2;
-          exponent = std::numeric_limits<signed_underlying>::max();
+          exponent = std::numeric_limits<decltype(exponent)>::max();
         }
       }
     }
 
   public:
-    static auto Multiply(const T &A, const underlying &B)
+    static auto Multiply(const T &A, const wide_underlying &B)
     {
-      const underlying A_bits = std::bit_cast<underlying>(A);
+      const wide_underlying A_bits = std::bit_cast<underlying>(A);
 
-      underlying sig = A_bits & MANTISSA_ONLY;
-
-      sig |= (underlying{ 1 } << EXPONENT_ST);
+      const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
       const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
 
       int shift = static_cast<int>(EXPONENT_ST + 1);
 
-      underlying digits_10;
+      wide_underlying digits_10;
 
       if(shift >= 0)
       {
-        digits_10 = static_cast<underlying>(prod >> shift);
+        digits_10 = static_cast<wide_underlying>(prod >> shift);
       }
       else
       {
-        digits_10 = static_cast<underlying>(prod << (-shift));
+        digits_10 = static_cast<wide_underlying>(prod << (-shift));
       }
 
       return digits_10;
@@ -295,30 +293,28 @@ namespace Helpers::Math
     };
 
   public:
-    static auto MultiplyRound(const T &A, const underlying &B)
+    static auto MultiplyRound(const T &A, const wide_underlying &B)
     {
-      const underlying A_bits = std::bit_cast<underlying>(A);
+      const wide_underlying A_bits = std::bit_cast<underlying>(A);
 
-      underlying sig = A_bits & MANTISSA_ONLY;
+      const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
-      sig |= (underlying{ 1 } << EXPONENT_ST);
-
-      const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
+      const wide_underlying prod = sig * B;
 
       int shift = static_cast<int>(EXPONENT_ST + 1);
 
-      underlying digits_10;
+      wide_underlying digits_10;
       wide_underlying remainder;
 
       if(shift >= 0)
       {
-        digits_10 = static_cast<underlying>(prod >> shift);
+        digits_10 = static_cast<wide_underlying>(prod >> shift);
         // remainder = prod - digits_10;
         remainder = (prod & ((wide_underlying{ 1 } << shift) - 1));
       }
       else
       {
-        digits_10 = static_cast<underlying>(prod << (-shift));
+        digits_10 = static_cast<wide_underlying>(prod << (-shift));
         remainder = wide_underlying{ 0 };
       }
 
@@ -341,54 +337,98 @@ namespace Helpers::Math
       return std::make_pair(RoundingResults::INEXACT_TRUNCATED, digits_10);
     }
 
-  public:
-    static auto MultiplyRoundNormalize(const T &A, const underlying &B, int &exp, const auto &selected_prescision)
+    struct u256
+    {
+      __uint128_t hi{};
+      __uint128_t lo{};
+    };
+
+    static u256 mul_u128(const __uint128_t &a, const __uint128_t &b) noexcept
+    {
+      constexpr unsigned W = 64;
+
+      const uint64_t a0 = static_cast<uint64_t>(a);
+      const uint64_t a1 = static_cast<uint64_t>(a >> W);
+      const uint64_t b0 = static_cast<uint64_t>(b);
+      const uint64_t b1 = static_cast<uint64_t>(b >> W);
+
+      const __uint128_t p00 = static_cast<__uint128_t>(a0) * b0;
+      const __uint128_t p01 = static_cast<__uint128_t>(a0) * b1;
+      const __uint128_t p10 = static_cast<__uint128_t>(a1) * b0;
+      const __uint128_t p11 = static_cast<__uint128_t>(a1) * b1;
+
+      const uint64_t x0 = static_cast<uint64_t>(p00);
+
+      const __uint128_t s1 = (p00 >> W) + static_cast<uint64_t>(p01) + static_cast<uint64_t>(p10);
+      const uint64_t x1 = static_cast<uint64_t>(s1);
+
+      const __uint128_t s2 = (s1 >> W) + (p01 >> W) + (p10 >> W) + static_cast<uint64_t>(p11);
+      const uint64_t x2 = static_cast<uint64_t>(s2);
+
+      const uint64_t x3 = static_cast<uint64_t>((s2 >> W) + (p11 >> W));
+
+      return { (static_cast<__uint128_t>(x3) << W) | x2, (static_cast<__uint128_t>(x1) << W) | x0 };
+    }
+
+    static __uint128_t shr_u256(const u256 &v, const uint8_t &s) noexcept
+    {
+      if(s == 0)
+      {
+        return v.lo;
+      }
+      if(s < 128)
+      {
+        return (v.hi << (128 - s)) | (v.lo >> s);
+      }
+      if(s == 128)
+      {
+        return v.hi;
+      }
+      if(s < 256)
+      {
+        return v.hi >> (s - 128);
+      }
+      return 0;
+    }
+
+    static __uint128_t shl_u256(const u256 &v, uint8_t &s) noexcept
+    {
+      if(s >= 128)
+      {
+        return 0;
+      }
+      return v.lo << s;
+    }
+
+    static auto MultiplyReturnHighLow(const T &A, const wide_underlying &B, const auto &expected_precision, int &exponent)
     {
       const underlying A_bits = std::bit_cast<underlying>(A);
+      const wide_underlying sig = (static_cast<wide_underlying>(A_bits & MANTISSA_ONLY)) | static_cast<wide_underlying>(MANTISSA_IMPLICIT_1);
 
-      underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+      static const constexpr auto shift = static_cast<int>(EXPONENT_ST + 1);
 
-      const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
+      static const constexpr uint8_t size = sizeof(wide_underlying);
+      __uint128_t result;
 
-      static const constexpr auto shift = EXPONENT_ST + 1;
-      static const constexpr auto half = wide_underlying{ 1 } << (shift - 1);
-
-      RoundingResults rounding_result{ RoundingResults::EXACT };
-
-      auto digits_10 = static_cast<underlying>(prod >> shift);
-      auto remainder = (prod & ((half << 1) - 1));
-
-      // digitss_10 = 12345.half.quarter.eith.etc.etc
-
-      if(remainder > half)
+      if constexpr(size == 8)
       {
-        digits_10++;
-        // We rounded UP to get to this decimal. The true value is slightly lower.
-        rounding_result = RoundingResults::INEXACT_ROUNDED_UP;
-      }
-      else if(remainder == half && (digits_10 & 1U))
-      {
-        digits_10++;
-        // exact rounding makes us happy
-        rounding_result = RoundingResults::EXACT;
-      }
-      else if(remainder == wide_underlying{ 0 })
-      {
-        rounding_result = RoundingResults::EXACT;
+        const auto prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B);
+        result = prod >> shift;
       }
       else
       {
-        // We truncated to get to this decimal. The true value is slightly higher.
-        rounding_result = RoundingResults::INEXACT_TRUNCATED;
+        const u256 prod = mul_u128(sig, B);
+
+        result = shr_u256(prod, static_cast<unsigned>(shift));
       }
 
-      if(digits_10 < selected_prescision)
+      if(result <= expected_precision)
       {
-        digits_10 *= 10;
-        exp--;
+        result *= 10;
+        exponent--;
       }
 
-      return std::make_pair(rounding_result, digits_10);
+      return result;
     }
 
     //

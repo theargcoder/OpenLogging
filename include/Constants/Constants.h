@@ -248,15 +248,14 @@ namespace Constants::Tables
   static constexpr auto GetExponentialRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<Type, N>{ BASE * Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I + 1)... };
+    return std::array<Type, N>{ BASE * Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I - 1)... };
   }
 
   template <typename Type, uint32_t BASE>
   static constexpr auto GetExponentialRoundingTable()
   {
-    using IntType = Constants::Tables::Floating<Type>::smallest_underlying_unsigned;
-    const constexpr auto N = std::numeric_limits<Type>::digits10;
-    return GetExponentialRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N>());
+    const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+    return GetExponentialRoundingTableImpl<Type, BASE>(std::make_index_sequence<N>());
   }
 
   template <typename T, uint32_t BASE, std::size_t... I>

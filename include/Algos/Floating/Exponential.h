@@ -63,16 +63,16 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const auto exp_table_val = exp_table[exp + Floating::BIAS];
 
-    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<T, 5>();
-    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<T, 10>();
-
     static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying_unsigned{ 10 }, Floating::ACTUAL_DIGITS10);
     static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying_unsigned{ 10 }, Floating::ACTUAL_DIGITS10 - 1);
+
+    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<typename Floating::smallest_underlying_unsigned, 5>();
+    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<typename Floating::smallest_underlying_unsigned, 10>();
 
     const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
 
-    auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::MultiplyRoundNormalize(mantissa, exp_table_val, exp_base_10_int, min_precision);
+    auto digits_10 = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val, min_precision, exp_base_10_int);
 
     const auto remainder = digits_10 % rounding_factor_10s;
     const auto rem_greater = remainder > rounding_factor_5s;
@@ -84,18 +84,12 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     }
     else if(rem_ties)
     {
-      if(rounding_results != Helpers::Math::IEEE754<T>::RoundingResults::EXACT)
+      // if(rounding_results != Helpers::Math::IEEE754<T>::RoundingResults::EXACT)
+      //  Pure mathematical tie. Use standard Ties-to-Even logic.
+      const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
+      if(last_digit_is_odd)
       {
         digits_10 += rounding_factor_5s;
-      }
-      else
-      {
-        // Pure mathematical tie. Use standard Ties-to-Even logic.
-        const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
-        if(last_digit_is_odd)
-        {
-          digits_10 += rounding_factor_5s;
-        }
       }
     }
 
