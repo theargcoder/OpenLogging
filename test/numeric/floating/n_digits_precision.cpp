@@ -155,10 +155,9 @@ namespace
       BOOST_CHECK_EQUAL(open_logging, std_format);
       if(open_logging != std_format)
       {
-
         const auto frexp_ours = Helpers::Math::IEEE754<Type>(i);
-
-        const auto exp_table_val = Constants::Tables::Floating<Type>().DIGITS[frexp_ours.exponent + Constants::Tables::Floating<Type>::BIAS];
+        const auto exp_2 = Constants::Tables::Floating<Type>().DIGITS[frexp_ours.exponent + Constants::Tables::Floating<Type>::BIAS];
+        const auto exp_table_val = exp_2;
         const auto non_floating_digits_encoding = exp_table_val * frexp_ours.mantissa;
 
         Helpers::Cout::print_binary("input_original               ", i);

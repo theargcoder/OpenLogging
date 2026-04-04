@@ -5,6 +5,7 @@
 #include <string>
 #include <type_traits>
 
+#include "include/Algos/Floating/DigitsPrecision.h"
 #include "include/Helpers/Math.h"
 
 #include "include/Constants/Constants.h"
@@ -63,29 +64,33 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const auto exp_table_val = exp_table[exp + Floating::BIAS];
 
-    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying_unsigned{ 10 }, Floating::ACTUAL_DIGITS10);
-    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(typename Floating::smallest_underlying_unsigned{ 10 }, Floating::ACTUAL_DIGITS10 - 1);
+    using type = decltype(exp_table_val);
 
-    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<typename Floating::smallest_underlying_unsigned, 5>();
-    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<typename Floating::smallest_underlying_unsigned, 10>();
+    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
+    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10);
+
+    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 5>();
+    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 10>();
 
     const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
 
-    auto digits_10 = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val, min_precision, exp_base_10_int);
+    auto result = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val, exp_base_10_int);
+    auto &extra = result.first;
+    auto &digits_10 = result.second;
 
     const auto remainder = digits_10 % rounding_factor_10s;
     const auto rem_greater = remainder > rounding_factor_5s;
     const auto rem_ties = remainder == rounding_factor_5s;
 
-    if(rem_greater)
+    // If it's mathematically > 5.0 (either decimal remainder > 5, OR decimal remainder == 5 + fractional bits)
+    if(rem_greater || (rem_ties && extra))
     {
       digits_10 += rounding_factor_5s;
     }
+    // If it is an EXACT perfect tie (remainder == 5 AND no fractional bits)
     else if(rem_ties)
     {
-      // if(rounding_results != Helpers::Math::IEEE754<T>::RoundingResults::EXACT)
-      //  Pure mathematical tie. Use standard Ties-to-Even logic.
       const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
       if(last_digit_is_odd)
       {

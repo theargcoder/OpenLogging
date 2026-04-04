@@ -65,23 +65,14 @@ namespace
     {
       const int exp = i - BIAS;
       const auto &val = table[i];
-      __uint128_t val_result;
-      if constexpr(std::is_same_v<T, double>)
-      {
-        val_result = (static_cast<__uint128_t>(val.hig) * Tests::pow(__uint128_t{ 10 }, std::numeric_limits<decltype(val.low)>::digits10 - 1)) + val.low;
-      }
-      else
-      {
-        val_result = static_cast<__uint128_t>(val.hig);
-      }
-      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val_result })) + (std::is_same_v<double, T> ? +1 : +0));
-      const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits);
+      const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
+      const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
       // Calculate power of 10 safely
       int32_t p10 = static_cast<int32_t>(std::floor(0.3010299956639812 * exp)); // Standard double is fine for the integer exponent
 
       // Reconstruct approximate value using BigFloat
-      BigFloat result = (static_cast<BigFloat>(val_result) / scale) * boost::multiprecision::pow(BigFloat(10), p10);
+      BigFloat result = (static_cast<BigFloat>(val) / scale) * boost::multiprecision::pow(BigFloat(10), p10);
       BigFloat expected = boost::multiprecision::pow(BigFloat(2), exp);
 
       BigFloat abs_error = boost::multiprecision::abs(result - expected);
@@ -91,18 +82,17 @@ namespace
       BOOST_CHECK_EQUAL(digits, FloatTable.ACTUAL_DIGITS10);
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
-      double rel_error_dbl = static_cast<T>(rel_error);
-      double max_tolerance = std::pow(T{ 10.0 }, FloatTable.ACTUAL_DIGITS10);
+      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * std::numeric_limits<std::remove_cvref_t<decltype(val)>>::digits10 + 1);
 
-      BOOST_CHECK_SMALL(rel_error_dbl, max_tolerance);
+      BOOST_CHECK_SMALL(rel_error, max_tolerance);
 
-      bool log = !(digits == FloatTable.ACTUAL_DIGITS10) || !(rel_error_dbl <= max_tolerance);
+      bool log = !(digits == FloatTable.ACTUAL_DIGITS10) || !(rel_error <= max_tolerance);
 
       if(log)
       {
         constexpr int FP_PREC = std::numeric_limits<T>::max_digits10;
         // Note: You may need to format BigFloat as a string for std::format
-        std::cout << std::format("table[{:+4}] = {} \t| rel_err {:.{}e}\n", exp, val_result, rel_error_dbl, FP_PREC);
+        std::cout << std::format("table[{:+4}] = {} \t| result {} | expected {}| rel_err {}\n", exp, val, result.str(), expected.str(), rel_error.str(), FP_PREC);
       }
     }
   };

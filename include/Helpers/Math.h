@@ -203,42 +203,41 @@ namespace Helpers::Math::Constexpr
 
 namespace Helpers::Math
 {
-
   template <typename T>
     requires std::is_floating_point_v<T>
   struct int_96bit
   {
+  public:
     uint64_t hig;
     uint32_t low;
 
+    using hig_type = std::remove_cvref_t<decltype(hig)>;
+    using low_type = std::remove_cvref_t<decltype(low)>;
+
+  private:
+    static const constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
+    static const constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 9 === 18)
+
+  public:
     int_96bit() = default;
 
     consteval explicit int_96bit(const __uint128_t &input)
     {
+      // 1. Remove the bottom 12 digits (discard them)
+      const __uint128_t remaining = input / DISCARD_POWER;
+
       if constexpr(std::is_same_v<double, std::remove_cvref_t<T>>)
       {
-        constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
-        constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 9 === 18)
-
-        // 1. Remove the bottom 12 digits (discard them)
-        __uint128_t remaining = input / DISCARD_POWER;
-
         // 2. Extract the next 8 digits for 'low'
-        low = static_cast<decltype(low)>(remaining % LOW_PART_POWER);
-
-        // 3. The rest goes into 'hig'
-        hig = static_cast<decltype(hig)>(remaining / LOW_PART_POWER);
+        low = static_cast<low_type>(remaining % LOW_PART_POWER);
       }
       else
       {
-        // 11 digits (38 - 11 === 27 - 9 digits (27 - 9 === 18)
-        constexpr __uint128_t DISCARD_POWER = 100'000'000'000;
-        constexpr __uint128_t LOW_PART_POWER = 100'000'000;
-
-        low = static_cast<decltype(low)>(0);
-        // 3. The top 18 goes into high
-        hig = static_cast<decltype(hig)>(static_cast<__uint128_t>(input / DISCARD_POWER) / LOW_PART_POWER);
+        low = static_cast<low_type>(0);
       }
+
+      // 3. The rest goes into 'hig'
+      hig = static_cast<hig_type>(remaining / LOW_PART_POWER);
     }
   };
 
@@ -272,6 +271,10 @@ namespace Helpers::Math
 
     using wide_underlying = std::conditional_t<IS_DOUBLE, __uint128_t, uint64_t>;
 
+    static const constexpr wide_underlying half = wide_underlying{ 1 } << EXPONENT_ST;
+    static const constexpr auto shift = EXPONENT_ST + 1;
+    static const constexpr __uint128_t frac_mask = ((__uint128_t{ 1 } << shift) - 1);
+
   public:
     T mantissa;
     int exponent;
@@ -302,10 +305,10 @@ namespace Helpers::Math
       }
       else
       {
-        const int shift = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
+        const int shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
-        mantissa = std::bit_cast<T>(((man << shift) & MANTISSA_ONLY) | SIGN | HALF_EXP);
-        exponent = 2 - EXPONENT_BIAS - shift;
+        mantissa = std::bit_cast<T>(((man << shift_internal) & MANTISSA_ONLY) | SIGN | HALF_EXP);
+        exponent = 2 - EXPONENT_BIAS - shift_internal;
 
         if(exponent == MIN_EXPONENT && mantissa) [[unlikely]]
         {
@@ -323,8 +326,6 @@ namespace Helpers::Math
       const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
       const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
-
-      int shift = static_cast<int>(EXPONENT_ST + 1);
 
       wide_underlying digits_10;
 
@@ -344,8 +345,9 @@ namespace Helpers::Math
     enum RoundingResults : uint8_t
     {
       EXACT,
-      INEXACT_TRUNCATED, // Decimal is SMALLER than binary bits (True remainder > 0.5)
-      INEXACT_ROUNDED_UP // when remainder > half (aka 0.5), it has leftover precision
+      INEXACT_TRUNCATED,
+      FORCE_ROUND,
+      INEXACT_ROUNDED_UP
     };
 
   public:
@@ -356,8 +358,6 @@ namespace Helpers::Math
       const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
       const wide_underlying prod = sig * B;
-
-      int shift = static_cast<int>(EXPONENT_ST + 1);
 
       wide_underlying digits_10;
       wide_underlying remainder;
@@ -381,7 +381,6 @@ namespace Helpers::Math
 
       if(shift >= 0)
       {
-        const wide_underlying half = wide_underlying{ 1 } << (shift - 1);
         // tie → bankers rounding
         if(remainder > half || (remainder == half && digits_10 & 1U))
         {
@@ -393,101 +392,47 @@ namespace Helpers::Math
       return std::make_pair(RoundingResults::INEXACT_TRUNCATED, digits_10);
     }
 
-    struct u256
+  public:
+    static auto MultiplyReturnHighLow(const T &A, const auto &B, int &exponent)
     {
-      __uint128_t hi{};
-      __uint128_t lo{};
-    };
+      using type = std::remove_cvref_t<decltype(B)>;
+      static_assert(std::is_integral_v<type>, "B must be an integral type");
+      static_assert(std::is_unsigned_v<type>, "B should be unsigned here");
 
-    static u256 mul_u128(const __uint128_t &a, const __uint128_t &b) noexcept
-    {
-      constexpr unsigned W = 64;
-
-      const uint64_t a0 = static_cast<uint64_t>(a);
-      const uint64_t a1 = static_cast<uint64_t>(a >> W);
-      const uint64_t b0 = static_cast<uint64_t>(b);
-      const uint64_t b1 = static_cast<uint64_t>(b >> W);
-
-      const __uint128_t p00 = static_cast<__uint128_t>(a0) * b0;
-      const __uint128_t p01 = static_cast<__uint128_t>(a0) * b1;
-      const __uint128_t p10 = static_cast<__uint128_t>(a1) * b0;
-      const __uint128_t p11 = static_cast<__uint128_t>(a1) * b1;
-
-      const uint64_t x0 = static_cast<uint64_t>(p00);
-
-      const __uint128_t s1 = (p00 >> W) + static_cast<uint64_t>(p01) + static_cast<uint64_t>(p10);
-      const uint64_t x1 = static_cast<uint64_t>(s1);
-
-      const __uint128_t s2 = (s1 >> W) + (p01 >> W) + (p10 >> W) + static_cast<uint64_t>(p11);
-      const uint64_t x2 = static_cast<uint64_t>(s2);
-
-      const uint64_t x3 = static_cast<uint64_t>((s2 >> W) + (p11 >> W));
-
-      return { (static_cast<__uint128_t>(x3) << W) | x2, (static_cast<__uint128_t>(x1) << W) | x0 };
-    }
-
-    static __uint128_t shr_u256(const u256 &v, const uint8_t &s) noexcept
-    {
-      if(s == 0)
-      {
-        return v.lo;
-      }
-      if(s < 128)
-      {
-        return (v.hi << (128 - s)) | (v.lo >> s);
-      }
-      if(s == 128)
-      {
-        return v.hi;
-      }
-      if(s < 256)
-      {
-        return v.hi >> (s - 128);
-      }
-      return 0;
-    }
-
-    static __uint128_t shl_u256(const u256 &v, uint8_t &s) noexcept
-    {
-      if(s >= 128)
-      {
-        return 0;
-      }
-      return v.lo << s;
-    }
-
-    static auto MultiplyReturnHighLow(const T &A, const Helpers::Math::int_96bit<T> &B, const auto &expected_precision, int &exponent)
-    {
       const underlying A_bits = std::bit_cast<underlying>(A);
-      const wide_underlying sig = (static_cast<wide_underlying>(A_bits & MANTISSA_ONLY)) | static_cast<wide_underlying>(MANTISSA_IMPLICIT_1);
+      const __uint64_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
-      static const constexpr auto shift = static_cast<int>(EXPONENT_ST + 1);
+      // 1. Calculate the high-precision product
+      __uint128_t prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B);
 
-      static const constexpr uint8_t size = sizeof(wide_underlying);
-      __uint128_t result;
+      // 2. Initial extraction
+      type result = static_cast<type>(prod >> shift);
 
-      if constexpr(size == 8)
+      static const constexpr type low = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
+      static const constexpr auto S_MASK = ((1ULL << (shift - 2)) - 1);
+
+      const bool G = prod & 1U;
+      const bool R = (prod >> 1) & 1U;
+      const bool S = ((prod >> 2) & S_MASK) != 0;
+      const bool LSB = result & 1U;
+
+      const bool round_up = G && (R || S || LSB);
+
+      if(round_up)
       {
-        const auto prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B.hig);
-        result = prod >> shift;
-      }
-      else
-      {
-        const u256 prod = mul_u128(sig, B.hig);
-
-        result = shr_u256(prod, static_cast<unsigned>(shift));
+        result++;
       }
 
-      if(result <= expected_precision)
+      // 3. Normalized check (the "x10" path)
+      if(result < low)
       {
         result *= 10;
-        exponent--;
+        --exponent;
       }
 
-      return result;
+      return std::make_pair(!G && !R && S && !LSB, result);
     }
 
     //
   };
-
 } // namespace Helpers::Math

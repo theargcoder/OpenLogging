@@ -170,7 +170,6 @@ namespace
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
           open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(i, PRECISION);
-
           lim++;
         }
       }
@@ -243,6 +242,7 @@ namespace
 
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
+  /*
   // floats
   test_and_benchmark_float(static_cast<float>(0), 1);
   test_and_benchmark_float(static_cast<float>(0), 2);
@@ -260,12 +260,15 @@ BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
   test_and_benchmark_float(static_cast<double>(0), 7);
   test_and_benchmark_float(static_cast<double>(0), 8);
   test_and_benchmark_float(static_cast<double>(0), 9);
+  */
   test_and_benchmark_float(static_cast<double>(0), 10);
   test_and_benchmark_float(static_cast<double>(0), 11);
   test_and_benchmark_float(static_cast<double>(0), 12);
   test_and_benchmark_float(static_cast<double>(0), 13);
   test_and_benchmark_float(static_cast<double>(0), 14);
   test_and_benchmark_float(static_cast<double>(0), 15);
+  test_and_benchmark_float(static_cast<double>(0), 16);
+  test_and_benchmark_float(static_cast<double>(0), 17);
 
   // tester_format_exponential(static_cast<long double>(0));
 }

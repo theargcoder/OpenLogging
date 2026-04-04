@@ -90,14 +90,13 @@ namespace Constants::Tables
   public:
     using smallest_underlying_unsigned = uint64_t;
     // we need that extra digit to avoid rounding errors (errors can happen after our min precision is met)
-    static constexpr auto ACTUAL_DIGITS10 = std::numeric_limits<decltype(Helpers::Math::int_96bit<T>::hig)>::digits10 - 1
-                                            + ((std::is_same_v<T, double>) ? +std::numeric_limits<decltype(Helpers::Math::int_96bit<T>::low)>::digits10 : 0);
+    static constexpr auto ACTUAL_DIGITS10 = std::numeric_limits<smallest_underlying_unsigned>::digits10;
 
   private:
     static constexpr auto INTERNAL_DIGITS10 = std::numeric_limits<__uint128_t>::digits10;
 
   public:
-    Helpers::Math::int_96bit<T> DIGITS[SIZE];
+    smallest_underlying_unsigned DIGITS[SIZE];
 
   private:
     template <typename Type>
@@ -195,20 +194,33 @@ namespace Constants::Tables
       return v;
     }
 
+  private:
+    static const constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
+    static const constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 9 === 18)
+
+    consteval auto uint_64_bit_msb_part(const __uint128_t &input)
+    {
+      // 1. Remove the bottom 12 digits (discard them)
+      const __uint128_t remaining = input / DISCARD_POWER;
+
+      // 3. The rest goes into 'hig'
+      return static_cast<smallest_underlying_unsigned>(remaining / LOW_PART_POWER);
+    }
+
     template <bool NEGATIVE>
     consteval void build_side() noexcept
     {
       using U = __uint128_t;
 
       U full_value = trim_to_actual_digits(U{ 1 });
-      DIGITS[0 + BIAS] = Helpers::Math::int_96bit<T>(full_value);
+      DIGITS[0 + BIAS] = uint_64_bit_msb_part(full_value);
 
       if constexpr(NEGATIVE)
       {
         for(int k = -1; k >= MIN_BIN_EXP; --k)
         {
           full_value = step_and_trim(full_value, U{ 5 });
-          DIGITS[k + BIAS] = Helpers::Math::int_96bit<T>(full_value);
+          DIGITS[k + BIAS] = uint_64_bit_msb_part(full_value);
         }
       }
       else
@@ -216,7 +228,7 @@ namespace Constants::Tables
         for(int k = 1; k <= MAX_BIN_EXP; ++k)
         {
           full_value = step_and_trim(full_value, U{ 2 });
-          DIGITS[k + BIAS] = Helpers::Math::int_96bit<T>(full_value);
+          DIGITS[k + BIAS] = uint_64_bit_msb_part(full_value);
         }
       }
     }
