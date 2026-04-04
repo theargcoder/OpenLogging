@@ -76,25 +76,32 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
 
     auto result = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val, exp_base_10_int);
-    auto &extra = result.first;
-    auto &digits_10 = result.second;
+    const auto rounded = std::get<0>(result), exact = std::get<1>(result), shrinked = std::get<2>(result);
+    auto digits_10 = std::get<3>(result);
 
     const auto remainder = digits_10 % rounding_factor_10s;
     const auto rem_greater = remainder > rounding_factor_5s;
     const auto rem_ties = remainder == rounding_factor_5s;
 
     // If it's mathematically > 5.0 (either decimal remainder > 5, OR decimal remainder == 5 + fractional bits)
-    if(rem_greater || (rem_ties && extra))
+    if(rem_greater)
     {
       digits_10 += rounding_factor_5s;
     }
     // If it is an EXACT perfect tie (remainder == 5 AND no fractional bits)
-    else if(rem_ties)
+    else if(rem_ties && !rounded)
     {
-      const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
-      if(last_digit_is_odd)
+      if(!exact)
       {
         digits_10 += rounding_factor_5s;
+      }
+      else
+      {
+        const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
+        if(last_digit_is_odd)
+        {
+          digits_10 += rounding_factor_5s;
+        }
       }
     }
 

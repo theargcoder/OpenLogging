@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <numbers>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -402,20 +403,26 @@ namespace Helpers::Math
       const underlying A_bits = std::bit_cast<underlying>(A);
       const __uint64_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
+      static const constexpr type low = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
+      static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
+
       // 1. Calculate the high-precision product
       __uint128_t prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B);
 
       // 2. Initial extraction
       type result = static_cast<type>(prod >> shift);
 
-      static const constexpr type low = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
-      static const constexpr auto S_MASK = ((1ULL << (shift - 2)) - 1);
+      // The discarded bits are prod[shift-1 : 0]
+      // G is the highest discarded bit
+      // R is the second highest discarded bit
+      // S is the logical OR of all remaining discarded bits (prod[shift-3 : 0])
 
-      const bool G = prod & 1U;
-      const bool R = (prod >> 1) & 1U;
-      const bool S = ((prod >> 2) & S_MASK) != 0;
+      const bool G = (prod >> (shift - 1)) & 1U;
+      const bool R = (prod >> (shift - 2)) & 1U;
+      const bool S = (prod & S_MASK) != 0;
       const bool LSB = result & 1U;
 
+      // IEEE 754 roundTiesToEven logic (Correct)
       const bool round_up = G && (R || S || LSB);
 
       if(round_up)
@@ -424,15 +431,19 @@ namespace Helpers::Math
       }
 
       // 3. Normalized check (the "x10" path)
-      if(result < low)
+      const auto shrinked = result < low;
+
+      if(shrinked)
       {
         result *= 10;
+        // result *= static_cast<type>(prod >> (shift - 1));
         --exponent;
       }
 
-      return std::make_pair(!G && !R && S && !LSB, result);
-    }
+      const bool is_exact = !G && !R && !S;
 
+      return std::make_tuple(round_up, is_exact, shrinked, result);
+    }
     //
   };
 } // namespace Helpers::Math
