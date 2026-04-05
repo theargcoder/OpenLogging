@@ -72,43 +72,65 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 5>();
     static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 10>();
 
-    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
-    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
+    auto [has_bits, G, RS, digits_10] = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val);
 
-    auto result = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val, exp_base_10_int);
-    const auto rounded = std::get<0>(result), exact = std::get<1>(result), shrinked = std::get<2>(result);
-    auto digits_10 = std::get<3>(result);
+    const bool shrinked = digits_10 < min_precision;
 
-    const auto remainder = digits_10 % rounding_factor_10s;
-    const auto rem_greater = remainder > rounding_factor_5s;
-    const auto rem_ties = remainder == rounding_factor_5s;
-
-    // If it's mathematically > 5.0 (either decimal remainder > 5, OR decimal remainder == 5 + fractional bits)
-    if(rem_greater)
+    if(shrinked)
     {
-      digits_10 += rounding_factor_5s;
+      exp_base_10_int--;
     }
-    // If it is an EXACT perfect tie (remainder == 5 AND no fractional bits)
-    else if(rem_ties && !rounded)
+
+    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION + shrinked];
+    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION + shrinked];
+    const auto remainder = digits_10 % rounding_factor_10s;
+
+    bool should_round_up = false;
+
+    if(remainder > rounding_factor_5s)
     {
-      if(!exact)
+      should_round_up = true;
+    }
+    else if(remainder == rounding_factor_5s)
+    {
+      // This is the critical TIE-BREAKER
+      // If there are ANY bits left over in the binary product (G, R, or S),
+      // then the real value is slightly > midpoint.
+      if(has_bits)
       {
-        digits_10 += rounding_factor_5s;
+        should_round_up = true;
       }
       else
       {
-        const bool last_digit_is_odd = (digits_10 / rounding_factor_10s) & 1U;
-        if(last_digit_is_odd)
+        // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+        const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
+        if(last_digit % 2 != 0)
         {
-          digits_10 += rounding_factor_5s;
+          should_round_up = true;
         }
       }
     }
 
-    if(digits_10 >= max_precision)
+    if(should_round_up)
     {
-      digits_10 /= 10;
-      exp_base_10_int++;
+      digits_10 += (rounding_factor_10s - remainder);
+    }
+
+    if(shrinked)
+    {
+      if(digits_10 >= min_precision)
+      {
+        digits_10 /= 10;
+        exp_base_10_int++;
+      }
+    }
+    else
+    {
+      if(digits_10 >= max_precision)
+      {
+        digits_10 /= 10;
+        exp_base_10_int++;
+      }
     }
 
     digits_10 /= rounding_factor_10s;

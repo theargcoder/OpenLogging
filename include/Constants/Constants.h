@@ -195,8 +195,12 @@ namespace Constants::Tables
     }
 
   private:
+    static constexpr const auto sldjflkjafs = std::numeric_limits<__uint128_t>::digits10;
     static const constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
-    static const constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 9 === 18)
+                                                                        // 0 to 18,446,744,073,709,551,615
+                                                                        // 1844'6744'0737'0955'1615
+    static const constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 8 === 19)
+                                                                        // table[+1023] = 1609'7680'4482'7758'8922
 
     consteval auto uint_64_bit_msb_part(const __uint128_t &input)
     {
@@ -245,7 +249,7 @@ namespace Constants::Tables
   static constexpr auto GetExponentialRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<Type, N>{ BASE * Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I - 1)... };
+    return std::array<Type, N + 1>{ BASE * Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I - 1)..., BASE };
   }
 
   template <typename Type, uint32_t BASE>
