@@ -195,7 +195,6 @@ namespace Constants::Tables
     }
 
   private:
-    static constexpr const auto sldjflkjafs = std::numeric_limits<__uint128_t>::digits10;
     static const constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
                                                                         // 0 to 18,446,744,073,709,551,615
                                                                         // 1844'6744'0737'0955'1615

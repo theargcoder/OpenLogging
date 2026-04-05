@@ -72,7 +72,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 5>();
     static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 10>();
 
-    auto [has_bits, G, RS, digits_10] = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val);
+    auto [round_up, extra, digits_10] = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val);
 
     const bool shrinked = digits_10 < min_precision;
 
@@ -85,35 +85,28 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION + shrinked];
     const auto remainder = digits_10 % rounding_factor_10s;
 
-    bool should_round_up = false;
-
     if(remainder > rounding_factor_5s)
     {
-      should_round_up = true;
+      digits_10 += rounding_factor_5s;
     }
-    else if(remainder == rounding_factor_5s)
+    else if(remainder == rounding_factor_5s && !round_up)
     {
       // This is the critical TIE-BREAKER
       // If there are ANY bits left over in the binary product (G, R, or S),
       // then the real value is slightly > midpoint.
-      if(has_bits)
+      if(extra)
       {
-        should_round_up = true;
+        digits_10 += rounding_factor_5s;
       }
       else
       {
         // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
         const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
-        if(last_digit % 2 != 0)
+        if(last_digit & 1U)
         {
-          should_round_up = true;
+          digits_10 += rounding_factor_5s;
         }
       }
-    }
-
-    if(should_round_up)
-    {
-      digits_10 += (rounding_factor_10s - remainder);
     }
 
     if(shrinked)

@@ -409,17 +409,24 @@ namespace Helpers::Math
       const __uint128_t prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B);
 
       // 2. Initial extraction check
-      const type result = static_cast<type>(prod >> shift);
+      type result = static_cast<type>(prod >> shift);
 
       // 4. Extract raw floor and flags
       const bool G = (prod >> (shift - 1)) & 1U;
       const bool R = (prod >> (shift - 2)) & 1U;
       const bool S = (prod & S_MASK) != 0;
+      const bool LSB = result & 1U;
 
       // DO NOT increment result here. Just return the state.
-      const bool has_fractional_bits = G || R || S;
+      const bool round_up = G && (R || S || LSB);
+      const bool extra = G || R || S;
 
-      return std::make_tuple(has_fractional_bits, G, (R || S), result);
+      if(round_up)
+      {
+        result++;
+      }
+
+      return std::make_tuple(round_up, extra, result);
     } //
   };
 } // namespace Helpers::Math
