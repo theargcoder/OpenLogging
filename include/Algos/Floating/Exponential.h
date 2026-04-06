@@ -72,7 +72,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 5>();
     static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 10>();
 
-    auto [round_up, extra, digits_10] = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val);
+    auto result = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val);
+    const auto round_up = std::get<0>(result), extra = std::get<1>(result);
+    auto digits_10 = std::get<2>(result);
 
     const bool shrinked = digits_10 < min_precision;
 
@@ -89,16 +91,16 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     {
       digits_10 += rounding_factor_5s;
     }
-    else if(remainder == rounding_factor_5s && !round_up)
+    else if(remainder == rounding_factor_5s)
     {
       // This is the critical TIE-BREAKER
       // If there are ANY bits left over in the binary product (G, R, or S),
       // then the real value is slightly > midpoint.
-      if(extra)
+      if(!round_up && extra)
       {
         digits_10 += rounding_factor_5s;
       }
-      else
+      else if(!extra)
       {
         // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
         const auto last_digit = (digits_10 / rounding_factor_10s) % 10;

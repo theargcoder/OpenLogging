@@ -401,7 +401,7 @@ namespace Helpers::Math
       static_assert(std::is_unsigned_v<type>, "B should be unsigned here");
 
       const underlying A_bits = std::bit_cast<underlying>(A);
-      const __uint64_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+      const __uint128_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
       static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
 
