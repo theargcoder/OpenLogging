@@ -277,7 +277,7 @@ namespace Helpers::Math
     static const constexpr __uint128_t frac_mask = ((__uint128_t{ 1 } << shift) - 1);
 
   public:
-    T mantissa;
+    underlying mantissa;
     int exponent;
 
   public:
@@ -289,44 +289,43 @@ namespace Helpers::Math
 
       const signed_underlying exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
 
-      const underlying SIGN = bits & SIGN_ONLY;
-
       if(exp == EXPONENT_ALL_BITS_ON) [[unlikely]]
       {
+        const underlying SIGN = bits & SIGN_ONLY;
         exponent = std::numeric_limits<decltype(exponent)>::max();
-        (man == underlying(0)) ? mantissa = (SIGN) ? T{ -1 } : T{ 1 } : mantissa = T{ 0 };
+        mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
 
         return;
       }
 
       if(exp > 0) [[likely]]
       {
-        mantissa = std::bit_cast<T>(man | SIGN | HALF_EXP);
+        mantissa = man | MANTISSA_IMPLICIT_1;
         exponent = exp + 1 - EXPONENT_BIAS;
       }
       else
       {
         const int shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
-        mantissa = std::bit_cast<T>(((man << shift_internal) & MANTISSA_ONLY) | SIGN | HALF_EXP);
+        mantissa = ((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
         exponent = 2 - EXPONENT_BIAS - shift_internal;
 
         if(exponent == MIN_EXPONENT && mantissa) [[unlikely]]
         {
-          mantissa = -2;
+          mantissa = std::numeric_limits<decltype(mantissa)>::max();
           exponent = std::numeric_limits<decltype(exponent)>::max();
         }
       }
     }
 
   public:
-    static auto Multiply(const T &A, const wide_underlying &B)
+    static auto Multiply(const T &A, const auto &B)
     {
       const wide_underlying A_bits = std::bit_cast<underlying>(A);
 
       const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
-      const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B };
+      const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B.hig };
 
       wide_underlying digits_10;
 
@@ -343,73 +342,31 @@ namespace Helpers::Math
     }
 
   public:
-    enum RoundingResults : uint8_t
+    static auto MultiplyRoundCompliant(const auto &A, const auto &B, int &exponent)
     {
-      EXACT,
-      INEXACT_TRUNCATED,
-      FORCE_ROUND,
-      INEXACT_ROUNDED_UP
-    };
-
-  public:
-    static auto MultiplyRound(const T &A, const wide_underlying &B)
-    {
-      const wide_underlying A_bits = std::bit_cast<underlying>(A);
-
-      const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
-
-      const wide_underlying prod = sig * B;
-
-      wide_underlying digits_10;
-      wide_underlying remainder;
-
-      if(shift >= 0)
-      {
-        digits_10 = static_cast<wide_underlying>(prod >> shift);
-        // remainder = prod - digits_10;
-        remainder = (prod & ((wide_underlying{ 1 } << shift) - 1));
-      }
-      else
-      {
-        digits_10 = static_cast<wide_underlying>(prod << (-shift));
-        remainder = wide_underlying{ 0 };
-      }
-
-      if(remainder == 0)
-      {
-        return std::make_pair(RoundingResults::EXACT, digits_10);
-      }
-
-      if(shift >= 0)
-      {
-        // tie → bankers rounding
-        if(remainder > half || (remainder == half && digits_10 & 1U))
-        {
-          digits_10++;
-          // return std::make_pair(RoundingResults::ROUNDED, digits_10);
-        }
-      }
-
-      return std::make_pair(RoundingResults::INEXACT_TRUNCATED, digits_10);
-    }
-
-  public:
-    static auto MultiplyReturnHighLow(const T &A, const auto &B)
-    {
-      using type = std::remove_cvref_t<decltype(B)>;
-      static_assert(std::is_integral_v<type>, "B must be an integral type");
-      static_assert(std::is_unsigned_v<type>, "B should be unsigned here");
-
-      const underlying A_bits = std::bit_cast<underlying>(A);
-      const __uint128_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+      using low_type = std::remove_cvref_t<decltype(B.low)>;
+      using hig_type = std::remove_cvref_t<decltype(B.hig)>;
+      static_assert(std::is_same_v<hig_type, low_type>, "both high and low types in constant table shit should be the same T");
+      static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
+      static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
 
       static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
 
       // 1. Calculate the high-precision product
-      const __uint128_t prod = static_cast<__uint128_t>(sig) * static_cast<__uint128_t>(B);
+      __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
 
       // 2. Initial extraction check
-      type result = static_cast<type>(prod >> shift);
+      hig_type result = static_cast<hig_type>(prod >> shift);
+
+      static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
+
+      // 3. Normalized check (the "x10" path)
+      if(result < low)
+      {
+        prod *= 10;
+        result = static_cast<hig_type>(prod >> shift);
+        --exponent;
+      }
 
       // 4. Extract raw floor and flags
       const bool G = (prod >> (shift - 1)) & 1U;
@@ -417,16 +374,14 @@ namespace Helpers::Math
       const bool S = (prod & S_MASK) != 0;
       const bool LSB = result & 1U;
 
-      // DO NOT increment result here. Just return the state.
       const bool round_up = G && (R || S || LSB);
-      const bool extra = G || R || S;
 
       if(round_up)
       {
         result++;
       }
 
-      return std::make_tuple(round_up, extra, result);
+      return result;
     } //
   };
 } // namespace Helpers::Math

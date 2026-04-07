@@ -1,11 +1,12 @@
 #pragma once
 
+#include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <string>
 #include <type_traits>
 
-#include "include/Algos/Floating/DigitsPrecision.h"
 #include "include/Helpers/Math.h"
 
 #include "include/Constants/Constants.h"
@@ -16,14 +17,43 @@
 
 namespace Helpers::Numeric::Floating::ExponentialNotation
 {
+  static inline uint32_t pow5Factor(uint64_t value)
+  {
+    const uint64_t m_inv_5 = 14757395258967641293u; // 5 * m_inv_5 = 1 (mod 2^64)
+    const uint64_t n_div_5 = 3689348814741910323u;  // #{ n | n = 0 (mod 2^64) } = 2^64 / 5
+    uint32_t count = 0;
+    for(;;)
+    {
+      assert(value != 0);
+      value *= m_inv_5;
+      if(value > n_div_5)
+        break;
+      ++count;
+    }
+    return count;
+  }
+
+  // Returns true if value is divisible by 5^p.
+  static inline bool multipleOfPowerOf5(const uint64_t value, const uint32_t p)
+  {
+    // I tried a case distinction on p, but there was no performance difference.
+    return pow5Factor(value) >= p;
+  }
+
+  // Returns true if value is divisible by 2^p.
+  static inline bool multipleOfPowerOf2(const uint64_t value, const uint32_t p)
+  {
+    assert(value != 0);
+    assert(p < 64);
+    // __builtin_ctzll doesn't appear to be faster here.
+    return (value & ((1ULL << p) - 1)) == 0;
+  }
+
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static auto ToStrCharArray(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<T>;
-
-    static const constinit auto FloatingStruct = Floating();
-    static const constinit auto &exp_table = FloatingStruct.DIGITS;
 
     static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
@@ -42,11 +72,11 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       {
         std::memcpy(&buff.array[buff.start_idx], "nan", 3);
       }
-      else if(mantissa > T{ 0 })
+      else if(mantissa == 1)
       {
         std::memcpy(&buff.array[buff.start_idx], "inf", 3);
       }
-      else if(mantissa == T{ -1 })
+      else if(mantissa == 2)
       {
         buff.start_idx--;
         std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
@@ -62,70 +92,61 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     int exp_base_10_int = ((exp * 78'913) >> 18);
 
-    const auto exp_table_val = exp_table[exp + Floating::BIAS];
+    const auto exp_table_val = Floating::DIGITS[exp + Floating::BIAS];
 
-    using type = decltype(exp_table_val);
+    using base_type = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::pair_uint64_t::hig)>;
+    // static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(uint64_t{ 10 }, std::numeric_limits<uint64_t>::digits10 - 1);
+    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(base_type{ 10 }, std::numeric_limits<base_type>::digits10);
 
-    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
-    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10);
+    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 5>();
+    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 10>();
 
-    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 5>();
-    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<type, 10>();
+    auto digits_10 = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
 
-    auto result = Helpers::Math::IEEE754<T>::MultiplyReturnHighLow(mantissa, exp_table_val);
-    const auto round_up = std::get<0>(result), extra = std::get<1>(result);
-    auto digits_10 = std::get<2>(result);
-
-    const bool shrinked = digits_10 < min_precision;
-
-    if(shrinked)
-    {
-      exp_base_10_int--;
-    }
-
-    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION + shrinked];
-    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION + shrinked];
+    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
+    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
     const auto remainder = digits_10 % rounding_factor_10s;
 
+    // 0 = don't round up; 1 = round up unconditionally; 2 = round up if odd.
+    int round = 0;
     if(remainder > rounding_factor_5s)
+    {
+      round = 1;
+    }
+    else if(remainder == rounding_factor_5s)
+    {
+      const auto rem_exp = PRECISION - exp_base_10_int;
+      const auto required_twos = -exp - rem_exp;
+      bool trailingZeros = required_twos <= 0 || (required_twos < 60 && multipleOfPowerOf2(mantissa, (uint32_t)required_twos));
+      if(rem_exp < 0)
+      {
+        const int32_t requiredFives = -rem_exp;
+        trailingZeros = trailingZeros && multipleOfPowerOf5(mantissa, (uint32_t)requiredFives);
+      }
+      round = trailingZeros ? 2 : 1;
+    }
+
+    if(round == 1)
     {
       digits_10 += rounding_factor_5s;
     }
-    else if(remainder == rounding_factor_5s)
+    else if(round == 2)
     {
       // This is the critical TIE-BREAKER
       // If there are ANY bits left over in the binary product (G, R, or S),
       // then the real value is slightly > midpoint.
-      if(!round_up && extra)
+      // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+      const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
+      if(last_digit & 1U)
       {
         digits_10 += rounding_factor_5s;
       }
-      else if(!extra)
-      {
-        // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-        const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
-        if(last_digit & 1U)
-        {
-          digits_10 += rounding_factor_5s;
-        }
-      }
     }
 
-    if(shrinked)
+    if(digits_10 >= max_precision)
     {
-      if(digits_10 >= min_precision)
-      {
-        digits_10 /= 10;
-        exp_base_10_int++;
-      }
-    }
-    else
-    {
-      if(digits_10 >= max_precision)
-      {
-        digits_10 /= 10;
-        exp_base_10_int++;
-      }
+      digits_10 /= 10;
+      exp_base_10_int++;
     }
 
     digits_10 /= rounding_factor_10s;

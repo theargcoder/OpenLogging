@@ -51,8 +51,8 @@ namespace
     requires std::is_floating_point_v<T>
   (T)
   {
-    const auto FloatTable = Constants::Tables::Floating<T>();
-    const auto &table = FloatTable.DIGITS;
+    using FloatTable = Constants::Tables::Floating<T>;
+    auto &table = Constants::Tables::Floating<T>::DIGITS;
 
     constexpr int BIAS = Constants::Tables::Floating<T>::BIAS;
 
@@ -61,10 +61,11 @@ namespace
 
     const BigFloat LOG_10_2_BF("0.301029995663981195213738894724493026768"); // Hardcoded for exactness or calculate via Boost
 
-    for(int i = 0; i < FloatTable.SIZE; ++i)
+    for(int i = 0; i < FloatTable::SIZE; ++i)
     {
       const int exp = i - BIAS;
-      const auto &val = table[i];
+      using base_type = std::remove_cvref_t<decltype(table[i].hig)>;
+      const __uint128_t val = static_cast<__uint128_t>(table[i].hig * Tests::pow(__uint128_t{ 10 }, std::numeric_limits<base_type>::digits10)) + table[i].low;
       const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
@@ -79,14 +80,14 @@ namespace
       BigFloat rel_error = abs_error / expected;
 
       // Bounds testing
-      BOOST_CHECK_EQUAL(digits, FloatTable.ACTUAL_DIGITS10);
+      BOOST_CHECK_EQUAL(digits, 38);
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
       BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * std::numeric_limits<std::remove_cvref_t<decltype(val)>>::digits10 + 1);
 
       BOOST_CHECK_SMALL(rel_error, max_tolerance);
 
-      bool log = !(digits == FloatTable.ACTUAL_DIGITS10) || !(rel_error <= max_tolerance);
+      bool log = !(digits == 38) || !(rel_error <= max_tolerance);
 
       if(log)
       {
