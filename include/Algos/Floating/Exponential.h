@@ -116,7 +116,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     else if(remainder == rounding_factor_5s)
     {
       const auto rem_exp = PRECISION - exp_base_10_int;
-      const auto required_twos = -exp - rem_exp;
+      const auto required_twos = -(exp - Floating::MANTISSA_BITS) - rem_exp;
       bool trailingZeros = required_twos <= 0 || (required_twos < 60 && multipleOfPowerOf2(mantissa, (uint32_t)required_twos));
       if(rem_exp < 0)
       {

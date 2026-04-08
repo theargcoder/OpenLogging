@@ -72,4 +72,9 @@ namespace Helpers::Numeric::Ryu
     int len = f2s_buffered_n(v, &buffer[0]);
     return std::string(&buffer[0], len);
   }
+
+  static void our_d2exp_buffered(double d, uint32_t precision, char *result)
+  {
+    return d2exp_buffered(d, precision, result);
+  }
 } // namespace Helpers::Numeric::Ryu

@@ -205,44 +205,6 @@ namespace Helpers::Math::Constexpr
 namespace Helpers::Math
 {
   template <typename T>
-    requires std::is_floating_point_v<T>
-  struct int_96bit
-  {
-  public:
-    uint64_t hig;
-    uint32_t low;
-
-    using hig_type = std::remove_cvref_t<decltype(hig)>;
-    using low_type = std::remove_cvref_t<decltype(low)>;
-
-  private:
-    static const constexpr __uint128_t DISCARD_POWER = 100'000'000'000; // 11 digits (38 - 11 === 27)
-    static const constexpr __uint128_t LOW_PART_POWER = 100'000'000;    // 9 digits (27 - 9 === 18)
-
-  public:
-    int_96bit() = default;
-
-    consteval explicit int_96bit(const __uint128_t &input)
-    {
-      // 1. Remove the bottom 12 digits (discard them)
-      const __uint128_t remaining = input / DISCARD_POWER;
-
-      if constexpr(std::is_same_v<double, std::remove_cvref_t<T>>)
-      {
-        // 2. Extract the next 8 digits for 'low'
-        low = static_cast<low_type>(remaining % LOW_PART_POWER);
-      }
-      else
-      {
-        low = static_cast<low_type>(0);
-      }
-
-      // 3. The rest goes into 'hig'
-      hig = static_cast<hig_type>(remaining / LOW_PART_POWER);
-    }
-  };
-
-  template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
   struct IEEE754
   {
@@ -350,38 +312,75 @@ namespace Helpers::Math
       static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
       static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
 
-      static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
-
-      // 1. Calculate the high-precision product
-      __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
-
-      // 2. Initial extraction check
-      hig_type result = static_cast<hig_type>(prod >> shift);
-
-      static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
-
-      // 3. Normalized check (the "x10" path)
-      if(result < low)
+      if constexpr(std::is_same_v<float, T>)
       {
-        prod *= 10;
-        result = static_cast<hig_type>(prod >> shift);
-        --exponent;
+        // 1. Calculate the high-precision product
+        __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
+
+        // 2. Initial extraction check
+        hig_type result = static_cast<hig_type>(prod >> shift);
+
+        static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
+
+        // 3. Normalized check (the "x10" path)
+        if(result < low)
+        {
+          prod *= 10;
+          result = static_cast<hig_type>(prod >> shift);
+          --exponent;
+        }
+
+        static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
+        // 4. Extract raw floor and flags
+        const bool G = (prod >> (shift - 1)) & 1U;
+        const bool R = (prod >> (shift - 2)) & 1U;
+        const bool S = (prod & S_MASK) != 0;
+        const bool LSB = result & 1U;
+
+        const bool round_up = G && (R || S || LSB);
+
+        if(round_up)
+        {
+          result++;
+        }
+        return result;
+      }
+      else
+      {
+
+        // result_low hig_type = 1825'10068'58915'41957
+        static const constexpr __uint128_t high_spot = 5000'00000'00000'00000ULL;
+        // 1. Calculate the high-precision product
+        __uint128_t prod_hig = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
+        __uint128_t prod_low = (prod_hig & frac_mask) * static_cast<__uint128_t>(B.low);
+
+        // 2. Initial extraction check
+        hig_type result_high = static_cast<hig_type>(prod_hig >> shift);
+        hig_type result_low = static_cast<hig_type>(prod_low >> shift);
+
+        static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
+
+        if(result_low < low)
+        {
+          prod_low *= 10;
+          result_low = static_cast<hig_type>(prod_low >> shift);
+        }
+
+        if(result_high < low)
+        {
+          prod_hig *= 10;
+          result_high = static_cast<hig_type>(prod_hig >> shift);
+          --exponent;
+        }
+
+        if(result_low >= high_spot)
+        {
+          result_high++;
+        }
+
+        return result_high;
       }
 
-      // 4. Extract raw floor and flags
-      const bool G = (prod >> (shift - 1)) & 1U;
-      const bool R = (prod >> (shift - 2)) & 1U;
-      const bool S = (prod & S_MASK) != 0;
-      const bool LSB = result & 1U;
-
-      const bool round_up = G && (R || S || LSB);
-
-      if(round_up)
-      {
-        result++;
-      }
-
-      return result;
     } //
   };
 } // namespace Helpers::Math

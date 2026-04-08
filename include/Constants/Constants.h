@@ -58,6 +58,7 @@ namespace Constants::Tables
   struct Floating
   {
   public:
+    static const constexpr auto MANTISSA_BITS = std::numeric_limits<T>::digits - 1;
     static const constexpr auto BASE = 10;
     static const constexpr auto MIN_BIN_EXP = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits; // Smallest binary exponent (subnormal limit)
     static const constexpr auto MAX_BIN_EXP = std::numeric_limits<double>::max_exponent - 1;                                   // Largest binary exponent
