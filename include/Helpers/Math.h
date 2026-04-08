@@ -306,11 +306,11 @@ namespace Helpers::Math
   public:
     static auto MultiplyRoundCompliant(const auto &A, const auto &B, int &exponent)
     {
-      using low_type = std::remove_cvref_t<decltype(B.low)>;
       using hig_type = std::remove_cvref_t<decltype(B.hig)>;
-      static_assert(std::is_same_v<hig_type, low_type>, "both high and low types in constant table shit should be the same T");
       static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
       static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
+
+      static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
 
       if constexpr(std::is_same_v<float, T>)
       {
@@ -319,8 +319,6 @@ namespace Helpers::Math
 
         // 2. Initial extraction check
         hig_type result = static_cast<hig_type>(prod >> shift);
-
-        static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
 
         // 3. Normalized check (the "x10" path)
         if(result < low)
@@ -335,9 +333,9 @@ namespace Helpers::Math
         const bool G = (prod >> (shift - 1)) & 1U;
         const bool R = (prod >> (shift - 2)) & 1U;
         const bool S = (prod & S_MASK) != 0;
-        const bool LSB = result & 1U;
+        // const bool LSB = result & 1U;
 
-        const bool round_up = G && (R || S || LSB);
+        const bool round_up = G && (R || S); //|| LSB);
 
         if(round_up)
         {
@@ -347,38 +345,22 @@ namespace Helpers::Math
       }
       else
       {
+        const auto B_pow = static_cast<__uint128_t>(B.hig) * 1'000 + B.low;
 
-        // result_low hig_type = 1825'10068'58915'41957
-        static const constexpr __uint128_t high_spot = 5000'00000'00000'00000ULL;
-        // 1. Calculate the high-precision product
-        __uint128_t prod_hig = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
-        __uint128_t prod_low = (prod_hig & frac_mask) * static_cast<__uint128_t>(B.low);
+        const __uint128_t prod = static_cast<__uint128_t>(A) * B_pow;
+        const __uint128_t result = prod >> shift;
 
-        // 2. Initial extraction check
-        hig_type result_high = static_cast<hig_type>(prod_hig >> shift);
-        hig_type result_low = static_cast<hig_type>(prod_low >> shift);
+        static const constexpr __uint128_t mega_low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
 
-        static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
-
-        if(result_low < low)
+        if(result < mega_low)
         {
-          prod_low *= 10;
-          result_low = static_cast<hig_type>(prod_low >> shift);
-        }
-
-        if(result_high < low)
-        {
-          prod_hig *= 10;
-          result_high = static_cast<hig_type>(prod_hig >> shift);
           --exponent;
+          return static_cast<hig_type>(result / 100);
         }
-
-        if(result_low >= high_spot)
+        else
         {
-          result_high++;
+          return static_cast<hig_type>(result / 1'000);
         }
-
-        return result_high;
       }
 
     } //

@@ -114,6 +114,7 @@ namespace
 
 namespace
 {
+  /*
   const auto almost_equal = []<typename Type>(const Type &, const long double &a, const long double &b) -> bool
   {
     const auto abs_error = std::abs(a - b);
@@ -124,6 +125,7 @@ namespace
     BOOST_CHECK_SMALL(rel_error, REL_TOL);
     return rel_error <= REL_TOL;
   };
+  */
 
   const auto lopper_format_exponential
       = []<typename Type>(const int &PRECISION, const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took, auto &std_fmt_took, auto &ryu_took) -> void
@@ -167,7 +169,7 @@ namespace
         const auto log_val = std::strtold(open_logging.c_str(), nullptr);
         const auto ref_val = std::strtold(std_format.c_str(), nullptr);
 
-        if(!almost_equal(i, log_val, ref_val))
+        if(log_val != ref_val) // if(!almost_equal(i, log_val, ref_val))
         {
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
@@ -249,16 +251,13 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   // floats
-  /*
   test_and_benchmark_float(static_cast<float>(0), 1);
   test_and_benchmark_float(static_cast<float>(0), 2);
   test_and_benchmark_float(static_cast<float>(0), 3);
   test_and_benchmark_float(static_cast<float>(0), 4);
   test_and_benchmark_float(static_cast<float>(0), 5);
   test_and_benchmark_float(static_cast<float>(0), 6);
-  */
   // doubles
-  /*
   test_and_benchmark_float(static_cast<double>(0), 1);
   test_and_benchmark_float(static_cast<double>(0), 2);
   test_and_benchmark_float(static_cast<double>(0), 3);
@@ -268,7 +267,6 @@ BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
   test_and_benchmark_float(static_cast<double>(0), 7);
   test_and_benchmark_float(static_cast<double>(0), 8);
   test_and_benchmark_float(static_cast<double>(0), 9);
-  */
   test_and_benchmark_float(static_cast<double>(0), 10);
   test_and_benchmark_float(static_cast<double>(0), 11);
   test_and_benchmark_float(static_cast<double>(0), 12);
