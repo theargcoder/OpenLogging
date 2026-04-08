@@ -90,9 +90,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
-    int exp_base_10_int = ((exp * 78'913) >> 18);
+    int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
-    const auto exp_table_val = Floating::DIGITS[exp + Floating::BIAS];
+    const auto exp_table_val = Floating::DIGITS[exp];
 
     using base_type = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::pair_uint64_t::hig)>;
     // static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(uint64_t{ 10 }, std::numeric_limits<uint64_t>::digits10 - 1);
@@ -160,6 +160,11 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     buff.array[--buff.start_idx] = '.';
 
     std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
+
+    if(input < 0)
+    {
+      buff.array[--buff.start_idx] = '-';
+    }
 
     return buff;
   }

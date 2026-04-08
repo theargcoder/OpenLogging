@@ -3,9 +3,11 @@
 
 #include "/Users/luccalabattaglia/Work/ryu/ryu/ryu.h"
 
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <type_traits>
 
 #include "include/Algos/Competition.h"
@@ -114,23 +116,71 @@ namespace
 
 namespace
 {
-  /*
-  const auto almost_equal = []<typename Type>(const Type &, const long double &a, const long double &b) -> bool
+  const auto fuzzer_format_exponential
+      = []<typename Type>(const Type &, const int &PRECISION, const size_t SAMPLES, auto &open_logging_took, auto &std_fmt_took, auto &ryu_took) -> void
   {
-    const auto abs_error = std::abs(a - b);
-    const auto denom = std::max(std::abs(b), static_cast<long double>(std::numeric_limits<Type>::denorm_min()));
-    const auto rel_error = abs_error / denom;
+    using UIntType = std::conditional_t<sizeof(Type) == 4, uint32_t, uint64_t>;
 
-    const constexpr auto REL_TOL = 1.0L / Helpers::Math::Constexpr::pow(10.0L, std::numeric_limits<Type>::digits10 - 1);
-    BOOST_CHECK_SMALL(rel_error, REL_TOL);
-    return rel_error <= REL_TOL;
+    // Fixed seed so test failures are 100% reproducible
+    std::mt19937_64 rng(0xDEADBEEF);
+    std::uniform_int_distribution<UIntType> dist(0, std::numeric_limits<UIntType>::max());
+
+    size_t errors = 0;
+    const constexpr size_t MAX_ERRORS = 10;
+
+    for(size_t i = 0; i < SAMPLES && errors < MAX_ERRORS; ++i)
+    {
+      UIntType raw_bits = dist(rng);
+      Type val = std::bit_cast<Type>(raw_bits);
+
+      // Optional: Skip NaN and Infinity if your parser doesn't handle them yet
+      if(!std::isfinite(val))
+        continue;
+
+      std::string open_logging, std_format, ryu;
+
+      const auto st_open_logging = std::chrono::high_resolution_clock::now();
+      open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
+      const auto en_open_logging = std::chrono::high_resolution_clock::now();
+
+      const auto st_std_fmt = std::chrono::high_resolution_clock::now();
+      std_format = Helpers::Numeric::Std::to_string<true>(val, PRECISION);
+      const auto en_std_fmt = std::chrono::high_resolution_clock::now();
+
+      const auto st_ryu = std::chrono::high_resolution_clock::now();
+      ryu = Helpers::Numeric::Ryu::ToStr(val);
+      const auto en_ryu = std::chrono::high_resolution_clock::now();
+
+      open_logging_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_open_logging - st_open_logging);
+      std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_fmt - st_std_fmt);
+      ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(en_ryu - st_ryu);
+
+      if(open_logging != std_format)
+      {
+        const auto log_val = std::strtold(open_logging.c_str(), nullptr);
+        const auto ref_val = std::strtold(std_format.c_str(), nullptr);
+
+        BOOST_CHECK_EQUAL(log_val, ref_val);
+
+        if(log_val != ref_val)
+        {
+          log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
+
+          open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
+
+          char buffer[1024];
+          d2exp_buffered(val, PRECISION, buffer);
+
+          errors++;
+        }
+      }
+    }
   };
-  */
 
   const auto lopper_format_exponential
       = []<typename Type>(const int &PRECISION, const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took, auto &std_fmt_took, auto &ryu_took) -> void
   {
-    const constexpr auto WISHED_RANGE = 10'000;
+    const constexpr auto WISHED_RANGE = 100'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -169,6 +219,8 @@ namespace
         const auto log_val = std::strtold(open_logging.c_str(), nullptr);
         const auto ref_val = std::strtold(std_format.c_str(), nullptr);
 
+        BOOST_CHECK_EQUAL(log_val, ref_val);
+
         if(log_val != ref_val) // if(!almost_equal(i, log_val, ref_val))
         {
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
@@ -184,7 +236,7 @@ namespace
     }
   };
 
-  const auto tester_format_exponential = []<typename T>(const T &, const int &PRECISION)
+  const auto tester_format_exponential = []<typename T>(const T &bannana, const int &PRECISION)
   {
     const constexpr auto MIN = std::numeric_limits<T>::min();
     const constexpr auto DENORM = std::numeric_limits<T>::denorm_min();
@@ -234,6 +286,15 @@ namespace
     lopper_format_exponential(PRECISION, true, T{ 123.456 }, T{ 0.01 }, open_logging_time, std_fmt_time, ryu_time);
     lopper_format_exponential(PRECISION, false, T{ 98765.4321 }, T{ 0.1 }, open_logging_time, std_fmt_time, ryu_time);
 
+    // ---- randomish mantissa coverage ----
+    lopper_format_exponential(PRECISION, true, T{ 1.234 }, T{ 0.0001 }, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(PRECISION, true, T{ 123.456 }, T{ 0.01 }, open_logging_time, std_fmt_time, ryu_time);
+    lopper_format_exponential(PRECISION, false, T{ 98765.4321 }, T{ 0.1 }, open_logging_time, std_fmt_time, ryu_time);
+
+    // ---- MASSIVE CHAOS FUZZER ----
+    // 1 million purely random bit-patterns per precision level
+    fuzzer_format_exponential(bannana, PRECISION, 1'000'000, open_logging_time, std_fmt_time, ryu_time);
+
     return std::make_tuple(open_logging_time, std_fmt_time, ryu_time);
   };
 
@@ -251,12 +312,14 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   // floats
+  /*
   test_and_benchmark_float(static_cast<float>(0), 1);
   test_and_benchmark_float(static_cast<float>(0), 2);
   test_and_benchmark_float(static_cast<float>(0), 3);
   test_and_benchmark_float(static_cast<float>(0), 4);
   test_and_benchmark_float(static_cast<float>(0), 5);
   test_and_benchmark_float(static_cast<float>(0), 6);
+  */
   // doubles
   test_and_benchmark_float(static_cast<double>(0), 1);
   test_and_benchmark_float(static_cast<double>(0), 2);

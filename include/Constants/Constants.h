@@ -63,7 +63,8 @@ namespace Constants::Tables
     static const constexpr auto MIN_BIN_EXP = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits; // Smallest binary exponent (subnormal limit)
     static const constexpr auto MAX_BIN_EXP = std::numeric_limits<double>::max_exponent - 1;                                   // Largest binary exponent
     static const constexpr auto BIAS = -MIN_BIN_EXP;                                                                           // Offset so that table[BIAS] corresponds to 2^0
-    static const constexpr auto SIZE = MAX_BIN_EXP - MIN_BIN_EXP + 1;
+    // static const constexpr auto BIAS = std::numeric_limits<T>::max_exponent - 1;
+    static const constexpr auto SIZE = MAX_BIN_EXP - MIN_BIN_EXP + 2;
     static const constexpr auto MAX_DIGITS10 = std::numeric_limits<T>::digits10;
     static const constexpr auto MAX_EXP_DIGITS10 = static_cast<decltype(MIN_BIN_EXP)>(Helpers::Math::Constexpr::log10(T{ std::numeric_limits<T>::max_exponent10 }));
 
@@ -494,7 +495,7 @@ namespace Constants::Tables
             { 6857655085992110854ULL, 699 }, { 1371531017198422170ULL, 813 }, { 2743062034396844341ULL, 627 }, { 5486124068793688683ULL, 255 }, { 1097224813758737736ULL, 651 },
             { 2194449627517475473ULL, 302 }, { 4388899255034950946ULL, 604 }, { 8777798510069901893ULL, 209 }, { 1755559702013980378ULL, 641 }, { 3511119404027960757ULL, 283 },
             { 7022238808055921514ULL, 567 }, { 1404447761611184302ULL, 913 }, { 2808895523222368605ULL, 827 }, { 5617791046444737211ULL, 654 }, { 1123558209288947442ULL, 330 },
-            { 2247116418577894884ULL, 661 }, { 4494232837155789769ULL, 323 }, { 8988465674311579538ULL, 646 } };
+            { 2247116418577894884ULL, 661 }, { 4494232837155789769ULL, 323 }, { 8988465674311579538ULL, 646 }, { 1797693134862315907ULL, 729 } };
   };
 
   template <typename Type, uint32_t BASE, std::size_t... I>

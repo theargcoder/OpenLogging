@@ -217,20 +217,15 @@ namespace Helpers::Math
     static constexpr underlying EXPONENT_ONLY = IS_DOUBLE ? 0x7FF0000000000000ULL : 0x7F800000U;
     static constexpr underlying EXPONENT_ST = IS_DOUBLE ? 52 : 23;
     static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(T) * 8 - EXPONENT_ST - 1;
-    static constexpr signed_underlying EXPONENT_BIAS = std::numeric_limits<T>::max_exponent - 1;
-
-    static constexpr underlying BIAS_IN_EXP_POS = EXPONENT_BIAS << ((IS_DOUBLE) ? 52 : 23);
 
     static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits;
 
-    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2046 : 255; // as defined in IEEE-754
+    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2047 : 255; // as defined in IEEE-754
 
     static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
     static constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
 
     static constexpr underlying SIGN_ONLY = IS_DOUBLE ? 0x8000000000000000ULL : 0x80000000U;
-
-    static constexpr underlying HALF_EXP = (EXPONENT_BIAS - 1) << EXPONENT_ST; // half == 0.5 aka 2^-1
 
     using wide_underlying = std::conditional_t<IS_DOUBLE, __uint128_t, uint64_t>;
 
@@ -251,7 +246,7 @@ namespace Helpers::Math
 
       const signed_underlying exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
 
-      if(exp == EXPONENT_ALL_BITS_ON) [[unlikely]]
+      if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
       {
         const underlying SIGN = bits & SIGN_ONLY;
         exponent = std::numeric_limits<decltype(exponent)>::max();
@@ -263,16 +258,18 @@ namespace Helpers::Math
       if(exp > 0) [[likely]]
       {
         mantissa = man | MANTISSA_IMPLICIT_1;
-        exponent = exp + 1 - EXPONENT_BIAS;
+        exponent = exp + EXPONENT_ST;
       }
       else
       {
         const int shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
-        mantissa = ((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
-        exponent = 2 - EXPONENT_BIAS - shift_internal;
-
-        if(exponent == MIN_EXPONENT && mantissa) [[unlikely]]
+        if(shift_internal <= EXPONENT_ST) [[likely]]
+        {
+          mantissa = ((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+          exponent = 1 + EXPONENT_ST - shift_internal;
+        }
+        else
         {
           mantissa = std::numeric_limits<decltype(mantissa)>::max();
           exponent = std::numeric_limits<decltype(exponent)>::max();
