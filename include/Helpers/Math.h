@@ -206,39 +206,164 @@ namespace Helpers::Math
 {
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-  struct IEEE754
+  struct IEEE754;
+
+  template <>
+  struct IEEE754<float>
   {
   private:
-    using underlying = std::conditional_t<std::is_same_v<T, float>, uint32_t, uint64_t>;
-    using signed_underlying = std::conditional_t<std::is_same_v<T, float>, int32_t, int64_t>;
+    using underlying = uint32_t;
+    using signed_underlying = int32_t;
+    using uint128_t = __uint128_t;
 
-    static constexpr bool IS_DOUBLE = std::is_same_v<T, double>;
+    static constexpr underlying EXPONENT_ONLY = 0x7F800000U;
+    static constexpr signed_underlying EXPONENT_ST = 23;
+    static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(float) * 8 - EXPONENT_ST - 1;
 
-    static constexpr underlying EXPONENT_ONLY = IS_DOUBLE ? 0x7FF0000000000000ULL : 0x7F800000U;
-    static constexpr underlying EXPONENT_ST = IS_DOUBLE ? 52 : 23;
-    static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(T) * 8 - EXPONENT_ST - 1;
+    static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<float>::min_exponent - std::numeric_limits<float>::digits;
+    static constexpr signed_underlying EXPONENT_TABLE_OFFSET = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
+    static constexpr signed_underlying EXPONENT_TABLE_BIAS = -EXPONENT_TABLE_OFFSET + MIN_EXPONENT + EXPONENT_ST;
 
-    static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<T>::min_exponent - std::numeric_limits<T>::digits;
+    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = 255; // as defined in IEEE-754
 
-    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = IS_DOUBLE ? 2047 : 255; // as defined in IEEE-754
-
-    static constexpr underlying MANTISSA_ONLY = IS_DOUBLE ? 0x000FFFFFFFFFFFFFULL : 0x007FFFFFU;
+    static constexpr underlying MANTISSA_ONLY = 0x007FFFFFU;
     static constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
 
-    static constexpr underlying SIGN_ONLY = IS_DOUBLE ? 0x8000000000000000ULL : 0x80000000U;
+    static constexpr underlying SIGN_ONLY = 0x80000000U;
 
-    using wide_underlying = std::conditional_t<IS_DOUBLE, __uint128_t, uint64_t>;
-
-    static const constexpr wide_underlying half = wide_underlying{ 1 } << EXPONENT_ST;
+    static const constexpr uint128_t half = uint128_t{ 1 } << EXPONENT_ST;
     static const constexpr auto shift = EXPONENT_ST + 1;
-    static const constexpr __uint128_t frac_mask = ((__uint128_t{ 1 } << shift) - 1);
+    static const constexpr uint128_t frac_mask = ((uint128_t{ 1 } << shift) - 1);
 
   public:
     underlying mantissa;
     int exponent;
 
   public:
-    explicit IEEE754(const T &input)
+    explicit IEEE754(const float &input)
+    {
+      const underlying bits = std::bit_cast<underlying>(input);
+
+      const underlying man = bits & MANTISSA_ONLY;
+
+      const signed_underlying exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
+
+      if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
+      {
+        const underlying SIGN = bits & SIGN_ONLY;
+        exponent = std::numeric_limits<decltype(exponent)>::max();
+        mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
+
+        return;
+      }
+
+      if(exp > 0) [[likely]]
+      {
+        mantissa = man | MANTISSA_IMPLICIT_1;
+        exponent = exp + EXPONENT_TABLE_BIAS;
+      }
+      else
+      {
+        const int shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
+
+        if(shift_internal <= EXPONENT_ST) [[likely]]
+        {
+          mantissa = ((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+          exponent = 1 - shift_internal + EXPONENT_TABLE_BIAS;
+        }
+        else
+        {
+          mantissa = std::numeric_limits<decltype(mantissa)>::max();
+          exponent = std::numeric_limits<decltype(exponent)>::max();
+        }
+      }
+    }
+
+  public:
+    static auto Multiply(const float &A, const auto &B)
+    {
+      const uint128_t A_bits = std::bit_cast<underlying>(A);
+
+      const uint128_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+
+      const uint128_t prod = uint128_t{ sig } * uint128_t{ B.hig };
+
+      return static_cast<uint128_t>(prod >> shift);
+    }
+
+  public:
+    static auto MultiplyRoundCompliant(const auto &A, const auto &B, int &exponent)
+    {
+      using hig_type = std::remove_cvref_t<decltype(B.hig)>;
+      static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
+      static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
+
+      static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
+
+      // 1. Calculate the high-precision product
+      __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
+
+      // 2. Initial extraction check
+      hig_type result = static_cast<hig_type>(prod >> shift);
+
+      static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
+      // 3. Normalized check (the "x10" path)
+      if(result < low)
+      {
+        prod *= 10;
+        result = static_cast<hig_type>(prod >> shift);
+        --exponent;
+      }
+
+      // 4. Extract raw floor and flags
+      const bool G = (prod >> (shift - 1)) & 1U;
+      const bool R = (prod >> (shift - 2)) & 1U;
+      const bool S = (prod & S_MASK) != 0;
+      // const bool LSB = result & 1U;
+
+      const bool round_up = G && (R || S); //|| LSB);
+
+      if(round_up)
+      {
+        result++;
+      }
+
+      return std::make_tuple(result, false);
+
+    } //
+  };
+
+  template <>
+  struct IEEE754<double>
+  {
+  private:
+    using underlying = uint64_t;
+    using signed_underlying = int64_t;
+    using uint128_t = __uint128_t;
+
+    static constexpr underlying EXPONENT_ONLY = 0x7FF0000000000000ULL;
+    static constexpr signed_underlying EXPONENT_ST = 52;
+    static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(double) * 8 - EXPONENT_ST - 1;
+
+    static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
+
+    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = 2047; // as defined in IEEE-754
+
+    static constexpr underlying MANTISSA_ONLY = 0x000FFFFFFFFFFFFFULL;
+    static constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
+
+    static constexpr underlying SIGN_ONLY = 0x8000000000000000ULL;
+
+    static const constexpr uint128_t half = uint128_t{ 1 } << EXPONENT_ST;
+    static const constexpr auto shift = EXPONENT_ST + 1;
+    static const constexpr uint128_t frac_mask = ((uint128_t{ 1 } << shift) - 1);
+
+  public:
+    underlying mantissa;
+    int exponent;
+
+  public:
+    explicit IEEE754(const double &input)
     {
       const underlying bits = std::bit_cast<underlying>(input);
 
@@ -278,26 +403,15 @@ namespace Helpers::Math
     }
 
   public:
-    static auto Multiply(const T &A, const auto &B)
+    static auto Multiply(const double &A, const auto &B)
     {
-      const wide_underlying A_bits = std::bit_cast<underlying>(A);
+      const uint128_t A_bits = std::bit_cast<underlying>(A);
 
-      const wide_underlying sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+      const uint128_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
 
-      const wide_underlying prod = wide_underlying{ sig } * wide_underlying{ B.hig };
+      const uint128_t prod = uint128_t{ sig } * uint128_t{ B.hig };
 
-      wide_underlying digits_10;
-
-      if(shift >= 0)
-      {
-        digits_10 = static_cast<wide_underlying>(prod >> shift);
-      }
-      else
-      {
-        digits_10 = static_cast<wide_underlying>(prod << (-shift));
-      }
-
-      return digits_10;
+      return static_cast<uint128_t>(prod >> shift);
     }
 
   public:
@@ -307,61 +421,23 @@ namespace Helpers::Math
       static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
       static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
 
-      static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
+      const auto B_pow = static_cast<__uint128_t>(B.hig) * 1'000 + B.low;
 
-      if constexpr(std::is_same_v<float, T>)
+      const __uint128_t prod = static_cast<__uint128_t>(A) * B_pow;
+      __uint128_t result = prod >> shift;
+
+      static const constexpr __uint128_t low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
+
+      // 4. Normalized check (the "x10" path)
+      if(result < low)
       {
-        // 1. Calculate the high-precision product
-        __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
-
-        // 2. Initial extraction check
-        hig_type result = static_cast<hig_type>(prod >> shift);
-
-        static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
-        // 3. Normalized check (the "x10" path)
-        if(result < low)
-        {
-          prod *= 10;
-          result = static_cast<hig_type>(prod >> shift);
-          --exponent;
-        }
-
-        // 4. Extract raw floor and flags
-        const bool G = (prod >> (shift - 1)) & 1U;
-        const bool R = (prod >> (shift - 2)) & 1U;
-        const bool S = (prod & S_MASK) != 0;
-        // const bool LSB = result & 1U;
-
-        const bool round_up = G && (R || S); //|| LSB);
-
-        if(round_up)
-        {
-          result++;
-        }
-
-        return std::make_tuple(result, false);
-      }
-      else
-      {
-        const auto B_pow = static_cast<__uint128_t>(B.hig) * 1'000 + B.low;
-
-        const __uint128_t prod = static_cast<__uint128_t>(A) * B_pow;
-        __uint128_t result = prod >> shift;
-
-        static const constexpr __uint128_t low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
-
-        // 4. Normalized check (the "x10" path)
-        if(result < low)
-        {
-          result *= 10;
-          --exponent;
-        }
-
-        const bool extra = (result % 1'000) != 0;
-        const hig_type to_ret = static_cast<hig_type>(result / 1'000);
-        return std::make_tuple(to_ret, extra);
+        result *= 10;
+        --exponent;
       }
 
+      const bool extra = (result % 1'000) != 0;
+      const hig_type to_ret = static_cast<hig_type>(result / 1'000);
+      return std::make_tuple(to_ret, extra);
     } //
   };
 } // namespace Helpers::Math

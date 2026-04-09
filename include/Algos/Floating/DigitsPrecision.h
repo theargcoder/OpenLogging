@@ -54,7 +54,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       buff.start_idx = SIZE_OF_BUFF;
 
-      const auto frexpp = Helpers::Math::IEEE754(input);
+      const auto frexpp = Helpers::Math::IEEE754<T>(input);
       const auto &exp = frexpp.exponent;
       const auto &mantissa = frexpp.mantissa;
 
@@ -165,7 +165,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       buff.start_idx = SIZE_OF_BUFF;
 
-      const auto frexpp = Helpers::Math::IEEE754(input);
+      const auto frexpp = Helpers::Math::IEEE754<T>(input);
       const auto &exp = frexpp.exponent;
       const auto &mantissa = frexpp.mantissa;
 
