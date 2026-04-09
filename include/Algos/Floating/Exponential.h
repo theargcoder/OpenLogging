@@ -101,25 +101,22 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 5>();
     static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 10>();
 
-    auto result = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
-    const auto extra = std::get<1>(result);
-    auto &digits_10 = std::get<0>(result);
+    auto [digits_10, extra] = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
 
     const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
     const auto remainder = digits_10 % rounding_factor_10s;
 
     // 0 = don't round up; 1 = round up unconditionally; 2 = round up if odd.
-    int round = 0;
     if(remainder > rounding_factor_5s)
     {
-      round = 1;
+      digits_10 += rounding_factor_5s;
     }
     else if(remainder == rounding_factor_5s)
     {
       if(extra)
       {
-        round = 1;
+        digits_10 += rounding_factor_5s;
       }
       else
       {
@@ -131,24 +128,23 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
           const int32_t requiredFives = -rem_exp;
           trailingZeros = trailingZeros && multipleOfPowerOf5(mantissa, (uint32_t)requiredFives);
         }
-        round = trailingZeros ? 2 : 1;
-      }
-    }
 
-    if(round == 1)
-    {
-      digits_10 += rounding_factor_5s;
-    }
-    else if(round == 2)
-    {
-      // This is the critical TIE-BREAKER
-      // If there are ANY bits left over in the binary product (G, R, or S),
-      // then the real value is slightly > midpoint.
-      // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-      const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
-      if(last_digit & 1U)
-      {
-        digits_10 += rounding_factor_5s;
+        if(trailingZeros)
+        {
+          // This is the critical TIE-BREAKER
+          // If there are ANY bits left over in the binary product (G, R, or S),
+          // then the real value is slightly > midpoint.
+          // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+          const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
+          if(last_digit & 1U)
+          {
+            digits_10 += rounding_factor_5s;
+          }
+        }
+        else
+        {
+          digits_10 += rounding_factor_5s;
+        }
       }
     }
 
