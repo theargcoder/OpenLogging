@@ -50,7 +50,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       // 1 for '+/-' also 1 for '.' also 1 for whatever
       static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
 
-      Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
+      Helpers::Numeric::Integral::char_array_start<SIZE_OF_BUFF> buff;
 
       buff.start_idx = SIZE_OF_BUFF;
 
@@ -161,7 +161,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       // 1 for '+/-' also 1 for '.' also 1 for whatever
       static const constexpr auto SIZE_OF_BUFF = FloatingStruct::MAX_DIGITS10 + std::numeric_limits<T>::max_exponent10 + PRECISION + 3;
 
-      Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
+      Helpers::Numeric::Integral::char_array_start<SIZE_OF_BUFF> buff;
 
       buff.start_idx = SIZE_OF_BUFF;
 

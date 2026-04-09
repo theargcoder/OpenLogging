@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -57,9 +58,14 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
-    Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
+    Helpers::Numeric::Integral::char_array_len<SIZE_OF_BUFF> buff;
 
-    buff.start_idx = SIZE_OF_BUFF;
+    buff.length = 0;
+    const auto NEGATIVE = input < 0;
+    if(NEGATIVE)
+    {
+      buff.array[buff.length++] = '-';
+    }
 
     const auto frexpp = Helpers::Math::IEEE754<T>(input);
     const auto &exp = frexpp.exponent;
@@ -67,24 +73,25 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max()) [[unlikely]]
     {
-      buff.start_idx -= 3;
       if(mantissa == T{ 0 })
       {
-        std::memcpy(&buff.array[buff.start_idx], "nan", 3);
+        buff.length = 3;
+        std::memcpy(&buff.array[0], "nan", buff.length);
       }
       else if(mantissa == 1)
       {
-        std::memcpy(&buff.array[buff.start_idx], "inf", 3);
+        buff.length = 3;
+        std::memcpy(&buff.array[0], "inf", buff.length);
       }
       else if(mantissa == 2)
       {
-        buff.start_idx--;
-        std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
+        buff.length = 4;
+        std::memcpy(&buff.array[0], "-inf", buff.length);
       }
       else
       {
-        buff.start_idx -= 3;
-        std::memcpy(&buff.array[buff.start_idx], "0.0E00", 6);
+        buff.length = 6;
+        std::memcpy(&buff.array[0], "0.0E00", buff.length);
       }
 
       return buff;
@@ -98,25 +105,23 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     // static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(uint64_t{ 10 }, std::numeric_limits<uint64_t>::digits10 - 1);
     static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(base_type{ 10 }, std::numeric_limits<base_type>::digits10);
 
-    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 5>();
-    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 10>();
+    const auto &[digits_10, extra] = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
 
-    auto [digits_10, extra] = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
+    buff.array[buff.length++] = '.';
 
-    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
-    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
-    const auto remainder = digits_10 % rounding_factor_10s;
+    const auto after_digit = Helpers::Numeric::Integral::ToStrFowardWriteFixedLengthCharArrayReturnNextDigit(digits_10, buff, PRECISION + 1);
 
     // 0 = don't round up; 1 = round up unconditionally; 2 = round up if odd.
-    if(remainder > rounding_factor_5s)
+    int round = 0;
+    if(after_digit > 5)
     {
-      digits_10 += rounding_factor_5s;
+      round = 1;
     }
-    else if(remainder == rounding_factor_5s)
+    else if(after_digit == 5)
     {
       if(extra)
       {
-        digits_10 += rounding_factor_5s;
+        round = 1;
       }
       else
       {
@@ -128,48 +133,83 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
           const int32_t requiredFives = -rem_exp;
           trailingZeros = trailingZeros && multipleOfPowerOf5(mantissa, (uint32_t)requiredFives);
         }
+        round = trailingZeros ? 2 : 1;
+      }
+    }
 
-        if(trailingZeros)
+    bool round_the_shit = false;
+    if(round == 1)
+    {
+      round_the_shit = true;
+    }
+    else if(round == 2)
+    {
+      // This is the critical TIE-BREAKER
+      // If there are ANY bits left over in the binary product (G, R, or S),
+      // then the real value is slightly > midpoint.
+      // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+      const auto last_digit = buff.array[buff.length - 1] - '0';
+      round_the_shit = last_digit & 1U;
+    }
+
+    if(round_the_shit)
+    {
+      int i = buff.length;
+      bool carry = true;
+      while(carry && i > (2 + NEGATIVE))
+      {
+        i--;
+        carry = buff.array[i] == '9';
+        (carry) ? buff.array[i] = '0' : buff.array[i]++;
+      }
+      if(i == (2 + NEGATIVE) && carry) // fuckkk from start till now all 9's
+      {
+        i--;
+        if(buff.array[i] == '9')
         {
-          // This is the critical TIE-BREAKER
-          // If there are ANY bits left over in the binary product (G, R, or S),
-          // then the real value is slightly > midpoint.
-          // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-          const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
-          if(last_digit & 1U)
-          {
-            digits_10 += rounding_factor_5s;
-          }
+          buff.array[i] = '1';
+          exp_base_10_int++;
         }
         else
         {
-          digits_10 += rounding_factor_5s;
+          buff.array[i]++;
         }
       }
     }
 
-    if(digits_10 >= max_precision)
+    buff.array[buff.length++] = 'e';
+    if(exp_base_10_int <= -1000)
     {
-      digits_10 /= 10;
-      exp_base_10_int++;
+      std::terminate(); // wtf happened; we dont know but shit is invalid
+    }
+    else if(exp_base_10_int <= -100)
+    {
+      buff.length += 4; // 1 for sign 1 for exp_digit
+    }
+    else if(exp_base_10_int <= -10)
+    {
+      buff.length += 3; // 1 for sign 1 for exp_digit
+    }
+    else if(exp_base_10_int < 10)
+    {
+      buff.length += 2; // 1 for sign 1 for exp_digit
+    }
+    else if(exp_base_10_int < 100)
+    {
+      buff.length += 3; // 1 for sign 2 for exp_digit
+    }
+    else if(exp_base_10_int < 1000)
+    {
+      buff.length += 4; // 1 for sign 1 for exp_digit
+    }
+    else
+    {
+      std::terminate(); // wtf happened; we dont know but shit is invalid
     }
 
-    digits_10 /= rounding_factor_10s;
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.length);
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
-
-    buff.array[--buff.start_idx] = 'e';
-
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<false>(digits_10, buff, buff.start_idx);
-
-    buff.array[--buff.start_idx] = '.';
-
-    std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
-
-    if(input < 0)
-    {
-      buff.array[--buff.start_idx] = '-';
-    }
+    std::swap(buff.array[NEGATIVE], buff.array[NEGATIVE + 1]);
 
     return buff;
   }
@@ -179,6 +219,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     const auto buff = Helpers::Numeric::Floating::ExponentialNotation::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+    return std::string(&buff.array[0], buff.length);
   }
 } // namespace Helpers::Numeric::Floating::ExponentialNotation
