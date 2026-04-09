@@ -64,8 +64,9 @@ namespace
     for(int i = 0; i < FloatTable::SIZE; ++i)
     {
       const int exp = i - BIAS;
-      using base_type = std::remove_cvref_t<decltype(table[i].hig)>;
-      const __uint128_t val = static_cast<__uint128_t>(table[i].hig * Tests::pow(__uint128_t{ 10 }, std::numeric_limits<base_type>::digits10)) + table[i].low;
+      using hig_type = std::remove_cvref_t<decltype(table[i].hig)>;
+      using low_type = std::remove_cvref_t<decltype(table[i].low)>;
+      const __uint128_t val = static_cast<__uint128_t>(table[i].hig) * Tests::pow(__uint128_t{ 10 }, std::numeric_limits<low_type>::digits10 - 1) + table[i].low;
       const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
@@ -80,14 +81,14 @@ namespace
       BigFloat rel_error = abs_error / expected;
 
       // Bounds testing
-      BOOST_CHECK_EQUAL(digits, 38);
+      BOOST_CHECK_EQUAL(digits, 22);
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
-      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * std::numeric_limits<std::remove_cvref_t<decltype(val)>>::digits10 + 1);
+      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * (std::numeric_limits<hig_type>::digits10 + std::numeric_limits<low_type>::digits10) + 2);
 
       BOOST_CHECK_SMALL(rel_error, max_tolerance);
 
-      bool log = !(digits == 38) || !(rel_error <= max_tolerance);
+      bool log = !(digits == 22) || !(rel_error <= max_tolerance);
 
       if(log)
       {

@@ -101,7 +101,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 5>();
     static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 10>();
 
-    auto digits_10 = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
+    auto result = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
+    const auto extra = std::get<1>(result);
+    auto &digits_10 = std::get<0>(result);
 
     const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
     const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
@@ -115,15 +117,22 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     }
     else if(remainder == rounding_factor_5s)
     {
-      const auto rem_exp = PRECISION - exp_base_10_int;
-      const auto required_twos = -(exp - Floating::MANTISSA_BITS) - rem_exp;
-      bool trailingZeros = required_twos <= 0 || (required_twos < 60 && multipleOfPowerOf2(mantissa, (uint32_t)required_twos));
-      if(rem_exp < 0)
+      if(extra)
       {
-        const int32_t requiredFives = -rem_exp;
-        trailingZeros = trailingZeros && multipleOfPowerOf5(mantissa, (uint32_t)requiredFives);
+        round = 1;
       }
-      round = trailingZeros ? 2 : 1;
+      else
+      {
+        const auto rem_exp = PRECISION - exp_base_10_int;
+        const auto required_twos = -(exp - Floating::MANTISSA_BITS - Floating::BIAS) - rem_exp;
+        bool trailingZeros = required_twos <= 0 || (required_twos < 60 && multipleOfPowerOf2(mantissa, (uint32_t)required_twos));
+        if(rem_exp < 0)
+        {
+          const int32_t requiredFives = -rem_exp;
+          trailingZeros = trailingZeros && multipleOfPowerOf5(mantissa, (uint32_t)requiredFives);
+        }
+        round = trailingZeros ? 2 : 1;
+      }
     }
 
     if(round == 1)

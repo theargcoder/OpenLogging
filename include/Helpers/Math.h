@@ -307,7 +307,7 @@ namespace Helpers::Math
       static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
       static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
 
-      static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
+      static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
 
       if constexpr(std::is_same_v<float, T>)
       {
@@ -317,6 +317,7 @@ namespace Helpers::Math
         // 2. Initial extraction check
         hig_type result = static_cast<hig_type>(prod >> shift);
 
+        static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
         // 3. Normalized check (the "x10" path)
         if(result < low)
         {
@@ -325,7 +326,6 @@ namespace Helpers::Math
           --exponent;
         }
 
-        static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
         // 4. Extract raw floor and flags
         const bool G = (prod >> (shift - 1)) & 1U;
         const bool R = (prod >> (shift - 2)) & 1U;
@@ -338,26 +338,28 @@ namespace Helpers::Math
         {
           result++;
         }
-        return result;
+
+        return std::make_tuple(result, false);
       }
       else
       {
         const auto B_pow = static_cast<__uint128_t>(B.hig) * 1'000 + B.low;
 
         const __uint128_t prod = static_cast<__uint128_t>(A) * B_pow;
-        const __uint128_t result = prod >> shift;
+        __uint128_t result = prod >> shift;
 
-        static const constexpr __uint128_t mega_low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
+        static const constexpr __uint128_t low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
 
-        if(result < mega_low)
+        // 4. Normalized check (the "x10" path)
+        if(result < low)
         {
+          result *= 10;
           --exponent;
-          return static_cast<hig_type>(result / 100);
         }
-        else
-        {
-          return static_cast<hig_type>(result / 1'000);
-        }
+
+        const bool extra = (result % 1'000) != 0;
+        const hig_type to_ret = static_cast<hig_type>(result / 1'000);
+        return std::make_tuple(to_ret, extra);
       }
 
     } //
