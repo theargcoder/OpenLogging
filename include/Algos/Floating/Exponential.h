@@ -92,9 +92,10 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
-    const auto exp_table_val = Floating::DIGITS[exp];
+    const auto &exp_table_val = Floating::DIGITS[exp];
 
     typename Helpers::Math::IEEE754<T>::result_extra result;
+
     Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int, result);
 
     if(PRECISION < std::numeric_limits<std::remove_cvref_t<decltype(result.result)>>::digits10)
@@ -145,11 +146,11 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       }
     }
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff);
 
     buff.array[--buff.start_idx] = 'e';
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<false>(result.result, buff, buff.start_idx);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(result.result, buff);
 
     buff.array[--buff.start_idx] = '.';
 

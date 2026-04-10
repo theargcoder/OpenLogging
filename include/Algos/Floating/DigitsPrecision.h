@@ -272,7 +272,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayForceAndCapLength<PRECISION>(right, buff, buff.start_idx);
       buff.array[--buff.start_idx] = '.';
-      Helpers::Numeric::Integral::ToStrReverseWriteToCharArray(left, buff, buff.start_idx);
+      // Helpers::Numeric::Integral::ToStrReverseWriteToCharArray(left, buff, buff.start_idx);
 
       return buff;
     }
