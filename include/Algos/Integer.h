@@ -17,6 +17,13 @@ namespace Helpers::Numeric::Integral
     char array[N];
   };
 
+  template <int N>
+  struct char_array_len
+  {
+    int length;
+    char array[N];
+  };
+
   template <bool FORCE_SIGN = false, typename T>
     requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
   static auto ToStrCharArray(const T &input)
@@ -64,6 +71,55 @@ namespace Helpers::Numeric::Integral
   {
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
     return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+  }
+
+  template <int N, typename T>
+    requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
+  static void ToStrReverseWriteToCharArrayResult(T val, char_array_len<N> &out_char)
+  {
+    char *__restrict__ it = &out_char.array[0] + out_char.length;
+
+    static const constexpr auto BASE = 10;
+
+    do
+    {
+      const auto rem = val % BASE;
+      val /= BASE;
+
+      *--it = '0' + rem;
+
+    } while(val);
+  }
+
+  template <bool FORCE_SIGN = false, int N, typename T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
+  static void ToStrReverseWriteToCharArray(const T &input, char_array_len<N> &out_char, const int &st_idx)
+  {
+    char *__restrict__ it = &out_char.array[st_idx];
+
+    static const constexpr auto BASE = 10;
+    const bool NEGATIVE = input < 0;
+
+    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
+    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+
+    do
+    {
+      const auto rem = val % BASE;
+      val /= BASE;
+
+      *--it = '0' + rem;
+
+    } while(val);
+
+    if(NEGATIVE)
+    {
+      *--it = '-';
+    }
+    else if constexpr(FORCE_SIGN)
+    {
+      *--it = '+';
+    }
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>
