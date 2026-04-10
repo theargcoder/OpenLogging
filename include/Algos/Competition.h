@@ -59,10 +59,10 @@ namespace Helpers::Numeric::Std
 
 namespace Helpers::Numeric::Ryu
 {
-  static auto ToStr(double v)
+  static auto ToStr(double v, const auto &PRECISION)
   {
     char buffer[32];
-    int len = d2s_buffered_n(v, &buffer[0]);
+    int len = d2exp_buffered_n(v, PRECISION, &buffer[0]);
     return std::string(&buffer[0], len);
   }
 
@@ -73,8 +73,4 @@ namespace Helpers::Numeric::Ryu
     return std::string(&buffer[0], len);
   }
 
-  static void our_d2exp_buffered(double d, uint32_t precision, char *result)
-  {
-    return d2exp_buffered(d, precision, result);
-  }
 } // namespace Helpers::Numeric::Ryu

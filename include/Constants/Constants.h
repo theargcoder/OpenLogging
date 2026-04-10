@@ -71,13 +71,13 @@ namespace Constants::Tables
     static const constexpr auto MAX_EXP_DIGITS10 = static_cast<decltype(MIN_BIN_EXP)>(Helpers::Math::Constexpr::log10(T{ std::numeric_limits<T>::max_exponent10 }));
 
   public:
-    struct pair_uint64_t
+    struct pair_uint64_uint16
     {
       uint64_t hig; // 19 digits
       uint16_t low; // 3 extra digits for doubles 22 digits is plenty for 'anomaly' resolutions
     };
 
-    static const constexpr pair_uint64_t DIGITS[SIZE]
+    static const constexpr pair_uint64_uint16 DIGITS[SIZE]
         = { { 4940656458412465441ULL, 765 }, { 9881312916824930883ULL, 531 }, { 1976262583364986176ULL, 706 }, { 3952525166729972353ULL, 412 }, { 7905050333459944706ULL, 825 },
             { 1581010066691988941ULL, 365 }, { 3162020133383977882ULL, 730 }, { 6324040266767955765ULL, 460 }, { 1264808053353591153ULL, 92 },  { 2529616106707182306ULL, 184 },
             { 5059232213414364612ULL, 368 }, { 1011846442682872922ULL, 473 }, { 2023692885365745844ULL, 947 }, { 4047385770731491689ULL, 894 }, { 8094771541462983379ULL, 788 },
@@ -504,7 +504,10 @@ namespace Constants::Tables
   static constexpr auto GetExponentialRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<Type, N + 1>{ BASE * Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I - 1)..., BASE };
+    auto array = std::array<Type, N>{ BASE * Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I - 2)... };
+    array[N - 1] = 1;
+
+    return array;
   }
 
   template <typename Type, uint32_t BASE>
@@ -512,6 +515,20 @@ namespace Constants::Tables
   {
     const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
     return GetExponentialRoundingTableImpl<Type, BASE>(std::make_index_sequence<N>());
+  }
+
+  template <typename Type, std::size_t... I>
+  static constexpr auto GetPrecistionImpl(std::index_sequence<I...> /*unused*/)
+  {
+    constexpr auto N = sizeof...(I);
+    return std::array<Type, N + 1>{ (10 * Helpers::Math::Constexpr::ipow(Type{ 10 }, I))..., 10 };
+  }
+
+  template <typename Type>
+  static constexpr auto GetPrecistion()
+  {
+    const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+    return GetPrecistionImpl<Type>(std::make_index_sequence<N>());
   }
 
   template <typename T, uint32_t BASE, std::size_t... I>
@@ -527,7 +544,7 @@ namespace Constants::Tables
   static constexpr auto GetRoundingTable()
   {
     constexpr auto N = std::numeric_limits<T>::digits10;
-    using IntType = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::pair_uint64_t::hig)>;
+    using IntType = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::pair_uint64_uint16::hig)>;
     return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N>());
   }
 } // namespace Constants::Tables

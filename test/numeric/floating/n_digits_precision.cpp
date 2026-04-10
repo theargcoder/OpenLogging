@@ -144,7 +144,14 @@ namespace
 
       const auto st_ryu = std::chrono::high_resolution_clock::now();
 
-      ryu = Helpers::Numeric::Ryu::ToStr(i);
+      if constexpr(std::is_same_v<double, Type>)
+      {
+        ryu = Helpers::Numeric::Ryu::ToStr(i, 15);
+      }
+      else
+      {
+        ryu = Helpers::Numeric::Ryu::ToStr(i);
+      }
 
       const auto en_ryu = std::chrono::high_resolution_clock::now();
 

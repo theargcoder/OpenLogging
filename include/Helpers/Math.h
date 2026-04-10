@@ -4,9 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <numbers>
-#include <tuple>
 #include <type_traits>
-#include <utility>
 
 namespace Helpers::Math::Constexpr
 {
@@ -291,45 +289,32 @@ namespace Helpers::Math
       return static_cast<uint128_t>(prod >> shift);
     }
 
+    struct result_extra
+    {
+      uint64_t result;
+      bool extra;
+    };
+
   public:
-    static auto MultiplyRoundCompliant(const auto &A, const auto &B, int &exponent)
+    static auto MultiplyRoundCompliant(const underlying &A, const auto &B, int &exponent, result_extra &to_ret)
     {
       using hig_type = std::remove_cvref_t<decltype(B.hig)>;
       static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
       static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
 
-      static const constexpr __uint128_t S_MASK = ((1ULL << (shift - 2)) - 1);
-
-      // 1. Calculate the high-precision product
-      __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
-
-      // 2. Initial extraction check
-      hig_type result = static_cast<hig_type>(prod >> shift);
-
       static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
-      // 3. Normalized check (the "x10" path)
-      if(result < low)
+
+      const __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
+
+      to_ret.result = static_cast<hig_type>(prod >> shift);
+
+      if(to_ret.result < low)
       {
-        prod *= 10;
-        result = static_cast<hig_type>(prod >> shift);
+        to_ret.result *= 10;
         --exponent;
       }
 
-      // 4. Extract raw floor and flags
-      const bool G = (prod >> (shift - 1)) & 1U;
-      const bool R = (prod >> (shift - 2)) & 1U;
-      const bool S = (prod & S_MASK) != 0;
-      // const bool LSB = result & 1U;
-
-      const bool round_up = G && (R || S); //|| LSB);
-
-      if(round_up)
-      {
-        result++;
-      }
-
-      return std::make_tuple(result, false);
-
+      to_ret.extra = false;
     } //
   };
 
@@ -414,19 +399,25 @@ namespace Helpers::Math
       return static_cast<uint128_t>(prod >> shift);
     }
 
+    struct result_extra
+    {
+      uint64_t result;
+      bool extra;
+    };
+
   public:
-    static auto MultiplyRoundCompliant(const auto &A, const auto &B, int &exponent)
+    static auto MultiplyRoundCompliant(const underlying &A, const auto &B, int &exponent, result_extra &to_ret)
     {
       using hig_type = std::remove_cvref_t<decltype(B.hig)>;
       static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
       static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
 
+      static const constexpr __uint128_t low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
+
       const auto B_pow = static_cast<__uint128_t>(B.hig) * 1'000 + B.low;
 
       const __uint128_t prod = static_cast<__uint128_t>(A) * B_pow;
       __uint128_t result = prod >> shift;
-
-      static const constexpr __uint128_t low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
 
       // 4. Normalized check (the "x10" path)
       if(result < low)
@@ -435,9 +426,8 @@ namespace Helpers::Math
         --exponent;
       }
 
-      const bool extra = (result % 1'000) != 0;
-      const hig_type to_ret = static_cast<hig_type>(result / 1'000);
-      return std::make_tuple(to_ret, extra);
+      to_ret.result = static_cast<hig_type>(result / 1'000);
+      to_ret.extra = (result % 1'000) != 0;
     } //
   };
 } // namespace Helpers::Math

@@ -94,31 +94,24 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const auto exp_table_val = Floating::DIGITS[exp];
 
-    using base_type = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::pair_uint64_t::hig)>;
-    // static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(uint64_t{ 10 }, std::numeric_limits<uint64_t>::digits10 - 1);
-    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(base_type{ 10 }, std::numeric_limits<base_type>::digits10);
+    typename Helpers::Math::IEEE754<T>::result_extra result;
+    Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int, result);
 
-    static const constexpr auto base_5_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 5>();
-    static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 10>();
-
-    auto [digits_10, extra] = Helpers::Math::IEEE754<T>::MultiplyRoundCompliant(mantissa, exp_table_val, exp_base_10_int);
-
-    const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
-    const auto &rounding_factor_5s = base_5_rounding_table[PRECISION];
-    const auto remainder = digits_10 % rounding_factor_10s;
-
-    // 0 = don't round up; 1 = round up unconditionally; 2 = round up if odd.
-    if(remainder > rounding_factor_5s)
+    if(PRECISION < std::numeric_limits<std::remove_cvref_t<decltype(result.result)>>::digits10)
     {
-      digits_10 += rounding_factor_5s;
-    }
-    else if(remainder == rounding_factor_5s)
-    {
-      if(extra)
+      static const constexpr auto base_10_rounding_table = Constants::Tables::GetExponentialRoundingTable<uint64_t, 10>();
+      static const constexpr auto precision_table = Constants::Tables::GetPrecistion<uint64_t>();
+      const auto &rounding_factor_10s = base_10_rounding_table[PRECISION];
+      result.result /= rounding_factor_10s;
+      const auto remainder = result.result % 10;
+      result.result /= 10;
+
+      // 0 = don't round up; 1 = round up unconditionally; 2 = round up if odd.
+      if(remainder > 5)
       {
-        digits_10 += rounding_factor_5s;
+        result.result++;
       }
-      else
+      else if(remainder == 5)
       {
         const auto rem_exp = PRECISION - exp_base_10_int;
         const auto required_twos = -(exp - Floating::MANTISSA_BITS - Floating::BIAS) - rem_exp;
@@ -132,35 +125,31 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
         if(trailingZeros)
         {
           // This is the critical TIE-BREAKER
-          // If there are ANY bits left over in the binary product (G, R, or S),
-          // then the real value is slightly > midpoint.
           // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-          const auto last_digit = (digits_10 / rounding_factor_10s) % 10;
+          const auto last_digit = result.result % 10;
           if(last_digit & 1U)
           {
-            digits_10 += rounding_factor_5s;
+            result.result++;
           }
         }
         else
         {
-          digits_10 += rounding_factor_5s;
+          result.result++;
         }
       }
-    }
 
-    if(digits_10 >= max_precision)
-    {
-      digits_10 /= 10;
-      exp_base_10_int++;
+      if(result.result >= precision_table[PRECISION])
+      {
+        result.result /= 10;
+        exp_base_10_int++;
+      }
     }
-
-    digits_10 /= rounding_factor_10s;
 
     Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
 
     buff.array[--buff.start_idx] = 'e';
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<false>(digits_10, buff, buff.start_idx);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<false>(result.result, buff, buff.start_idx);
 
     buff.array[--buff.start_idx] = '.';
 
