@@ -289,33 +289,29 @@ namespace Helpers::Math
       return static_cast<uint128_t>(prod >> shift);
     }
 
-    struct result_extra
-    {
-      uint64_t result;
-      bool extra;
-    };
-
   public:
-    static auto MultiplyRoundCompliant(const underlying &A, const auto &B, int &exponent, result_extra &to_ret)
+    auto mul3_128b(const auto *table) const
     {
-      using hig_type = std::remove_cvref_t<decltype(B.hig)>;
-      static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
-      static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
+      static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
+      static const constexpr __uint128_t MASK53 = SHIFT53 - 1;
 
-      static const constexpr hig_type low = Helpers::Math::Constexpr::ipow(hig_type{ 10 }, std::numeric_limits<hig_type>::digits10 - 1);
+      static const constexpr __uint128_t DEC7 = 10'000'000ULL;
+      static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
+      static const constexpr __uint128_t DEC18 = DEC9 * DEC9;
 
-      const __uint128_t prod = static_cast<__uint128_t>(A) * static_cast<__uint128_t>(B.hig);
+      const __uint128_t p_hi = static_cast<__uint128_t>(this->mantissa) * table->hig;
+      const __uint128_t p_mid = static_cast<__uint128_t>(this->mantissa) * table->mid;
+      const __uint128_t p_low = static_cast<__uint128_t>(this->mantissa) * table->low;
+      const __uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
 
-      to_ret.result = static_cast<hig_type>(prod >> shift);
+      const uint32_t q_hi = p_hi >> 53;
+      const uint32_t q_mid = p_mid >> 53;
+      const uint32_t q_low = p_low >> 53;
 
-      if(to_ret.result < low)
-      {
-        to_ret.result *= 10;
-        --exponent;
-      }
+      const __uint128_t total = static_cast<__uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
 
-      to_ret.extra = false;
-    } //
+      return static_cast<uint64_t>(total / DEC7);
+    }
   };
 
   template <>
@@ -361,7 +357,6 @@ namespace Helpers::Math
         const underlying SIGN = bits & SIGN_ONLY;
         exponent = std::numeric_limits<decltype(exponent)>::max();
         mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
-
         return;
       }
 
@@ -383,8 +378,33 @@ namespace Helpers::Math
         {
           mantissa = std::numeric_limits<decltype(mantissa)>::max();
           exponent = std::numeric_limits<decltype(exponent)>::max();
+          return;
         }
       }
+    }
+
+  public:
+    auto mul3_128b(const auto *table) const
+    {
+      static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
+      static const constexpr __uint128_t MASK53 = SHIFT53 - 1;
+
+      static const constexpr __uint128_t DEC7 = 10'000'000ULL;
+      static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
+      static const constexpr __uint128_t DEC18 = DEC9 * DEC9;
+
+      const __uint128_t p_hi = static_cast<__uint128_t>(this->mantissa) * table->hig;
+      const __uint128_t p_mid = static_cast<__uint128_t>(this->mantissa) * table->mid;
+      const __uint128_t p_low = static_cast<__uint128_t>(this->mantissa) * table->low;
+      const __uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
+
+      const uint32_t q_hi = p_hi >> 53;
+      const uint32_t q_mid = p_mid >> 53;
+      const uint32_t q_low = p_low >> 53;
+
+      const __uint128_t total = static_cast<__uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
+
+      return static_cast<uint64_t>(total / DEC7);
     }
 
   public:
@@ -398,36 +418,5 @@ namespace Helpers::Math
 
       return static_cast<uint128_t>(prod >> shift);
     }
-
-    struct result_extra
-    {
-      uint64_t result;
-      bool extra;
-    };
-
-  public:
-    static auto MultiplyRoundCompliant(const underlying &A, const auto &B, int &exponent, result_extra &to_ret)
-    {
-      using hig_type = std::remove_cvref_t<decltype(B.hig)>;
-      static_assert(std::is_integral_v<hig_type>, "B must be an integral type");
-      static_assert(std::is_unsigned_v<hig_type>, "B should be unsigned here");
-
-      static const constexpr __uint128_t low = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, std::numeric_limits<uint64_t>::digits10 + 2);
-
-      const auto B_pow = static_cast<__uint128_t>(B.hig) * 1'000 + B.low;
-
-      const __uint128_t prod = static_cast<__uint128_t>(A) * B_pow;
-      __uint128_t result = prod >> shift;
-
-      // 4. Normalized check (the "x10" path)
-      if(result < low)
-      {
-        result *= 10;
-        --exponent;
-      }
-
-      to_ret.result = static_cast<hig_type>(result / 1'000);
-      to_ret.extra = (result % 1'000) != 0;
-    } //
   };
 } // namespace Helpers::Math

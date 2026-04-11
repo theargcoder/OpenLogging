@@ -91,8 +91,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
-    const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
-    auto digits_10 = frexpp.mul3_128b(table);
+    const auto digits_10 = frexpp.mul3_128b();
 
     buff.length = 0;
     if(input < 0)
@@ -106,10 +105,10 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
-    static const constexpr auto digits_len = std::numeric_limits<std::remove_cvref_t<decltype(digits_10)>>::digits10;
+    static const constexpr auto digits_len = std::numeric_limits<std::remove_cvref_t<decltype(result.result)>>::digits10;
 
     buff.length += digits_len;
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(digits_10, buff);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(result.result, buff);
     buff.length -= digits_len;
 
     std::swap(buff.array[buff.length - 1], buff.array[buff.length]);
@@ -125,7 +124,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     }
     else if(after_digit == 5)
     {
-      if(digits_10)
+      if(result.extra)
       {
         round = true;
       }

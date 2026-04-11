@@ -64,9 +64,8 @@ namespace
     for(int i = 0; i < FloatTable::SIZE; ++i)
     {
       const int exp = i - BIAS;
-      using hig_type = std::remove_cvref_t<decltype(table[i].hig)>;
-      using low_type = std::remove_cvref_t<decltype(table[i].low)>;
-      const __uint128_t val = static_cast<__uint128_t>(table[i].hig) * Tests::pow(__uint128_t{ 10 }, std::numeric_limits<low_type>::digits10 - 1) + table[i].low;
+      const __uint128_t val
+          = static_cast<__uint128_t>(table[i].hig) * Tests::pow(__uint128_t{ 10 }, 18) + static_cast<__uint128_t>(table[i].mid) * Tests::pow(__uint128_t{ 10 }, 9) + table[i].low;
       const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
@@ -81,14 +80,14 @@ namespace
       BigFloat rel_error = abs_error / expected;
 
       // Bounds testing
-      BOOST_CHECK_EQUAL(digits, 22);
+      BOOST_CHECK_EQUAL(digits, 9 + 9 + 9);
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
-      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * (std::numeric_limits<hig_type>::digits10 + std::numeric_limits<low_type>::digits10) + 2);
+      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * (27 - 1));
 
       BOOST_CHECK_SMALL(rel_error, max_tolerance);
 
-      bool log = !(digits == 22) || !(rel_error <= max_tolerance);
+      bool log = !(digits == 27) || !(rel_error <= max_tolerance);
 
       if(log)
       {
@@ -106,41 +105,106 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
   test_float_table(static_cast<double>(0));
 }
 
-/**
- * Calculates the first N digits of 2^exp.
- * @tparam N The number of leading digits to extract (max 38 for __uint128_t).
- * @param exp The exponent for the power of 2.
- * @return The first N digits as a raw 128-bit integer.
- */
+auto mul3_128b(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
+{
+  static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
+  static const constexpr __uint128_t MASK53 = SHIFT53 - 1;
+
+  static const constexpr __uint128_t DEC7 = 10'000'000ULL;
+  static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
+  static const constexpr __uint128_t DEC18 = DEC9 * DEC9;
+
+  const __uint128_t p_hi = static_cast<__uint128_t>(mantissa) * m_high;
+  const __uint128_t p_mid = static_cast<__uint128_t>(mantissa) * m_mid;
+  const __uint128_t p_low = static_cast<__uint128_t>(mantissa) * m_low;
+  const __uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
+
+  const uint32_t q_hi = p_hi >> 53;
+  const uint32_t q_mid = p_mid >> 53;
+  const uint32_t q_low = p_low >> 53;
+
+  const __uint128_t total = static_cast<__uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
+
+  const uint64_t top_18_digits = static_cast<uint64_t>(total / DEC7);
+
+  return top_18_digits;
+}
+
+auto mul2_128b(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_low)
+{
+  static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
+  const unsigned __int128 mul = static_cast<__uint128_t>(mantissa) * m_high * DEC9 + static_cast<__uint128_t>(mantissa) * m_low;
+
+  return static_cast<uint64_t>(mul >> 53);
+}
+
+struct table_3_way
+{
+  uint32_t hig;
+  uint32_t mid;
+  uint32_t low;
+};
+
+BOOST_AUTO_TEST_CASE(multiplytest)
+{
+  const uint64_t mantissa = 6646139978835021;
+  table_3_way tablevals = { 135525271, 560688054, 250931600 };
+
+  {
+    auto expected_truncated = mul2_128b(mantissa, tablevals.hig, tablevals.mid);
+    BOOST_CHECK_EQUAL(expected_truncated, 99'999'999'998'652'475); //'500'019'082);
+  }
+  {
+    const auto expected_truncated = mul3_128b(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
+    BOOST_CHECK_EQUAL(expected_truncated, 99999'99999'86524'7550ULL); //'500'019'082);
+  }
+}
 
 /*
-template <int N>
-__uint128_t get_leading_digits(int exp)
+template <typename T>
+static boost::multiprecision::cpp_int pow10_int(int n)
 {
-  static_assert(N > 0 && N <= 38, "N must be between 1 and 38 digits to fit in __uint128_t.");
+  using boost::multiprecision::cpp_int;
+  cpp_int r = 1;
+  while(n-- > 0)
+    r *= 10;
+  return r;
+}
 
-  using namespace boost::multiprecision;
+template <int Begin, int End>
+std::string get_digits_range(int exp)
+{
+  static_assert(Begin >= 0, "Begin must be >= 0");
+  static_assert(End > Begin, "End must be > Begin");
 
-  // Use 100-decimal-digit precision to ensure N digits remain accurate
-  // even for very large exponents.
-  using BigFloat = cpp_bin_float_100;
+  constexpr std::size_t Len = End - Begin;
+  using BigInt = boost::multiprecision::cpp_int;
 
-  // 1. Calculate 2^exp
-  BigFloat value = pow(BigFloat(2), exp);
+  // Exact integer math to prevent floating-point anomalies.
+  // 2^exp for positive, 5^(|exp|) for negative exact significant digits.
+  BigInt exact_val = (exp >= 0) ? boost::multiprecision::pow(BigInt(2), exp) : boost::multiprecision::pow(BigInt(5), -exp);
 
-  // 2. Determine the base-10 magnitude
-  // log10(value) gives us the exponent. floor() tells us how many
-  // digits exist before the decimal (minus 1).
-  int magnitude = floor(log10(value)).convert_to<int>();
+  std::string s = exact_val.convert_to<std::string>();
 
-  // 3. Scale the value to "shift" the first N digits into the integer part
-  // Formula: value * 10^((N-1) - magnitude)
-  // If magnitude is larger than N, this multiplies by a negative power (divides).
-  BigFloat shifted = value * pow(BigFloat(10), (N - 1) - magnitude);
+  // Pad with trailing zeros to guarantee we can slice up to 'End'
+  if(s.length() < static_cast<std::size_t>(End))
+  {
+    s.append(static_cast<std::size_t>(End) - s.length(), '0');
+  }
 
-  // 4. Convert to __uint128_t
-  // We convert to boost's uint128_t first, then cast to the native GCC/Clang type.
-  return static_cast<__uint128_t>(shifted.convert_to<uint128_t>());
+  // Extract the requested range.
+  // If Begin == 0, there are no unnatural leading zeros.
+  // If Begin > 0, the substr naturally catches any zeros padded out by smaller chunks.
+  int i = Begin;
+  for(; i < End - 1; i++)
+  {
+    if(s[i] == '0')
+    {
+      continue;
+    }
+    break;
+  }
+  return s.substr(i, End - i);
 }
 
 BOOST_AUTO_TEST_CASE(bannananana)
@@ -148,12 +212,21 @@ BOOST_AUTO_TEST_CASE(bannananana)
   std::cout << "{";
   for(int i = Constants::Tables::Floating<double>::MIN_BIN_EXP; i <= Constants::Tables::Floating<double>::MAX_BIN_EXP; i++)
   {
-    // 19 + 3 = 22
-    const auto res = get_leading_digits<22>(i);
-    const auto res_int_big = static_cast<uint64_t>(res / 1'000);
-    const auto res_rem = static_cast<uint16_t>(res % 1'000);
+    std::cout << '{';
+    {
+      const auto res = get_digits_range<0, 9>(i);
+      std::cout << std::format("{}U,", res);
+    }
+    {
+      const auto res = get_digits_range<9, 18>(i);
+      std::cout << std::format("{}U,", res);
+    }
+    {
+      const auto res = get_digits_range<18, 27>(i);
+      std::cout << std::format("{}U", res);
+    }
 
-    std::cout << '{' << std::format("{}ULL,{}", res_int_big, res_rem) << "},";
+    std::cout << "},";
   }
   std::cout << "\b};";
 }
