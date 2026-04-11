@@ -292,25 +292,24 @@ namespace Helpers::Math
   public:
     auto mul3_128b(const auto *table, int &base_10_exponent) const noexcept
     {
-      static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
-      static const constexpr __uint128_t MASK53 = SHIFT53 - 1;
+      static const constexpr uint128_t SHIFT53 = (uint128_t)1 << 53;
+      static const constexpr uint128_t MASK53 = SHIFT53 - 1;
 
-      static const constexpr __uint128_t DEC8 = 100'000'000ULL;
-      static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
-      static const constexpr __uint128_t DEC18 = DEC9 * DEC9;
+      static const constexpr uint128_t DEC8 = 100'000'000ULL;
+      static const constexpr uint128_t DEC9 = 1'000'000'000ULL;
+      static const constexpr uint128_t DEC18 = DEC9 * DEC9;
 
-      static const constexpr __uint128_t min_precision = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, 26);
-
-      const __uint128_t p_hi = static_cast<__uint128_t>(this->mantissa) * table->hig;
-      const __uint128_t p_mid = static_cast<__uint128_t>(this->mantissa) * table->mid;
-      const __uint128_t p_low = static_cast<__uint128_t>(this->mantissa) * table->low;
-      const __uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
+      const uint128_t p_hi = static_cast<uint128_t>(this->mantissa) * table->hig;
+      const uint128_t p_mid = static_cast<uint128_t>(this->mantissa) * table->mid;
+      const uint128_t p_low = static_cast<uint128_t>(this->mantissa) * table->low;
+      const uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
 
       const uint32_t q_hi = p_hi >> 53;
       const uint32_t q_mid = p_mid >> 53;
       const uint32_t q_low = p_low >> 53;
 
-      __uint128_t total = static_cast<__uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
+      uint128_t total = static_cast<uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
+      static const constexpr uint128_t min_precision = Helpers::Math::Constexpr::ipow(uint128_t{ 10 }, 26);
       if(total < min_precision)
       {
         total *= 10;
@@ -391,25 +390,25 @@ namespace Helpers::Math
   public:
     auto mul3_128b(const auto *table, int &base_10_exponent) const noexcept
     {
-      static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
-      static const constexpr __uint128_t MASK53 = SHIFT53 - 1;
+      static const constexpr uint32_t DEC8 = 100'000'000ULL;
+      static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+      static const constexpr uint64_t DEC18 = DEC9 * DEC9;
 
-      static const constexpr __uint128_t DEC8 = 100'000'000ULL;
-      static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
-      static const constexpr __uint128_t DEC18 = DEC9 * DEC9;
+      static const constexpr uint64_t MASK53 = (1ULL << 53) - 1;
 
-      static const constexpr __uint128_t min_precision = Helpers::Math::Constexpr::ipow(__uint128_t{ 10 }, 26);
-
-      const __uint128_t p_hi = static_cast<__uint128_t>(this->mantissa) * table->hig;
-      const __uint128_t p_mid = static_cast<__uint128_t>(this->mantissa) * table->mid;
-      const __uint128_t p_low = static_cast<__uint128_t>(this->mantissa) * table->low;
-      const __uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
+      const uint128_t p_hi = static_cast<uint128_t>(this->mantissa) * table->hig;
+      const uint128_t p_mid = static_cast<uint128_t>(this->mantissa) * table->mid;
+      const uint128_t p_low = static_cast<uint128_t>(this->mantissa) * table->low;
+      const uint128_t carry = ((static_cast<uint128_t>(p_hi & MASK53) * static_cast<uint128_t>(DEC18)) + (static_cast<uint128_t>(p_mid & MASK53) * static_cast<uint128_t>(DEC9))
+                               + static_cast<uint128_t>(p_low & MASK53))
+                              >> 53;
 
       const uint32_t q_hi = p_hi >> 53;
       const uint32_t q_mid = p_mid >> 53;
       const uint32_t q_low = p_low >> 53;
 
-      __uint128_t total = static_cast<__uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
+      static const constexpr uint128_t min_precision = Helpers::Math::Constexpr::ipow(uint128_t{ 10 }, 26);
+      uint128_t total = static_cast<uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
       if(total < min_precision)
       {
         total *= 10;
