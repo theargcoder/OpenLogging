@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <limits>
@@ -209,8 +210,9 @@ namespace Helpers::Math
   template <>
   struct IEEE754<float>
   {
-  private:
     using underlying = uint32_t;
+
+  private:
     using signed_underlying = int32_t;
     using uint128_t = __uint128_t;
 
@@ -289,8 +291,23 @@ namespace Helpers::Math
       return static_cast<uint128_t>(prod >> shift);
     }
 
+  private:
+    template <typename TypeBase, uint64_t ST, int PRECISION_CT, std::size_t... I>
+    static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
+    {
+      constexpr auto N = sizeof...(I);
+      return std::array<TypeBase, N + 1>{ (ST * Helpers::Math::Constexpr::ipow(TypeBase{ 10 }, N - I - 1))..., ST };
+    }
+
+    template <typename TypeBase, typename Type, uint64_t ST, int PRECISION_CT>
+    static constexpr auto GetPrecistionTable()
+    {
+      const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+      return GetPrecistionTableImpl<TypeBase, ST, PRECISION_CT>(std::make_index_sequence<N>());
+    }
+
   public:
-    auto mul3_128b(const auto *table, int &base_10_exponent) const noexcept
+    auto mul3_128b(const auto *table, const int PRECISION, uint32_t &result, int &base_10_exponent) const noexcept
     {
       static const constexpr uint32_t MASK23 = (1U << EXPONENT_ST) - 1;
 
@@ -317,15 +334,21 @@ namespace Helpers::Math
         base_10_exponent++;
       }
 
-      return static_cast<uint32_t>(total / DEC9);
+      static const constexpr auto precision_table = GetPrecistionTable<uint64_t, uint32_t, DEC9, std::numeric_limits<std::remove_cvref_t<decltype(result)>>::digits10>();
+
+      const auto &precision = precision_table[PRECISION];
+
+      result = static_cast<uint32_t>(total / precision);
+      return total % precision_table[PRECISION] != 0;
     }
   };
 
   template <>
   struct IEEE754<double>
   {
-  private:
     using underlying = uint64_t;
+
+  private:
     using signed_underlying = int64_t;
     using uint128_t = __uint128_t;
 
@@ -342,9 +365,7 @@ namespace Helpers::Math
 
     static constexpr underlying SIGN_ONLY = 0x8000000000000000ULL;
 
-    static const constexpr uint128_t half = uint128_t{ 1 } << EXPONENT_ST;
     static const constexpr auto shift = EXPONENT_ST + 1;
-    static const constexpr uint128_t frac_mask = ((uint128_t{ 1 } << shift) - 1);
 
   public:
     underlying mantissa;
@@ -388,25 +409,40 @@ namespace Helpers::Math
       }
     }
 
+  private:
+    template <typename TypeBase, uint64_t ST, int PRECISION_CT, std::size_t... I>
+    static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
+    {
+      constexpr auto N = sizeof...(I);
+      return std::array<TypeBase, N + 1>{ (ST * Helpers::Math::Constexpr::ipow(TypeBase{ 10 }, N - I - 1))..., ST };
+    }
+
+    template <typename TypeBase, typename Type, uint64_t ST, int PRECISION_CT>
+    static constexpr auto GetPrecistionTable()
+    {
+      const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+      return GetPrecistionTableImpl<TypeBase, ST, PRECISION_CT>(std::make_index_sequence<N>());
+    }
+
   public:
-    auto mul3_128b(const auto *table, int &base_10_exponent) const noexcept
+    auto mul3_128b(const auto *table, const int PRECISION, uint64_t &result, int &base_10_exponent) const noexcept
     {
       static const constexpr uint32_t DEC8 = 100'000'000ULL;
       static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
       static const constexpr uint64_t DEC18 = DEC9 * DEC9;
 
-      static const constexpr uint64_t MASK53 = (1ULL << EXPONENT_ST) - 1;
+      static const constexpr uint64_t MASK53 = (1ULL << shift) - 1;
 
       const uint128_t p_hi = static_cast<uint128_t>(this->mantissa) * table->hig;
       const uint128_t p_mid = static_cast<uint128_t>(this->mantissa) * table->mid;
       const uint128_t p_low = static_cast<uint128_t>(this->mantissa) * table->low;
       const uint128_t carry = ((static_cast<uint128_t>(p_hi & MASK53) * static_cast<uint128_t>(DEC18)) + (static_cast<uint128_t>(p_mid & MASK53) * static_cast<uint128_t>(DEC9))
                                + static_cast<uint128_t>(p_low & MASK53))
-                              >> EXPONENT_ST;
+                              >> shift;
 
-      const uint32_t q_hi = p_hi >> EXPONENT_ST;
-      const uint32_t q_mid = p_mid >> EXPONENT_ST;
-      const uint32_t q_low = p_low >> EXPONENT_ST;
+      const uint32_t q_hi = p_hi >> shift;
+      const uint32_t q_mid = p_mid >> shift;
+      const uint32_t q_low = p_low >> shift;
 
       static const constexpr uint128_t min_precision = Helpers::Math::Constexpr::ipow(uint128_t{ 10 }, 26);
       uint128_t total = static_cast<uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
@@ -416,7 +452,10 @@ namespace Helpers::Math
         base_10_exponent--;
       }
 
-      return static_cast<uint64_t>(total / DEC8);
+      static const constexpr auto precision_table = GetPrecistionTable<uint128_t, uint64_t, DEC8, std::numeric_limits<std::remove_cvref_t<decltype(result)>>::digits10>();
+
+      result = static_cast<uint64_t>(total / precision_table[PRECISION]);
+      return total % precision_table[PRECISION] != 0;
     }
 
   public:

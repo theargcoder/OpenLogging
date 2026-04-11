@@ -56,9 +56,10 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   {
     using Floating = Constants::Tables::Floating<T>;
 
-    // static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
+    static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
-    Helpers::Numeric::Integral::char_array_len<100> buff;
+    Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
+    buff.start_idx = SIZE_OF_BUFF;
 
     const auto frexpp = Helpers::Math::IEEE754<T>(input);
     const auto &exp = frexpp.exponent;
@@ -68,61 +69,47 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     {
       if(mantissa == T{ 0 })
       {
-        buff.length = 3;
-        std::memcpy(&buff.array[0], "nan", buff.length);
+        buff.start_idx = 3;
+        std::memcpy(&buff.array[buff.start_idx], "nan", 3);
       }
       else if(mantissa == 1)
       {
-        buff.length = 3;
-        std::memcpy(&buff.array[0], "inf", buff.length);
+        buff.start_idx = 3;
+        std::memcpy(&buff.array[buff.start_idx], "inf", 3);
       }
       else if(mantissa == 2)
       {
-        buff.length = 4;
-        std::memcpy(&buff.array[0], "-inf", buff.length);
+        buff.start_idx = 4;
+        std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
       }
       else
       {
-        buff.length = 6;
-        std::memcpy(&buff.array[0], "0.0E00", buff.length);
+        buff.start_idx = 6;
+        std::memcpy(&buff.array[buff.start_idx], "0.0E00", 6);
       }
 
       return buff;
     }
 
-    buff.length = 0;
-    if(input < 0)
-    {
-      buff.length++;
-      buff.array[0] = '-';
-    }
-
-    buff.array[buff.length] = '.';
-    buff.length++;
-
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
     const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
-    auto digits_10 = frexpp.mul3_128b(table, exp_base_10_int);
+    using type = typename Math::IEEE754<T>::underlying;
+    type digits_10;
+    const bool extra = frexpp.mul3_128b(table, PRECISION, digits_10, exp_base_10_int);
 
-    Helpers::Numeric::Integral::ToStrFowardWriteNdigitsAlterInput(digits_10, buff, PRECISION + 2);
+    const auto after_digit = digits_10 % 10;
+    digits_10 /= 10;
 
-    std::swap(buff.array[buff.length - 1], buff.array[buff.length]);
-
-    buff.length += PRECISION + 1;
-
-    bool round = 0;
-
-    const auto after_digit = buff.array[buff.length] - '0';
     if(after_digit > 5)
     {
-      round = true;
+      digits_10++;
     }
     else if(after_digit == 5)
     {
-      if(digits_10)
+      if(extra)
       {
-        round = true;
+        digits_10++;
       }
       else
       {
@@ -137,76 +124,41 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
         if(trailingZeros)
         {
           // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-          const auto last_digit = buff.array[buff.length - 1] - '0';
-          round = last_digit & 1U;
+          const auto last_digit = digits_10 % 10;
+          if(last_digit & 1U)
+          {
+            digits_10++;
+          }
         }
         else
         {
-          round = true;
+          digits_10++;
         }
       }
     }
 
-    if(round)
-    {
-      int i = buff.length;
-      bool carry = true;
-      while(carry)
-      {
-        i--;
-        if(buff.array[i] == '.')
-          break;
+    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
 
-        carry = buff.array[i] == '9';
-        (carry) ? buff.array[i] = '0' : buff.array[i]++;
-      }
-      if(buff.array[i] == '.' && carry) // fuckkk from start till now all 9's
-      {
-        i--;
-        if(buff.array[i] == '9')
-        {
-          buff.array[i] = '1';
-          exp_base_10_int++;
-        }
-        else
-        {
-          buff.array[i]++;
-        }
-      }
+    if(digits_10 >= precision_table[PRECISION])
+    {
+      digits_10 /= 10;
+      exp_base_10_int++;
     }
 
-    buff.array[buff.length++] = 'e';
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
 
-    if(exp_base_10_int <= -1000)
-    {
-      std::terminate(); // wtf happened; we dont know but shit is invalid
-    }
-    else if(exp_base_10_int <= -100)
-    {
-      buff.length += 4; // 1 for sign 1 for exp_digit
-    }
-    else if(exp_base_10_int <= -10)
-    {
-      buff.length += 3; // 1 for sign 1 for exp_digit
-    }
-    else if(exp_base_10_int < 10)
-    {
-      buff.length += 2; // 1 for sign 1 for exp_digit
-    }
-    else if(exp_base_10_int < 100)
-    {
-      buff.length += 3; // 1 for sign 2 for exp_digit
-    }
-    else if(exp_base_10_int < 1000)
-    {
-      buff.length += 4; // 1 for sign 1 for exp_digit
-    }
-    else
-    {
-      std::terminate(); // wtf happened; we dont know but shit is invalid
-    }
+    buff.array[--buff.start_idx] = 'e';
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.length);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(digits_10, buff);
+
+    buff.array[--buff.start_idx] = '.';
+
+    std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
+
+    if(input < 0)
+    {
+      buff.array[--buff.start_idx] = '-';
+    }
 
     return buff;
   }
@@ -216,6 +168,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     const auto buff = Helpers::Numeric::Floating::ExponentialNotation::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[0], buff.length);
+    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
 } // namespace Helpers::Numeric::Floating::ExponentialNotation

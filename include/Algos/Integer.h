@@ -77,21 +77,22 @@ namespace Helpers::Numeric::Integral
 
   template <int N, typename T>
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
-  static auto ToStrFowardWriteNdigitsAlterInput(T &input, char_array_len<N> &out_char, const int &digits)
+  static void ToStrReverseWriteToCharArrayResult(T val, char_array<N> &out_char)
   {
-    static const constexpr auto presicion_table = Constants::Tables::GetFowardWritingTable<T>();
+    char *__restrict__ it = &out_char.array[0] + out_char.start_idx;
 
-    char *__restrict__ it = &out_char.array[out_char.length];
-    const T *__restrict__ div = &presicion_table[0];
+    static const constexpr auto BASE = 10;
 
-    // Write exactly DIGITS characters
-    for(int i = 0; i < digits; ++i, div++)
+    do
     {
-      const auto digit = input / *div;
-      input -= digit * *div;
+      const auto rem = val % BASE;
+      val /= BASE;
 
-      *it++ = '0' + static_cast<char>(digit);
-    }
+      *--it = '0' + rem;
+
+    } while(val);
+
+    out_char.start_idx = it - &out_char.array[0];
   }
 
   template <int N, typename T>
@@ -110,37 +111,6 @@ namespace Helpers::Numeric::Integral
       *--it = '0' + rem;
 
     } while(val);
-  }
-
-  template <bool FORCE_SIGN = false, int N, typename T>
-    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
-  static void ToStrReverseWriteToCharArray(const T &input, char_array_len<N> &out_char, const int &st_idx)
-  {
-    char *__restrict__ it = &out_char.array[st_idx];
-
-    static const constexpr auto BASE = 10;
-    const bool NEGATIVE = input < 0;
-
-    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
-    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
-
-    do
-    {
-      const auto rem = val % BASE;
-      val /= BASE;
-
-      *--it = '0' + rem;
-
-    } while(val);
-
-    if(NEGATIVE)
-    {
-      *--it = '-';
-    }
-    else if constexpr(FORCE_SIGN)
-    {
-      *--it = '+';
-    }
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>

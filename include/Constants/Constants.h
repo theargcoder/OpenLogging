@@ -2197,20 +2197,6 @@ namespace Constants::Tables
   }
 
   template <typename Type, std::size_t... I>
-  static constexpr auto GetFowardWritingTableImpl(std::index_sequence<I...> /*unused*/)
-  {
-    constexpr auto N = sizeof...(I);
-    return std::array<Type, N>{ Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I)... };
-  }
-
-  template <typename Type>
-  static constexpr auto GetFowardWritingTable()
-  {
-    const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
-    return GetFowardWritingTableImpl<Type>(std::make_index_sequence<N>());
-  }
-
-  template <typename Type, std::size_t... I>
   static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
