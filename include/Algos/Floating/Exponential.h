@@ -105,8 +105,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
     auto digits_10 = frexpp.mul3_128b(table, exp_base_10_int);
 
-    static const constexpr auto digits_len = std::numeric_limits<std::remove_cvref_t<decltype(digits_10)>>::digits10 + 1;
-
     Helpers::Numeric::Integral::ToStrFowardWriteNdigitsAlterInput(digits_10, buff, PRECISION + 2);
 
     std::swap(buff.array[buff.length - 1], buff.array[buff.length]);
