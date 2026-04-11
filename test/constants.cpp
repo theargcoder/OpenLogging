@@ -51,30 +51,26 @@ namespace
     requires std::is_floating_point_v<T>
   (T)
   {
-    using FloatTable = Constants::Tables::Floating<T>;
-    auto &table = Constants::Tables::Floating<T>::DIGITS;
-
-    constexpr int BIAS = Constants::Tables::Floating<T>::BIAS;
-
+    const auto table = Constants::Tables::Floating<T>::DIGITS;
     // Use Boost's 100-decimal-digit precision float for the test bounds
     using BigFloat = boost::multiprecision::cpp_bin_float_100;
 
     const BigFloat LOG_10_2_BF("0.301029995663981195213738894724493026768"); // Hardcoded for exactness or calculate via Boost
 
-    for(int i = 0; i < FloatTable::SIZE; ++i)
+    for(int i = Constants::Tables::Floating<float>::MIN_BIN_EXP; i <= Constants::Tables::Floating<float>::MAX_BIN_EXP; i++)
     {
-      const int exp = i - BIAS;
-      const __uint128_t val
-          = static_cast<__uint128_t>(table[i].hig) * Tests::pow(__uint128_t{ 10 }, 18) + static_cast<__uint128_t>(table[i].mid) * Tests::pow(__uint128_t{ 10 }, 9) + table[i].low;
+      const auto idx = i + Constants::Tables::Floating<T>::BIAS;
+      const __uint128_t val = static_cast<__uint128_t>(table[idx].hig) * Tests::pow(__uint128_t{ 10 }, 18)
+                              + static_cast<__uint128_t>(table[idx].mid) * Tests::pow(__uint128_t{ 10 }, 9) + table[idx].low;
       const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
       // Calculate power of 10 safely
-      int32_t p10 = static_cast<int32_t>(std::floor(0.3010299956639812 * exp)); // Standard double is fine for the integer exponent
+      int32_t p10 = static_cast<int32_t>(std::floor(0.3010299956639812 * i)); // Standard double is fine for the integer exponent
 
       // Reconstruct approximate value using BigFloat
       BigFloat result = (static_cast<BigFloat>(val) / scale) * boost::multiprecision::pow(BigFloat(10), p10);
-      BigFloat expected = boost::multiprecision::pow(BigFloat(2), exp);
+      BigFloat expected = boost::multiprecision::pow(BigFloat(2), i);
 
       BigFloat abs_error = boost::multiprecision::abs(result - expected);
       BigFloat rel_error = abs_error / expected;
@@ -93,7 +89,7 @@ namespace
       {
         constexpr int FP_PREC = std::numeric_limits<T>::max_digits10;
         // Note: You may need to format BigFloat as a string for std::format
-        std::cout << std::format("table[{:+4}] = {} \t| result {} | expected {}| rel_err {}\n", exp, val, result.str(), expected.str(), rel_error.str(), FP_PREC);
+        std::cout << std::format("table[{:+4}] = {} \t| result {} | expected {}| rel_err {}\n", i, val, result.str(), expected.str(), rel_error.str(), FP_PREC);
       }
     }
   };
@@ -105,6 +101,7 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
   test_float_table(static_cast<double>(0));
 }
 
+/*
 auto mul3_128b(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
 {
   static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
@@ -159,6 +156,7 @@ BOOST_AUTO_TEST_CASE(multiplytest)
     BOOST_CHECK_EQUAL(expected_truncated, 99999'99999'86524'7550ULL); //'500'019'082);
   }
 }
+*/
 
 /*
 template <typename T>

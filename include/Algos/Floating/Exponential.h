@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -91,9 +90,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
-    const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
-    auto digits_10 = frexpp.mul3_128b(table);
-
     buff.length = 0;
     if(input < 0)
     {
@@ -106,15 +102,16 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
-    static const constexpr auto digits_len = std::numeric_limits<std::remove_cvref_t<decltype(digits_10)>>::digits10;
+    const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
+    auto digits_10 = frexpp.mul3_128b(table, exp_base_10_int);
 
-    buff.length += digits_len;
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(digits_10, buff);
-    buff.length -= digits_len;
+    static const constexpr auto digits_len = std::numeric_limits<std::remove_cvref_t<decltype(digits_10)>>::digits10 + 1;
+
+    Helpers::Numeric::Integral::ToStrFowardWriteNdigitsAlterInput(digits_10, buff, PRECISION + 2);
 
     std::swap(buff.array[buff.length - 1], buff.array[buff.length]);
 
-    buff.length += 1 + PRECISION;
+    buff.length += PRECISION + 1;
 
     bool round = 0;
 

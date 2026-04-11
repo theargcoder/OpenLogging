@@ -1,6 +1,8 @@
 #pragma once
 
+#include "include/Constants/Constants.h"
 #include "include/Helpers/Templating.h"
+
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -71,6 +73,25 @@ namespace Helpers::Numeric::Integral
   {
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
     return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+  }
+
+  template <int N, typename T>
+    requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
+  static auto ToStrFowardWriteNdigitsAlterInput(T &input, char_array_len<N> &out_char, const int &digits)
+  {
+    static const constexpr auto presicion_table = Constants::Tables::GetFowardWritingTable<T>();
+
+    char *__restrict__ it = &out_char.array[out_char.length];
+    const T *__restrict__ div = &presicion_table[0];
+
+    // Write exactly DIGITS characters
+    for(int i = 0; i < digits; ++i, div++)
+    {
+      const auto digit = input / *div;
+      input -= digit * *div;
+
+      *it++ = '0' + static_cast<char>(digit);
+    }
   }
 
   template <int N, typename T>

@@ -61,7 +61,7 @@ namespace Constants::Tables
     static const constexpr auto MANTISSA_BITS = std::numeric_limits<T>::digits - 1;
     static const constexpr auto BASE = 10;
     static const constexpr auto MIN_BIN_EXP = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits; // Smallest binary exponent (subnormal limit)
-    static const constexpr auto MAX_BIN_EXP = std::numeric_limits<double>::max_exponent - 1;                                   // Largest binary exponent
+    static const constexpr auto MAX_BIN_EXP = std::numeric_limits<double>::max_exponent;                                       // Largest binary exponent
     static const constexpr auto BIAS = -MIN_BIN_EXP;                                                                           // Offset so that table[BIAS] corresponds to 2^0
     static const constexpr auto TABLE_BIAS = std::is_same_v<double, T> ? 0 : BIAS + std::numeric_limits<float>::min_exponent;  // Offset so that float's have correct locations
 
@@ -2175,7 +2175,8 @@ namespace Constants::Tables
                                                         { 112355820U, 928894744U, 233081574U },
                                                         { 224711641U, 857789488U, 466163148U },
                                                         { 449423283U, 715578976U, 932326297U },
-                                                        { 898846567U, 431157953U, 864652595U } };
+                                                        { 898846567U, 431157953U, 864652595U },
+                                                        { 179769313U, 486231590U, 772930519U } };
   };
 
   template <typename Type, uint32_t BASE, std::size_t... I>
@@ -2196,17 +2197,31 @@ namespace Constants::Tables
   }
 
   template <typename Type, std::size_t... I>
-  static constexpr auto GetPrecistionImpl(std::index_sequence<I...> /*unused*/)
+  static constexpr auto GetFowardWritingTableImpl(std::index_sequence<I...> /*unused*/)
+  {
+    constexpr auto N = sizeof...(I);
+    return std::array<Type, N>{ Helpers::Math::Constexpr::ipow(Type{ 10 }, N - I)... };
+  }
+
+  template <typename Type>
+  static constexpr auto GetFowardWritingTable()
+  {
+    const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+    return GetFowardWritingTableImpl<Type>(std::make_index_sequence<N>());
+  }
+
+  template <typename Type, std::size_t... I>
+  static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
     return std::array<Type, N + 1>{ (10 * Helpers::Math::Constexpr::ipow(Type{ 10 }, I))..., 10 };
   }
 
   template <typename Type>
-  static constexpr auto GetPrecistion()
+  static constexpr auto GetPrecistionTable()
   {
     const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
-    return GetPrecistionImpl<Type>(std::make_index_sequence<N>());
+    return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
   }
 
   template <typename T, uint32_t BASE, std::size_t... I>
