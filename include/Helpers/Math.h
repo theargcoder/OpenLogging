@@ -750,9 +750,9 @@ namespace Helpers::Math
     }
 
   private:
-    static inline auto umulh32(const uint32_t &a, const uint32_t &b)
+    static inline auto umulh32(const uint64_t &a, const uint32_t &b)
     {
-      return (uint32_t)((uint64_t)a * b >> 32);
+      return (uint32_t)(a * b >> 32);
     }
 
   public:
@@ -760,7 +760,7 @@ namespace Helpers::Math
     {
       static const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-      const auto MANTISSA_MAX = mantissa << (32 - 23);
+      const uint64_t MANTISSA_MAX = static_cast<uint64_t>(mantissa) << (32 - 23);
 
       const uint32_t p_hi_bottom = MANTISSA_MAX * table->hig;
       const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
@@ -768,6 +768,12 @@ namespace Helpers::Math
 
       result = umulh32(MANTISSA_MAX, table->hig);
       next_9_digits = p_low_top + p_hi_bottom_1e9;
+
+      if(next_9_digits >= DEC9)
+      {
+        result++;
+        next_9_digits -= DEC9;
+      }
     }
   };
 

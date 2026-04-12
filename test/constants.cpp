@@ -102,9 +102,9 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
   test_float_table(static_cast<double>(0));
 }
 
-static inline auto umulh32(const uint32_t &a, const uint32_t &b)
+static inline auto umulh32(const uint64_t &a, const uint32_t &b)
 {
-  return (uint32_t)((uint64_t)a * b >> 32);
+  return (uint32_t)(a * b >> 32);
 }
 
 static inline auto umulh64(const uint64_t &a, const uint64_t &b)
@@ -112,11 +112,13 @@ static inline auto umulh64(const uint64_t &a, const uint64_t &b)
   return (uint64_t)((__uint128_t)a * b >> 64);
 }
 
-auto mul_ret_remainder(const uint32_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid)
+template <typename Type>
+  requires std::is_same_v<uint32_t, Type>
+auto mul_ret_remainder(const Type &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
 {
   static const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-  const auto MANTISSA_MAX = mantissa << (32 - 23);
+  const uint64_t MANTISSA_MAX = static_cast<uint64_t>(mantissa) << (32 - 23);
 
   const uint32_t p_hi_bottom = MANTISSA_MAX * m_high;
   const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
@@ -133,7 +135,9 @@ static inline uint32_t top_digit(uint32_t n)
   return (uint64_t(n) * 0x55E63B89ULL) >> 57;
 }
 
-auto mul_ret_remainder(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
+template <typename Type>
+  requires std::is_same_v<uint64_t, Type>
+auto mul_ret_remainder(const Type &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
 {
   static const constexpr uint64_t DEC10 = 10'000'000'000ULL;
   static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
@@ -186,14 +190,22 @@ struct table_3_way
 
 BOOST_AUTO_TEST_CASE(multiplytest)
 {
-  const uint64_t mantissa = 6646139978835021;
-  table_3_way tablevals = { 135525271, 560688054, 250931600 };
 
   {
+    const uint64_t mantissa = 6646139978835021;
+    table_3_way tablevals = { 135525271, 560688054, 250931600 };
     auto expected_truncated = mul2_128b(mantissa, tablevals.hig, tablevals.mid);
     BOOST_CHECK_EQUAL(expected_truncated, 99'999'999'998'652'475); //'500'019'082);
   }
   {
+    const uint64_t mantissa = 6646139978835021;
+    table_3_way tablevals = { 135525271, 560688054, 250931600 };
+    mul_ret_remainder(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
+    BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
+  }
+  {
+    const uint32_t mantissa = 8388608;
+    table_3_way tablevals = { .hig = 140129846, .mid = 432481707, .low = 92372958 };
     mul_ret_remainder(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
     BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
   }

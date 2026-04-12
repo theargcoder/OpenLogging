@@ -99,17 +99,25 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     type digits_10;
     frexpp.mul3_128b(table, digits_10, extra_digits);
 
-    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 2);
+    static const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
+
+    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number);
+    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number + 1);
 
     if(digits_10 < min_precision)
     {
       digits_10 *= 10;
       exp_base_10_int--;
     }
+    else if(digits_10 > max_precision)
+    {
+      digits_10 /= 10;
+      exp_base_10_int++;
+    }
 
     type remainder;
 
-    (PRECISION < 17) ? (Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - 3), true)
+    (PRECISION < 17) ? (Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - magic_number - 1), true)
                      : (remainder = Helpers::Math::Magic::Division::top_digit(extra_digits), true);
 
     const bool extra = extra_digits != 0 || remainder != 0;
