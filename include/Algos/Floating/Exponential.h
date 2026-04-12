@@ -91,11 +91,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
-    if(PRECISION < 1)
-      PRECISION = 1;
-    else if(PRECISION > 17)
-      PRECISION = 15; // default
-
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
     const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
@@ -104,7 +99,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     type digits_10;
     frexpp.mul3_128b(table, digits_10, extra_digits);
 
-    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
     static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 2);
 
     if(digits_10 < min_precision)
@@ -113,27 +107,20 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       exp_base_10_int--;
     }
 
-    bool extra = extra_digits != 0;
-    if(PRECISION < 17)
-    {
-      type remainder;
-      Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - 3);
-      extra = extra || remainder != 0;
-    }
-    else
-    {
-      const auto rem = Helpers::Math::Magic::Division::top_digit(extra_digits);
-      extra = extra || rem != 0;
-    }
+    type remainder;
 
-    const auto after_digit = digits_10 % 10;
-    digits_10 /= 10;
+    (PRECISION < 17) ? (Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - 3), true)
+                     : (remainder = Helpers::Math::Magic::Division::top_digit(extra_digits), true);
 
-    if(after_digit > 5)
+    const bool extra = extra_digits != 0 || remainder != 0;
+
+    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
+
+    if(remainder > 5)
     {
       digits_10++;
     }
-    else if(after_digit == 5)
+    else if(remainder == 5)
     {
       if(extra)
       {
@@ -165,6 +152,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       }
     }
 
+    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
     if(digits_10 >= precision_table[PRECISION])
     {
       digits_10 /= 10;

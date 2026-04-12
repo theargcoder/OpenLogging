@@ -319,16 +319,13 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   // floats
-  /*
   test_and_benchmark_float(static_cast<float>(0), 1);
   test_and_benchmark_float(static_cast<float>(0), 2);
   test_and_benchmark_float(static_cast<float>(0), 3);
   test_and_benchmark_float(static_cast<float>(0), 4);
   test_and_benchmark_float(static_cast<float>(0), 5);
   test_and_benchmark_float(static_cast<float>(0), 6);
-  */
   // doubles
-  /*
   test_and_benchmark_float(static_cast<double>(0), 1);
   test_and_benchmark_float(static_cast<double>(0), 2);
   test_and_benchmark_float(static_cast<double>(0), 3);
@@ -343,7 +340,6 @@ BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
   test_and_benchmark_float(static_cast<double>(0), 12);
   test_and_benchmark_float(static_cast<double>(0), 13);
   test_and_benchmark_float(static_cast<double>(0), 14);
-  */
   test_and_benchmark_float(static_cast<double>(0), 15);
   test_and_benchmark_float(static_cast<double>(0), 16);
   test_and_benchmark_float(static_cast<double>(0), 17);
