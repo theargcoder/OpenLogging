@@ -16,5 +16,11 @@ target_include_directories(test_constants PRIVATE ${RYU_INCLUDE_DIR})
 target_link_libraries(test_constants PRIVATE OpenLogging ${RYU_LIB})
 add_test(NAME ConstantsTest COMMAND test_constants)
 
+# Test: MagicMath 
+add_executable(test_magic_math magic_math.cpp)
+target_include_directories(test_magic_math PRIVATE ${RYU_INCLUDE_DIR})
+target_link_libraries(test_magic_math PRIVATE OpenLogging ${RYU_LIB})
+add_test(NAME MagicMathTest COMMAND test_magic_math)
+
 # Numeric subdirectory
 add_subdirectory(numeric)

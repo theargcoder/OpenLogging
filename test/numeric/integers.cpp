@@ -116,7 +116,7 @@ namespace
 {
   const auto lopper_integer = []<typename Type>(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging, auto &std_to_string, auto &std_to_char) -> void
   {
-    const constexpr auto WISHED_RANGE = 10'000;
+    const constexpr auto WISHED_RANGE = 100'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;

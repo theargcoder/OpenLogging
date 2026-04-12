@@ -253,7 +253,9 @@ namespace Helpers::Math::Magic::Division
     // clang-format on
   }
 
-  static auto div_by_10_denominator(const uint32_t &numerator, const uint32_t &denominator)
+  template <typename Type>
+    requires std::is_same_v<uint32_t, Type>
+  static auto div_by_10_denominator(const Type &numerator, const Type &denominator)
   {
     // clang-format off
     if(denominator <= 10) { return div_by_10_pow_n<1>(numerator); }
@@ -274,29 +276,29 @@ namespace Helpers::Math::Magic::Division
   {
     static_assert(N != 0, "why divide by 1");
     static_assert(N <= std::numeric_limits<uint64_t>::digits10, "10 ^exp is greater that num of digits");
+
     // clang-format off
-    if constexpr(N == 1) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xCCCCCCCCCCCCD000ULL) >> 67); }
-    else if constexpr(N == 2) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xA3D70A3D70A3D800ULL) >> 70); }
-    else if constexpr(N == 3) { return static_cast<uint64_t>( ((unsigned __int128)n * 0x83126E978D4FE000ULL) >> 73); }
-    else if constexpr(N == 4) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xD1B71758E2196800ULL) >> 77); }
-    else if constexpr(N == 5) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xA7C5AC471B478800ULL) >> 80); }
-    else if constexpr(N == 6) { return static_cast<uint64_t>( ((unsigned __int128)n * 0x8637BD05AF6C6800ULL) >> 83); }
-    else if constexpr(N == 7) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xD6BF94D5E57A4000ULL) >> 87); }
-    else if constexpr(N == 8) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xABCC77118461D000ULL) >> 90); }
-    else if constexpr(N == 9) { return static_cast<uint64_t>( ((unsigned __int128)n * 0x89705F4136B4A800ULL) >> 93); }
-    else if constexpr(N == 10) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xDBE6FECEBDEDD800ULL) >> 97); }
-    else if constexpr(N == 11) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xAFEBFF0BCB24A800ULL) >> 100); }
-    else if constexpr(N == 12) { return static_cast<uint64_t>( ((unsigned __int128)n * 0x8CBCCC096F508800ULL) >> 103); }
-    else if constexpr(N == 13) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xE12E13424BB41000ULL) >> 107); }
-    else if constexpr(N == 14) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xB424DC35095CD800ULL) >> 110); }
-    else if constexpr(N == 15) { return static_cast<uint64_t>( ((unsigned __int128)n * 0x901D7CF73AB0B000ULL) >> 113); }
-    else if constexpr(N == 16) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xE69594BEC44DE000ULL) >> 117); }
-    else if constexpr(N == 17) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xB877AA3236A4B800ULL) >> 120); }
-    else if constexpr(N == 18) { return static_cast<uint64_t>( ((unsigned __int128)n * 0x9392EE8E921D6000ULL) >> 123); }
-    else if constexpr(N == 19) { return static_cast<uint64_t>( ((unsigned __int128)n * 0xEC1E4A7DB6956000ULL) >> 127); }
+    if constexpr(N == 1) { return static_cast<uint64_t>(((unsigned __int128)n * 0xCCCCCCCCCCCCCCCDULL) >> 67); }
+    else if constexpr(N == 2) { return static_cast<uint64_t>(((unsigned __int128)n * 0xA3D70A3D70A3D70BULL) >> 70); }
+    else if constexpr(N == 3) { return static_cast<uint64_t>(((unsigned __int128)n * 0x83126E978D4FDF3CULL) >> 73); }
+    else if constexpr(N == 4) { return static_cast<uint64_t>(((unsigned __int128)n * 0xD1B71758E219652CULL) >> 77); }
+    else if constexpr(N == 5) { return static_cast<uint64_t>(((unsigned __int128)n * 0xA7C5AC471B478424ULL) >> 80); }
+    else if constexpr(N == 6) { return static_cast<uint64_t>(((unsigned __int128)n * 0x8637BD05AF6C69B6ULL) >> 83); }
+    else if constexpr(N == 7) { return static_cast<uint64_t>(((unsigned __int128)n * 0xD6BF94D5E57A42BDULL) >> 87); }
+    else if constexpr(N == 8) { return static_cast<uint64_t>(((unsigned __int128)n * 0xABCC77118461CEFDULL) >> 90); }
+    else if constexpr(N == 9) { return static_cast<uint64_t>(((unsigned __int128)n * 0x89705F4136B4A598ULL) >> 93); }
+    else if constexpr(N == 10) { return static_cast<uint64_t>(((unsigned __int128)n * 0xDBE6FECEBDEDD5C0ULL) >> 97); }
+    else if constexpr(N == 11) { return static_cast<uint64_t>(((unsigned __int128)n * 0xAFEBFF0BCB24AAFFULL) >> 100); }
+    else if constexpr(N == 12) { return static_cast<uint64_t>(((unsigned __int128)n * 0x8CBCCC096F5088CCULL) >> 103); }
+    else if constexpr(N == 13) { return static_cast<uint64_t>(((unsigned __int128)n * 0xE12E13424BB40E14ULL) >> 107); }
+    else if constexpr(N == 14) { return static_cast<uint64_t>(((unsigned __int128)n * 0xB424DC35095CD810ULL) >> 110); }
+    else if constexpr(N == 15) { return static_cast<uint64_t>(((unsigned __int128)n * 0x901D7CF73AB0ACDCULL) >> 113); }
+    else if constexpr(N == 16) { return static_cast<uint64_t>(((unsigned __int128)n * 0xE69594BEC44DE15CULL) >> 117); }
+    else if constexpr(N == 17) { return static_cast<uint64_t>(((unsigned __int128)n * 0xB877AA3236A4B44AULL) >> 120); }
+    else if constexpr(N == 18) { return static_cast<uint64_t>(((unsigned __int128)n * 0x9392EE8E921D5D08ULL) >> 123); }
+    else if constexpr(N == 19) { return static_cast<uint64_t>(((unsigned __int128)n * 0xEC1E4A7DB69561A6ULL) >> 127); }
     // clang-format on
   }
-
   template <uint64_t DIV>
   static auto div_by_10_pow_template(const uint64_t &n)
   {
@@ -327,7 +329,9 @@ namespace Helpers::Math::Magic::Division
     // clang-format on
   }
 
-  static auto div_by_10_denominator(const uint64_t &numerator, const uint64_t &denominator)
+  template <typename Type>
+    requires std::is_same_v<uint64_t, Type>
+  static auto div_by_10_denominator(const Type &numerator, const Type &denominator)
   {
     // clang-format off
     if (denominator <= 10) {  return div_by_10_pow_n<1>(numerator); }
@@ -369,15 +373,15 @@ namespace Helpers::Math::Magic::Modulo
     static_assert(N <= std::numeric_limits<uint32_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { return static_cast<uint32_t>( (((uint64_t(n) * 0xCCCCCCCDULL) >> 35) * 10U)); }
-    else if constexpr(N == 2) { return static_cast<uint32_t>( (((uint64_t(n) * 0xA3D70A3EULL) >> 38) * 100U)); }
-    else if constexpr(N == 3) { return static_cast<uint32_t>( (((uint64_t(n) * 0x83126E98ULL) >> 41) * 1000U)); }
-    else if constexpr(N == 4) { return static_cast<uint32_t>( (((uint64_t(n) * 0xD1B71759ULL) >> 45) * 10000U)); }
-    else if constexpr(N == 5) { return static_cast<uint32_t>( (((uint64_t(n) * 0xA7C5AC48ULL) >> 48) * 100000U)); }
-    else if constexpr(N == 6) { return static_cast<uint32_t>( (((uint64_t(n) * 0x8637BD06ULL) >> 51) * 1000000U)); }
-    else if constexpr(N == 7) { return static_cast<uint32_t>( (((uint64_t(n) * 0xD6BF94D6ULL) >> 55) * 10000000U)); }
-    else if constexpr(N == 8) { return static_cast<uint32_t>( (((uint64_t(n) * 0xABCC7712ULL) >> 58) * 100000000U)); }
-    else if constexpr(N == 9) { return static_cast<uint32_t>( (((uint64_t(n) * 0x89705F42ULL) >> 61) * 1000000000U)); }
+    if constexpr(N == 1) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0xCCCCCCCDULL) >> 35) * 10U)); }
+    else if constexpr(N == 2) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0xA3D70A3EULL) >> 38) * 100U)); }
+    else if constexpr(N == 3) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0x83126E98ULL) >> 41) * 1000U)); }
+    else if constexpr(N == 4) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0xD1B71759ULL) >> 45) * 10000U)); }
+    else if constexpr(N == 5) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0xA7C5AC48ULL) >> 48) * 100000U)); }
+    else if constexpr(N == 6) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0x8637BD06ULL) >> 51) * 1000000U)); }
+    else if constexpr(N == 7) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0xD6BF94D6ULL) >> 55) * 10000000U)); }
+    else if constexpr(N == 8) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0xABCC7712ULL) >> 58) * 100000000U)); }
+    else if constexpr(N == 9) { return static_cast<uint32_t>(n - (((uint64_t(n) * 0x89705F42ULL) >> 61) * 1000000000U)); }
     // clang-format on
   }
 
@@ -424,25 +428,25 @@ namespace Helpers::Math::Magic::Modulo
     static_assert(N <= std::numeric_limits<uint64_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xCCCCCCCCCCCCD000ULL) >> 67) * 10ULL)); }
-    else if constexpr(N == 2) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xA3D70A3D70A3D800ULL) >> 70) * 100ULL)); }
-    else if constexpr(N == 3) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0x83126E978D4FE000ULL) >> 73) * 1000ULL)); }
-    else if constexpr(N == 4) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xD1B71758E2196800ULL) >> 77) * 10000ULL)); }
-    else if constexpr(N == 5) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xA7C5AC471B478800ULL) >> 80) * 100000ULL)); }
-    else if constexpr(N == 6) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0x8637BD05AF6C6800ULL) >> 83) * 1000000ULL)); }
-    else if constexpr(N == 7) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xD6BF94D5E57A4000ULL) >> 87) * 10000000ULL)); }
-    else if constexpr(N == 8) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xABCC77118461D000ULL) >> 90) * 100000000ULL)); }
-    else if constexpr(N == 9) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0x89705F4136B4A800ULL) >> 93) * 1000000000ULL)); }
-    else if constexpr(N == 10) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xDBE6FECEBDEDD800ULL) >> 97) * 10000000000ULL)); }
-    else if constexpr(N == 11) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xAFEBFF0BCB24A800ULL) >> 100) * 100000000000ULL)); }
-    else if constexpr(N == 12) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0x8CBCCC096F508800ULL) >> 103) * 1000000000000ULL)); }
-    else if constexpr(N == 13) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xE12E13424BB41000ULL) >> 107) * 10000000000000ULL)); }
-    else if constexpr(N == 14) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xB424DC35095CD800ULL) >> 110) * 100000000000000ULL)); }
-    else if constexpr(N == 15) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0x901D7CF73AB0B000ULL) >> 113) * 1000000000000000ULL)); }
-    else if constexpr(N == 16) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xE69594BEC44DE000ULL) >> 117) * 10000000000000000ULL)); }
-    else if constexpr(N == 17) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xB877AA3236A4B800ULL) >> 120) * 100000000000000000ULL)); }
-    else if constexpr(N == 18) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0x9392EE8E921D6000ULL) >> 123) * 1000000000000000000ULL)); }
-    else if constexpr(N == 19) { return static_cast<uint64_t>( ((((unsigned __int128)n * 0xEC1E4A7DB6956000ULL) >> 127) * 10000000000000000000ULL)); }
+      if constexpr(N == 1) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xCCCCCCCCCCCCCCCDULL) >> 67) * 10ULL)); }
+      else if constexpr(N == 2) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xA3D70A3D70A3D70BULL) >> 70) * 100ULL)); }
+      else if constexpr(N == 3) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0x83126E978D4FDF3CULL) >> 73) * 1000ULL)); }
+      else if constexpr(N == 4) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xD1B71758E219652CULL) >> 77) * 10000ULL)); }
+      else if constexpr(N == 5) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xA7C5AC471B478424ULL) >> 80) * 100000ULL)); }
+      else if constexpr(N == 6) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0x8637BD05AF6C69B6ULL) >> 83) * 1000000ULL)); }
+      else if constexpr(N == 7) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xD6BF94D5E57A42BDULL) >> 87) * 10000000ULL)); }
+      else if constexpr(N == 8) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xABCC77118461CEFDULL) >> 90) * 100000000ULL)); }
+      else if constexpr(N == 9) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0x89705F4136B4A598ULL) >> 93) * 1000000000ULL)); }
+      else if constexpr(N == 10) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xDBE6FECEBDEDD5BFULL) >> 97) * 10000000000ULL)); }
+      else if constexpr(N == 11) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xAFEBFF0BCB24AAFFULL) >> 100) * 100000000000ULL)); }
+      else if constexpr(N == 12) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0x8CBCCC096F5088CCULL) >> 103) * 1000000000000ULL)); }
+      else if constexpr(N == 13) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xE12E13424BB40E14ULL) >> 107) * 10000000000000ULL)); }
+      else if constexpr(N == 14) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xB424DC35095CD810ULL) >> 110) * 100000000000000ULL)); }
+      else if constexpr(N == 15) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0x901D7CF73AB0ACDAULL) >> 113) * 1000000000000000ULL)); }
+      else if constexpr(N == 16) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xE69594BEC44DE15CULL) >> 117) * 10000000000000000ULL)); }
+      else if constexpr(N == 17) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xB877AA3236A4B44AULL) >> 120) * 100000000000000000ULL)); }
+      else if constexpr(N == 18) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0x9392EE8E921D5D08ULL) >> 123) * 1000000000000000000ULL)); }
+      else if constexpr(N == 19) { return static_cast<uint64_t>(n - ((((unsigned __int128)n * 0xEC1E4A7DB69561A6ULL) >> 127) * 10000000000000000000ULL)); }
     // clang-format on
   }
 

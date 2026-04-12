@@ -130,8 +130,8 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       extra = extra || rem != 0;
     }
 
-    const auto after_digit = Helpers::Math::Magic::Modulo::mod_by_10_template<10>(digits_10);
-    digits_10 = Helpers::Math::Magic::Division::div_by_10_pow_template<10>(digits_10);
+    const auto after_digit = digits_10 % 10;
+    digits_10 /= 10;
 
     if(after_digit > 5)
     {
