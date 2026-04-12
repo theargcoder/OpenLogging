@@ -116,13 +116,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     bool extra = extra_digits != 0;
     if(PRECISION < 17)
     {
-      static const constexpr auto truncation_table = Constants::Tables::GetTruncationTable<type>();
-
-      const auto &pres_div = truncation_table[PRECISION];
-
-      const auto rem = Helpers::Math::Magic::Modulo::mod_by_10_denominator(digits_10, pres_div);
-      digits_10 = Helpers::Math::Magic::Division::div_by_10_denominator(digits_10, pres_div);
-      extra = extra || rem != 0;
+      type remainder;
+      Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - 3);
+      extra = extra || remainder != 0;
     }
     else
     {
