@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -142,11 +143,22 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       exp_base_10_int++;
     }
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArray<true>(exp_base_10_int, buff, buff.start_idx);
+    uint32_t exp_abs = std::abs(exp_base_10_int);
+
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(exp_abs, extra_digits, buff);
+
+    if(exp_base_10_int < 0)
+    {
+      buff.array[--buff.start_idx] = '-';
+    }
+    else
+    {
+      buff.array[--buff.start_idx] = '+';
+    }
 
     buff.array[--buff.start_idx] = 'e';
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(digits_10, buff);
+    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(digits_10, remainder, buff);
 
     buff.array[--buff.start_idx] = '.';
 

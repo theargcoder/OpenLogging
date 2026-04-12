@@ -1,6 +1,7 @@
 #pragma once
 
 #include "include/Constants/Constants.h"
+#include "include/Helpers/Math.h"
 #include "include/Helpers/Templating.h"
 
 #include <cstdint>
@@ -77,40 +78,19 @@ namespace Helpers::Numeric::Integral
 
   template <int N, typename T>
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
-  static void ToStrReverseWriteToCharArrayResult(T val, char_array<N> &out_char)
+  static void ToStrReverseWriteToCharArrayResult(T &val, T &rem, char_array<N> &out_char)
   {
     char *__restrict__ it = &out_char.array[0] + out_char.start_idx;
 
-    static const constexpr auto BASE = 10;
-
     do
     {
-      const auto rem = val % BASE;
-      val /= BASE;
+      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(val, rem);
 
       *--it = '0' + rem;
 
     } while(val);
 
     out_char.start_idx = it - &out_char.array[0];
-  }
-
-  template <int N, typename T>
-    requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
-  static void ToStrReverseWriteToCharArrayResult(T val, char_array_len<N> &out_char)
-  {
-    char *__restrict__ it = &out_char.array[0] + out_char.length;
-
-    static const constexpr auto BASE = 10;
-
-    do
-    {
-      const auto rem = val % BASE;
-      val /= BASE;
-
-      *--it = '0' + rem;
-
-    } while(val);
   }
 
   template <bool FORCE_SIGN = false, int N, typename T>
