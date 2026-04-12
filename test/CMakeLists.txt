@@ -1,8 +1,8 @@
 # Remove find_package(ryu REQUIRED)
 
 # Set library manually
-set(RYU_INCLUDE_DIR /Users/luccalabattaglia/Work/ryu/include)
-set(RYU_LIB /Users/luccalabattaglia/Work/ryu/build/libryu.a)
+set(RYU_INCLUDE_DIR /home/lucca/Work/ryu/include)
+set(RYU_LIB /home/lucca/Work/ryu/build/libryu.a)
 
 # Test: Logging
 add_executable(test_logging logging.cpp)
@@ -16,7 +16,7 @@ target_include_directories(test_constants PRIVATE ${RYU_INCLUDE_DIR})
 target_link_libraries(test_constants PRIVATE OpenLogging ${RYU_LIB})
 add_test(NAME ConstantsTest COMMAND test_constants)
 
-# Test: MagicMath 
+# Test: MagicMath
 add_executable(test_magic_math magic_math.cpp)
 target_include_directories(test_magic_math PRIVATE ${RYU_INCLUDE_DIR})
 target_link_libraries(test_magic_math PRIVATE OpenLogging ${RYU_LIB})

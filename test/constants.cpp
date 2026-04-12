@@ -30,7 +30,7 @@ namespace
     }
 
     template <typename T>
-      requires std::is_integral_v<T>
+      requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
     static T pow(T base, int exp)
     {
       T result = 1;

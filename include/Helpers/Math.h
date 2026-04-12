@@ -16,7 +16,7 @@ namespace Helpers::Math::Constexpr
   }
 
   template <typename BaseType, typename ExpType>
-    requires std::is_integral_v<ExpType>
+    requires std::is_integral_v<ExpType> || std::is_same_v<BaseType, __uint128_t>
   static constexpr BaseType ipow(BaseType base, ExpType exp)
   {
     if(exp < 0)
@@ -408,9 +408,9 @@ namespace Helpers::Math::Magic::Division
   template <typename T>
   static auto top_digit(const T &input)
   {
-    return div_by_10_denominator(input, input);
+    return div_by_10_denominator(input, input / 10);
   }
-}
+} // namespace Helpers::Math::Magic::Division
 
 namespace Helpers::Math::Magic::Modulo
 {
@@ -433,8 +433,9 @@ namespace Helpers::Math::Magic::Modulo
     // clang-format on
   }
 
-  template <uint32_t N>
-  static inline auto mod_by_10_pow_n_void(uint32_t &quotient, uint32_t &remainder)
+  template <uint32_t N, typename Type>
+    requires std::is_unsigned_v<Type> && (sizeof(Type) >= sizeof(uint32_t))
+  static inline auto mod_by_10_pow_n_void(uint32_t &quotient, Type &remainder)
   {
     static_assert(N != 0, "why modide by 1");
     static_assert(N <= std::numeric_limits<uint32_t>::digits10, "10 ^exp is greater that num of digits");
@@ -518,8 +519,9 @@ namespace Helpers::Math::Magic::Modulo
     // clang-format on
   }
 
-  template <uint32_t N>
-  static inline auto mod_by_10_pow_n_void(uint64_t &quotient, uint64_t &remainder)
+  template <uint32_t N, typename Type>
+    requires std::is_unsigned_v<Type> && (sizeof(Type) >= sizeof(uint64_t))
+  static inline auto mod_by_10_pow_n_void(uint64_t &quotient, Type &remainder)
   {
 
     static_assert(N != 0, "why mod by 1");
@@ -606,7 +608,8 @@ namespace Helpers::Math::Magic::Modulo
     else {  return mod_by_10_pow_n<19>(numerator); }
     // clang-format on
   }
-}
+
+} // namespace Helpers::Math::Magic::Modulo
 
 namespace Helpers::Math::Precision
 {
@@ -653,11 +656,12 @@ namespace Helpers::Math::Precision
     case 15: { Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<15>(quotient, rem); } break;
     case 16: { Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<16>(quotient, rem); } break;
     case 17: { Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<17>(quotient, rem); } break;
+    case 18: { Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<18>(quotient, rem); } break;
     default: { Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<6>(quotient, rem); } break;
     }
     // clang-format on
   }
-}
+} // namespace Helpers::Math::Precision
 
 namespace Helpers::Math
 {

@@ -104,25 +104,41 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number);
     static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number + 1);
 
+    type remainder;
+
     if(digits_10 < min_precision)
     {
       digits_10 *= 10;
+      remainder = Helpers::Math::Magic::Division::div_by_10_pow_n<8>(extra_digits);
+      digits_10 += remainder;
+      extra_digits -= remainder * 100'000'000U;
+      extra_digits *= 10;
       exp_base_10_int--;
     }
     else if(digits_10 > max_precision)
     {
-      digits_10 /= 10;
+      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
+      Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(extra_digits);
+      extra_digits += remainder * 100'000'000U;
       exp_base_10_int++;
     }
 
-    type remainder;
+    if(PRECISION < 17)
+    {
+      Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - magic_number - 1);
+    }
+    else
+    {
+      remainder = Helpers::Math::Magic::Division::div_by_10_pow_n<8>(extra_digits);
+      extra_digits -= remainder * 100'000'000U;
+    }
 
-    (PRECISION < 17) ? (Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - magic_number - 1), true)
-                     : (remainder = Helpers::Math::Magic::Division::top_digit(extra_digits), true);
+    const bool extra = extra_digits != 0 || (PRECISION < 17 && remainder != 0);
 
-    const bool extra = extra_digits != 0 || remainder != 0;
-
-    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
+    if(PRECISION < 17)
+    {
+      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
+    }
 
     if(remainder > 5)
     {

@@ -1,8 +1,6 @@
 #define BOOST_TEST_MODULE ScientificNotatioTests
 #include <boost/test/included/unit_test.hpp>
 
-#include "/Users/luccalabattaglia/Work/ryu/ryu/ryu.h"
-
 #include <bit>
 #include <chrono>
 #include <cmath>
