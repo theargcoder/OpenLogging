@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <exception>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -23,8 +22,16 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   static auto ToStrCharArray(const T &input, int PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<double>;
+    using type = typename Helpers::Math::IEEE754<T>::underlying;
+
+    static const constexpr type BASE = 10U;
+    static const constexpr type DEC8 = 100'000'000U;
+    static const constexpr uint32_t ROUNDING_FACTOR = 5U;
+    static const constexpr int32_t MAX_PRECISION = std::is_same_v<T, float> ? 8 : 17;
 
     static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
+
+    assert(PRECISION <= MAX_PRECISION); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
     Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
     buff.start_idx = SIZE_OF_BUFF;
@@ -38,34 +45,33 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       if(mantissa == T{ 0 })
       {
         buff.start_idx = 3;
-        std::memcpy(&buff.array[buff.start_idx], "nan", 3);
+        std::memcpy(&buff.array[3], "nan", 3);
       }
       else if(mantissa == 1)
       {
         buff.start_idx = 3;
-        std::memcpy(&buff.array[buff.start_idx], "inf", 3);
+        std::memcpy(&buff.array[3], "inf", 3);
       }
       else if(mantissa == 2)
       {
         buff.start_idx = 4;
-        std::memcpy(&buff.array[buff.start_idx], "-inf", 4);
+        std::memcpy(&buff.array[3], "-inf", 4);
       }
       else
       {
-        buff.start_idx = 6;
-        std::memcpy(&buff.array[buff.start_idx], "0.0E00", 6);
+        buff.start_idx = 5;
+        std::memcpy(&buff.array[5], "0.0E0", 5);
       }
 
       return buff;
     }
 
-    int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
+    int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18U);
 
     const auto *table = &Floating::DIGITS[exp];
-    using type = typename Math::IEEE754<T>::underlying;
     uint32_t extra_digits;
     type digits_10;
-    frexpp.mul3_128b(table, digits_10, extra_digits);
+    Helpers::Math::IEEE754<T>::multiply(mantissa, table, digits_10, extra_digits);
 
     static const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
 
@@ -76,43 +82,43 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     if(digits_10 < min_precision)
     {
-      digits_10 *= 10;
+      digits_10 *= BASE;
       remainder = Helpers::Math::Magic::Division::div_by_10_pow_n<8>(extra_digits);
       digits_10 += remainder;
-      extra_digits -= remainder * 100'000'000U;
-      extra_digits *= 10;
+      extra_digits -= remainder * DEC8;
+      extra_digits *= BASE;
       exp_base_10_int--;
     }
     else if(digits_10 > max_precision)
     {
       Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
       Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(extra_digits);
-      extra_digits += remainder * 100'000'000U;
+      extra_digits += remainder * DEC8;
       exp_base_10_int++;
     }
 
-    if(PRECISION < 17)
+    if(PRECISION < MAX_PRECISION)
     {
       Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<type>::digits10 - PRECISION - magic_number - 1);
     }
     else
     {
       remainder = Helpers::Math::Magic::Division::div_by_10_pow_n<8>(extra_digits);
-      extra_digits -= remainder * 100'000'000U;
+      extra_digits -= remainder * DEC8;
     }
 
     const bool extra = extra_digits != 0 || (PRECISION < 17 && remainder != 0);
 
-    if(PRECISION < 17)
+    if(PRECISION < MAX_PRECISION)
     {
       Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
     }
 
-    if(remainder > 5)
+    if(remainder > ROUNDING_FACTOR)
     {
       digits_10++;
     }
-    else if(remainder == 5)
+    else if(remainder == ROUNDING_FACTOR)
     {
       if(extra)
       {
@@ -132,7 +138,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
     if(digits_10 >= precision_table[PRECISION])
     {
-      digits_10 /= 10;
+      digits_10 /= BASE;
       exp_base_10_int++;
     }
 

@@ -197,23 +197,15 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         return buff;
       }
 
-      using base_type = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::table_3_way::hig)>;
+      using base_type = typename Helpers::Math::IEEE754<T>::underlying;
 
       static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(base_type{ 10 }, std::numeric_limits<base_type>::digits10 - 1);
 
-      const auto exp_2 = Constants::Tables::Floating<T>::DIGITS[exp + FloatingStruct::BIAS];
+      const auto *exp_2 = &Constants::Tables::Floating<T>::DIGITS[exp + FloatingStruct::BIAS];
 
-      // const auto [rounding_results, digits_10] = Helpers::Math::IEEE754<T>::Multiply(mantissa, exp_2);
-      const auto digits_10 = Helpers::Math::IEEE754<T>::Multiply(mantissa, exp_2);
-
-      /*
-      auto exp_shft = 0;
-      if(digits_10 < min_precision)
-      {
-        digits_10 *= 10;
-        exp_shft++;
-      }
-      */
+      uint32_t extra_digits;
+      base_type digits_10;
+      Helpers::Math::IEEE754<T>::multiply(mantissa, exp_2, digits_10, extra_digits);
 
       static const constexpr auto base_5_rounding_table = Constants::Tables::GetRoundingTable<T, 5>();
       static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();

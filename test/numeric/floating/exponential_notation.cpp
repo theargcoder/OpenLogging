@@ -47,7 +47,7 @@ namespace
     BenchResult(const char *str, std::chrono::nanoseconds nano) : label(str), time(nano) {};
   };
 
-  const auto log_time_tables = []<typename T, typename... Args>(T, const Args &...times)
+  const auto log_time_tables = []<typename T, typename... Args>(T, int PRECISION, const Args &...times)
   {
     using namespace std::chrono;
 
@@ -97,8 +97,8 @@ namespace
     std::string row_micro = std::format("{:>15}", "Microseconds");
     ((row_micro += get_val_cell(times, microseconds{})), ...);
 
-    std::string type_name = std::is_floating_point_v<T> ? "FLOAT" : "INT";
-    std::string title = std::format(" {} COMPARISON (Avg: {:.3f} millisec) ", type_name, average / 1'000'000);
+    std::string type_name = std::is_same_v<T, float> ? "FLOAT" : "DOUBLE";
+    std::string title = std::format(" {} PRECISION {} COMPARISON (Avg: {:.3f} millisec) ", type_name, std::to_string(PRECISION), average / 1'000'000);
     int total_width = 15 + (SIZE * 18); // 15 for label + 18 per column (| + color + 15 chars)
 
     std::cout << "\n" << std::format("{:=^{}}", title, total_width) << "\n";
@@ -309,7 +309,8 @@ namespace
   {
     const auto float_res = tester_format_exponential(static_cast<T>(0), PRECISION);
 
-    log_time_tables(0.0, BenchResult("OpenLogging", std::get<0>(float_res)), BenchResult("std::to_chars", std::get<1>(float_res)), BenchResult("ryu", std::get<2>(float_res)));
+    log_time_tables(0.0, PRECISION, BenchResult("OpenLogging", std::get<0>(float_res)), BenchResult("std::to_chars", std::get<1>(float_res)),
+                    BenchResult("ryu", std::get<2>(float_res)));
   };
 
 } // namespace

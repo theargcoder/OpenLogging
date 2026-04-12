@@ -676,26 +676,20 @@ namespace Helpers::Math
 
   private:
     using signed_underlying = int32_t;
-    using uint128_t = __uint128_t;
 
-    static constexpr underlying EXPONENT_ONLY = 0x7F800000U;
-    static constexpr signed_underlying EXPONENT_ST = 23;
-    static constexpr signed_underlying EXPONENT_LEFT_OFFSET = sizeof(float) * 8 - EXPONENT_ST - 1;
+    static const constexpr uint8_t NUM_OF_BITS = sizeof(float) * 8U;
+    static const constexpr uint8_t EXPONENT_ST = 23;
+    static const constexpr uint8_t EXPONENT_LEFT_OFFSET = sizeof(float) * 8 - EXPONENT_ST - 1;
+    static const constexpr uint8_t EXPONENT_ALL_BITS_ON = 255; // as defined in IEEE-754
 
-    static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<float>::min_exponent - std::numeric_limits<float>::digits;
-    static constexpr signed_underlying EXPONENT_TABLE_OFFSET = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
-    static constexpr signed_underlying EXPONENT_TABLE_BIAS = -EXPONENT_TABLE_OFFSET + MIN_EXPONENT + EXPONENT_ST - 1;
+    static const constexpr int16_t MIN_EXPONENT = std::numeric_limits<float>::min_exponent - std::numeric_limits<float>::digits;
+    static const constexpr int16_t EXPONENT_TABLE_OFFSET = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
+    static const constexpr int16_t EXPONENT_TABLE_BIAS = -EXPONENT_TABLE_OFFSET + MIN_EXPONENT + EXPONENT_ST - 1;
 
-    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = 255; // as defined in IEEE-754
-
-    static constexpr underlying MANTISSA_ONLY = 0x007FFFFFU;
-    static constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
-
-    static constexpr underlying SIGN_ONLY = 0x80000000U;
-
-    static const constexpr uint128_t half = uint128_t{ 1 } << EXPONENT_ST;
-    static const constexpr auto shift = EXPONENT_ST + 1;
-    static const constexpr uint128_t frac_mask = ((uint128_t{ 1 } << shift) - 1);
+    static const constexpr underlying EXPONENT_ONLY = 0x7F800000U;
+    static const constexpr underlying MANTISSA_ONLY = 0x007FFFFFU;
+    static const constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
+    static const constexpr underlying SIGN_ONLY = 0x80000000U;
 
   public:
     underlying mantissa;
@@ -704,11 +698,11 @@ namespace Helpers::Math
   public:
     explicit IEEE754(const float &input)
     {
-      const underlying bits = std::bit_cast<underlying>(input);
+      const auto bits = std::bit_cast<underlying>(input);
 
       const underlying man = bits & MANTISSA_ONLY;
 
-      const signed_underlying exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
+      const uint8_t exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
 
       if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
       {
@@ -726,7 +720,7 @@ namespace Helpers::Math
       }
       else
       {
-        const int shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
+        const auto shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
         if(shift_internal <= EXPONENT_ST) [[likely]]
         {
@@ -741,30 +735,18 @@ namespace Helpers::Math
       }
     }
 
-  public:
-    static auto Multiply(const float &A, const auto &B)
-    {
-      const uint128_t A_bits = std::bit_cast<underlying>(A);
-
-      const uint128_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
-
-      const uint128_t prod = uint128_t{ sig } * uint128_t{ B.hig };
-
-      return static_cast<uint128_t>(prod >> shift);
-    }
-
   private:
     static inline auto umulh32(const uint64_t &a, const uint32_t &b)
     {
-      return (uint32_t)(a * b >> 32);
+      return static_cast<uint32_t>((a * b) >> NUM_OF_BITS);
     }
 
   public:
-    auto mul3_128b(const auto *table, auto &result, auto &next_9_digits) const noexcept
+    static auto multiply(const underlying &mantissa, const auto *table, auto &result, auto &next_9_digits) noexcept
     {
       static const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-      const uint64_t MANTISSA_MAX = static_cast<uint64_t>(mantissa) << (32 - 23);
+      const uint64_t MANTISSA_MAX = static_cast<uint64_t>(mantissa) << 9U;
 
       const uint32_t p_hi_bottom = MANTISSA_MAX * table->hig;
       const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
@@ -790,20 +772,18 @@ namespace Helpers::Math
     using signed_underlying = int64_t;
     using uint128_t = __uint128_t;
 
-    static constexpr uint8_t EXPONENT_ST = 52;
+    static const constexpr uint8_t NUM_OF_BITS = sizeof(double) * 8;
+    static const constexpr uint8_t EXPONENT_ST = 52;
     static const constexpr uint8_t shift = EXPONENT_ST + 1;
+    static const constexpr uint8_t EXPONENT_LEFT_OFFSET = NUM_OF_BITS - EXPONENT_ST - 1;
 
-    static constexpr underlying EXPONENT_ONLY = 0x7FF0000000000000ULL;
-    static constexpr uint8_t EXPONENT_LEFT_OFFSET = sizeof(double) * 8 - EXPONENT_ST - 1;
+    static const constexpr uint16_t EXPONENT_ALL_BITS_ON = 2047; // as defined in IEEE-754
 
-    static constexpr signed_underlying MIN_EXPONENT = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
+    static const constexpr underlying EXPONENT_ONLY = 0x7FF0000000000000ULL;
+    static const constexpr underlying MANTISSA_ONLY = 0x000FFFFFFFFFFFFFULL;
+    static const constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
 
-    static constexpr signed_underlying EXPONENT_ALL_BITS_ON = 2047; // as defined in IEEE-754
-
-    static constexpr underlying MANTISSA_ONLY = 0x000FFFFFFFFFFFFFULL;
-    static constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
-
-    static constexpr underlying SIGN_ONLY = 0x8000000000000000ULL;
+    static const constexpr underlying SIGN_ONLY = 0x8000000000000000ULL;
 
   public:
     underlying mantissa;
@@ -812,11 +792,11 @@ namespace Helpers::Math
   public:
     explicit IEEE754(const double &input)
     {
-      const underlying bits = std::bit_cast<underlying>(input);
+      const auto bits = std::bit_cast<underlying>(input);
 
       const underlying man = bits & MANTISSA_ONLY;
 
-      const signed_underlying exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
+      const uint16_t exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
 
       if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
       {
@@ -832,7 +812,7 @@ namespace Helpers::Math
       }
       else
       {
-        const int shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
+        const auto shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
         if(shift_internal <= EXPONENT_ST) [[likely]]
         {
@@ -848,36 +828,22 @@ namespace Helpers::Math
     }
 
   private:
-    template <typename TypeBase, std::size_t... I>
-    static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
-    {
-      constexpr auto N = sizeof...(I);
-      return std::array<TypeBase, N + 1>{ (Helpers::Math::Constexpr::ipow(TypeBase{ 10 }, N - I - 2))..., 1 };
-    }
-
-    template <typename Type>
-    static constexpr auto GetPrecistionTable()
-    {
-      const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
-      return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
-    }
-
     static inline auto umulh64(const uint64_t &a, const uint64_t &b)
     {
-      return (uint64_t)((__uint128_t)a * b >> 64);
+      return static_cast<uint64_t>(static_cast<uint128_t>(a) * b >> NUM_OF_BITS);
     }
 
   public:
-    auto mul3_128b(const auto *table, auto &result, auto &next_9_digits) const noexcept
+    static auto multiply(const underlying &mantissa, const auto *table, auto &result, auto &next_9_digits) noexcept
     {
       static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
 
-      const auto MANTISSA_MAX = mantissa << (64 - 53);
+      const auto MANTISSA_MAX = mantissa << 11U;
 
       const uint64_t m_high_mid = static_cast<uint64_t>(table->hig) * DEC9 + table->mid;
       const uint64_t p_hi_mid_bottom = (MANTISSA_MAX)*m_high_mid;
-      const uint32_t p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulh64(p_hi_mid_bottom, DEC9));
-      const uint32_t p_low_top = static_cast<uint32_t>(umulh64(MANTISSA_MAX, table->low));
+      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulh64(p_hi_mid_bottom, DEC9));
+      const auto p_low_top = static_cast<uint32_t>(umulh64(MANTISSA_MAX, table->low));
 
       result = umulh64(MANTISSA_MAX, m_high_mid);
       next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
@@ -887,18 +853,6 @@ namespace Helpers::Math
         result++;
         next_9_digits -= DEC9;
       }
-    }
-
-  public:
-    static auto Multiply(const double &A, const auto &B)
-    {
-      const uint128_t A_bits = std::bit_cast<underlying>(A);
-
-      const uint128_t sig = (A_bits & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
-
-      const uint128_t prod = uint128_t{ sig } * uint128_t{ B.hig };
-
-      return static_cast<uint128_t>(prod >> shift);
     }
   };
 } // namespace Helpers::Math
