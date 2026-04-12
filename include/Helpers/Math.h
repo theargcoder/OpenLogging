@@ -769,7 +769,7 @@ namespace Helpers::Math
       result = umulh32(MANTISSA_MAX, table->hig);
       next_9_digits = p_low_top + p_hi_bottom_1e9;
 
-      if(next_9_digits >= DEC9)
+      while(next_9_digits >= DEC9)
       {
         result++;
         next_9_digits -= DEC9;
@@ -878,7 +878,7 @@ namespace Helpers::Math
       result = umulh64(MANTISSA_MAX, m_high_mid);
       next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
 
-      if(next_9_digits >= DEC9)
+      while(next_9_digits >= DEC9)
       {
         result++;
         next_9_digits -= DEC9;

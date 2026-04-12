@@ -122,10 +122,13 @@ auto mul_ret_remainder(const Type &mantissa, const uint32_t &m_high, const uint3
 
   const uint32_t p_hi_bottom = MANTISSA_MAX * m_high;
   const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
-  const uint32_t p_low_top = umulh64(MANTISSA_MAX, m_mid);
+  const uint32_t p_mid_top = umulh32(MANTISSA_MAX, m_mid);
+  const uint32_t p_mid_bottom = MANTISSA_MAX * m_mid;
+  const uint32_t p_mid_bottom_1e9 = umulh32(p_mid_bottom, DEC9);
+  const uint32_t p_low_top = umulh32(MANTISSA_MAX, m_low);
 
   const uint64_t first_9_digits = umulh32(MANTISSA_MAX, m_high);
-  const uint32_t next_9_digits = p_low_top + p_hi_bottom_1e9;
+  const uint32_t next_9_digits = p_mid_top + p_hi_bottom_1e9;
 
   return first_9_digits;
 }
@@ -206,6 +209,12 @@ BOOST_AUTO_TEST_CASE(multiplytest)
   {
     const uint32_t mantissa = 8388608;
     table_3_way tablevals = { .hig = 140129846, .mid = 432481707, .low = 92372958 };
+    mul_ret_remainder(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
+    BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
+  }
+  {
+    const uint32_t mantissa = 16759306;
+    table_3_way tablevals = { .hig = 152587890, .mid = 625000000, .low = 0 };
     mul_ret_remainder(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
     BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
   }

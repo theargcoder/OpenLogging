@@ -54,7 +54,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static auto ToStrCharArray(const T &input, int PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
-    using Floating = Constants::Tables::Floating<T>;
+    using Floating = Constants::Tables::Floating<double>;
 
     static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
@@ -93,7 +93,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
-    const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
+    const auto *table = &Floating::DIGITS[exp];
     using type = typename Math::IEEE754<T>::underlying;
     uint32_t extra_digits;
     type digits_10;
@@ -137,7 +137,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       else
       {
         const auto rem_exp = PRECISION - exp_base_10_int;
-        const auto required_twos = -(exp - Floating::MANTISSA_BITS - Floating::BIAS) - rem_exp;
+        const auto required_twos = -(exp - Floating::MANTISSA_BITS - Floating::EXPONENT_BIAS) - rem_exp;
         bool trailingZeros = required_twos <= 0 || (required_twos < 60 && multipleOfPowerOf2(mantissa, (uint32_t)required_twos));
         if(rem_exp < 0)
         {
