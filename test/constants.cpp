@@ -1,3 +1,4 @@
+#include <istream>
 #define BOOST_TEST_MODULE ConstantsTests
 
 #include <boost/multiprecision/cpp_bin_float.hpp>
@@ -101,30 +102,71 @@ BOOST_AUTO_TEST_CASE(test_sig_figs_of_floating_point_v_table)
   test_float_table(static_cast<double>(0));
 }
 
-/*
-auto mul3_128b(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
+static inline auto umulh32(const uint32_t &a, const uint32_t &b)
 {
-  static const constexpr __uint128_t SHIFT53 = (__uint128_t)1 << 53;
-  static const constexpr __uint128_t MASK53 = SHIFT53 - 1;
+  return (uint32_t)((uint64_t)a * b >> 32);
+}
 
-  static const constexpr __uint128_t DEC7 = 10'000'000ULL;
-  static const constexpr __uint128_t DEC9 = 1'000'000'000ULL;
-  static const constexpr __uint128_t DEC18 = DEC9 * DEC9;
+static inline auto umulh64(const uint64_t &a, const uint64_t &b)
+{
+  return (uint64_t)((__uint128_t)a * b >> 64);
+}
 
-  const __uint128_t p_hi = static_cast<__uint128_t>(mantissa) * m_high;
-  const __uint128_t p_mid = static_cast<__uint128_t>(mantissa) * m_mid;
-  const __uint128_t p_low = static_cast<__uint128_t>(mantissa) * m_low;
-  const __uint128_t carry = (((p_hi & MASK53) * DEC18) + ((p_mid & MASK53) * DEC9) + (p_low & MASK53)) >> 53;
+auto mul_ret_remainder(const uint32_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid)
+{
+  static const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-  const uint32_t q_hi = p_hi >> 53;
-  const uint32_t q_mid = p_mid >> 53;
-  const uint32_t q_low = p_low >> 53;
+  const auto MANTISSA_MAX = mantissa << (32 - 23);
 
-  const __uint128_t total = static_cast<__uint128_t>(q_hi) * DEC18 + static_cast<uint64_t>(q_mid) * DEC9 + q_low + carry;
+  const uint32_t p_hi_bottom = MANTISSA_MAX * m_high;
+  const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
+  const uint32_t p_low_top = umulh64(MANTISSA_MAX, m_mid);
 
-  const uint64_t top_18_digits = static_cast<uint64_t>(total / DEC7);
+  const uint64_t first_9_digits = umulh32(MANTISSA_MAX, m_high);
+  const uint32_t next_9_digits = p_low_top + p_hi_bottom_1e9;
 
-  return top_18_digits;
+  return first_9_digits;
+}
+
+static inline uint32_t top_digit(uint32_t n)
+{
+  return (uint64_t(n) * 0x55E63B89ULL) >> 57;
+}
+
+auto mul_ret_remainder(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
+{
+  static const constexpr uint64_t DEC10 = 10'000'000'000ULL;
+  static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+  static const constexpr uint64_t DEC8 = 100'000'000ULL;
+
+  const auto MANTISSA_MAX = mantissa << (64 - 53);
+
+  const uint64_t AABC = static_cast<uint64_t>(m_high) * DEC9 + m_mid;
+  const uint64_t CCDKS = (MANTISSA_MAX)*AABC;
+  const uint32_t KJDLD = static_cast<uint32_t>(umulh64(CCDKS, DEC9));
+  const uint32_t KDJSLFJ = static_cast<uint32_t>(umulh64(MANTISSA_MAX, m_low));
+
+  const uint64_t AFIRST118 = umulh64(MANTISSA_MAX, AABC);
+  const uint32_t NEXT9DIGI = KDJSLFJ + KJDLD;
+
+  {
+    const uint32_t low_top_digit = top_digit(m_high);
+    const uint32_t low_part = m_low - (low_top_digit * DEC9);
+
+    const uint64_t m_high_mid = static_cast<uint64_t>(m_high) * DEC10 + static_cast<uint64_t>(m_mid) * 10 + low_top_digit;
+    const uint64_t p_hi_mid_bottom = (MANTISSA_MAX)*m_high_mid;
+    const uint32_t p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulh64(p_hi_mid_bottom, DEC8));
+    const uint32_t p_low_top = static_cast<uint32_t>(umulh64(MANTISSA_MAX, low_part));
+
+    uint64_t result = umulh64(MANTISSA_MAX, m_high_mid);
+    uint32_t next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
+
+    if(next_9_digits >= DEC8)
+    {
+      result++;
+      next_9_digits -= DEC8;
+    }
+  }
 }
 
 auto mul2_128b(const uint64_t &mantissa, const uint32_t &m_high, const uint32_t &m_low)
@@ -152,11 +194,10 @@ BOOST_AUTO_TEST_CASE(multiplytest)
     BOOST_CHECK_EQUAL(expected_truncated, 99'999'999'998'652'475); //'500'019'082);
   }
   {
-    const auto expected_truncated = mul3_128b(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
-    BOOST_CHECK_EQUAL(expected_truncated, 99999'99999'86524'7550ULL); //'500'019'082);
+    mul_ret_remainder(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
+    BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
   }
 }
-*/
 
 /*
 template <typename T>

@@ -52,7 +52,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
-  static auto ToStrCharArray(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
+  static auto ToStrCharArray(const T &input, int PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<T>;
 
@@ -91,15 +91,47 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
+    if(PRECISION < 1)
+      PRECISION = 1;
+    else if(PRECISION > 17)
+      PRECISION = 15; // default
+
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18);
 
     const auto *table = &Constants::Tables::Floating<double>::DIGITS[exp];
     using type = typename Math::IEEE754<T>::underlying;
+    uint32_t extra_digits;
     type digits_10;
-    const bool extra = frexpp.mul3_128b(table, PRECISION, digits_10, exp_base_10_int);
+    frexpp.mul3_128b(table, digits_10, extra_digits);
 
-    const auto after_digit = digits_10 % 10;
-    digits_10 /= 10;
+    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
+    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 2);
+
+    if(digits_10 < min_precision)
+    {
+      digits_10 *= 10;
+      exp_base_10_int--;
+    }
+
+    bool extra = extra_digits != 0;
+    if(PRECISION < 17)
+    {
+      static const constexpr auto truncation_table = Constants::Tables::GetTruncationTable<type>();
+
+      const auto &pres_div = truncation_table[PRECISION];
+
+      const auto rem = Helpers::Math::Magic::Modulo::mod_by_10_denominator(digits_10, pres_div);
+      digits_10 = Helpers::Math::Magic::Division::div_by_10_denominator(digits_10, pres_div);
+      extra = extra || rem != 0;
+    }
+    else
+    {
+      const auto rem = Helpers::Math::Magic::Division::top_digit(extra_digits);
+      extra = extra || rem != 0;
+    }
+
+    const auto after_digit = Helpers::Math::Magic::Modulo::mod_by_10_template<10>(digits_10);
+    digits_10 = Helpers::Math::Magic::Division::div_by_10_pow_template<10>(digits_10);
 
     if(after_digit > 5)
     {
@@ -136,8 +168,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
         }
       }
     }
-
-    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
 
     if(digits_10 >= precision_table[PRECISION])
     {

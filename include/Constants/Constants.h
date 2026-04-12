@@ -2210,6 +2210,20 @@ namespace Constants::Tables
     return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
   }
 
+  template <typename TypeBase, std::size_t... I>
+  static constexpr auto GetTruncationTableImpl(std::index_sequence<I...> /*unused*/)
+  {
+    constexpr auto N = sizeof...(I);
+    return std::array<TypeBase, N + 1>{ (Helpers::Math::Constexpr::ipow(TypeBase{ 10 }, N - I - 2))..., 1 };
+  }
+
+  template <typename Type>
+  static constexpr auto GetTruncationTable()
+  {
+    const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+    return GetTruncationTableImpl<Type>(std::make_index_sequence<N>());
+  }
+
   template <typename T, uint32_t BASE, std::size_t... I>
   static constexpr auto GetRoundingTableImpl(std::index_sequence<I...> /*unused*/)
   {
