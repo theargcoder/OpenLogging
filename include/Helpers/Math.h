@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <bit>
 #include <cstdint>
 #include <limits>
@@ -835,11 +834,16 @@ namespace Helpers::Math
 
     __attribute__((always_inline)) static uint64_t umulhi(const uint64_t &a, const uint64_t &b)
     {
+#if defined(__x86_64__)
       uint64_t hi;
       uint64_t lo = a;
-
       asm("mul %[b]" : "+a"(lo), "=d"(hi) : [b] "r"(b) : "cc");
-
+#elif defined(__aarch64__)
+      uint64_t hi;
+      asm("umulh %0, %1, %2" : "=r"(hi) : "r"(a), "r"(b));
+#else
+      return (uint64_t)((__uint128_t)a * b >> 64);
+#endif
       return hi;
     }
 
