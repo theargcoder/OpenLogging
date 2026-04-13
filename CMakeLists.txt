@@ -26,7 +26,8 @@ endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
-      -g
+      -ggdb
+      -fno-omit-frame-pointer
       -O0
       -Wall
       -Wshadow
@@ -52,9 +53,11 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
       -Ofast
+      -ggdb
+      -fno-omit-frame-pointer
       -fprefetch-loop-arrays
       -funroll-loops
-      -march=broadwell
+      -march=native
       -static-libstdc++
       -Wall
       -Wshadow

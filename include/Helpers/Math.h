@@ -736,7 +736,7 @@ namespace Helpers::Math
     }
 
   private:
-    static inline auto umulh32(const uint64_t &a, const uint32_t &b)
+    __attribute__((always_inline)) static auto umulh32(const uint64_t &a, const uint32_t &b)
     {
       return static_cast<uint32_t>((a * b) >> NUM_OF_BITS);
     }
@@ -833,6 +833,16 @@ namespace Helpers::Math
       return static_cast<uint64_t>(static_cast<uint128_t>(a) * b >> NUM_OF_BITS);
     }
 
+    __attribute__((always_inline)) static uint64_t umulhi(const uint64_t &a, const uint64_t &b)
+    {
+      uint64_t hi;
+      uint64_t lo = a;
+
+      asm("mul %[b]" : "+a"(lo), "=d"(hi) : [b] "r"(b) : "cc");
+
+      return hi;
+    }
+
   public:
     static auto multiply(const underlying &mantissa, const auto *table, auto &result, auto &next_9_digits) noexcept
     {
@@ -842,10 +852,10 @@ namespace Helpers::Math
 
       const uint64_t m_high_mid = static_cast<uint64_t>(table->hig) * DEC9 + table->mid;
       const uint64_t p_hi_mid_bottom = (MANTISSA_MAX)*m_high_mid;
-      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulh64(p_hi_mid_bottom, DEC9));
-      const auto p_low_top = static_cast<uint32_t>(umulh64(MANTISSA_MAX, table->low));
+      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulhi(p_hi_mid_bottom, DEC9));
+      const auto p_low_top = static_cast<uint32_t>(umulhi(MANTISSA_MAX, table->low));
 
-      result = umulh64(MANTISSA_MAX, m_high_mid);
+      result = umulhi(MANTISSA_MAX, m_high_mid);
       next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
 
       while(next_9_digits >= DEC9)
