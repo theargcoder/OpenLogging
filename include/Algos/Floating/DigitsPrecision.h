@@ -87,7 +87,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       const auto exp_2 = table[exp + Floating::BIAS];
 
-      using base_type = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::table_3_way::hig)>;
+      using base_type = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
       const auto digits_10 = static_cast<base_type>(mantissa * exp_2);
 
@@ -201,7 +201,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(base_type{ 10 }, std::numeric_limits<base_type>::digits10 - 1);
 
-      const auto *exp_2 = &Constants::Tables::Floating<T>::DIGITS[exp + FloatingStruct::BIAS];
+      const auto *exp_2 = &Constants::Tables::Floating<T>::DIGITS[exp + FloatingStruct::BIAS][0];
 
       uint32_t extra_digits;
       base_type digits_10;

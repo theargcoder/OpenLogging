@@ -70,14 +70,7 @@ namespace Constants::Tables
     static const constexpr auto MAX_EXP_DIGITS10 = static_cast<decltype(MIN_BIN_EXP)>(Helpers::Math::Constexpr::log10(T{ std::numeric_limits<T>::max_exponent10 }));
 
   public:
-    struct table_3_way
-    {
-      uint32_t hig; // 9 digits
-      uint32_t mid; // 9 digits
-      uint32_t low; // 9 digits
-    };
-
-    static const constexpr table_3_way DIGITS[SIZE] = { { 494065645U, 841246544U, 176568792U },
+    static const constexpr uint32_t DIGITS[SIZE][3] = { { 494065645U, 841246544U, 176568792U },
                                                         { 988131291U, 682493088U, 353137585U },
                                                         { 197626258U, 336498617U, 670627517U },
                                                         { 395252516U, 672997235U, 341255034U },
@@ -2236,8 +2229,8 @@ namespace Constants::Tables
   static constexpr auto GetRoundingTable()
   {
     constexpr auto N = std::numeric_limits<T>::digits10;
-    using IntType = std::remove_cvref_t<decltype(Constants::Tables::Floating<T>::table_3_way::hig)>;
-    return GetRoundingTableImpl<IntType, BASE>(std::make_index_sequence<N>());
+    using base_type = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
+    return GetRoundingTableImpl<base_type, BASE>(std::make_index_sequence<N>());
   }
 } // namespace Constants::Tables
 

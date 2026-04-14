@@ -677,9 +677,10 @@ namespace Helpers::Math
     using signed_underlying = int32_t;
 
     static const constexpr uint8_t NUM_OF_BITS = sizeof(float) * 8U;
-    static const constexpr uint8_t EXPONENT_ST = 23;
+    static const constexpr uint8_t EXPONENT_ST = 23U;
+    static const constexpr uint8_t MANTISSA_SHIFT = 9U;
     static const constexpr uint8_t EXPONENT_LEFT_OFFSET = sizeof(float) * 8 - EXPONENT_ST - 1;
-    static const constexpr uint8_t EXPONENT_ALL_BITS_ON = 255; // as defined in IEEE-754
+    static const constexpr uint8_t EXPONENT_ALL_BITS_ON = 255U; // as defined in IEEE-754
 
     static const constexpr int16_t MIN_EXPONENT = std::numeric_limits<float>::min_exponent - std::numeric_limits<float>::digits;
     static const constexpr int16_t EXPONENT_TABLE_OFFSET = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
@@ -691,7 +692,7 @@ namespace Helpers::Math
     static const constexpr underlying SIGN_ONLY = 0x80000000U;
 
   public:
-    underlying mantissa;
+    uint64_t mantissa;
     int exponent;
 
   public:
@@ -714,7 +715,7 @@ namespace Helpers::Math
 
       if(exp > 0) [[likely]]
       {
-        mantissa = man | MANTISSA_IMPLICIT_1;
+        mantissa = static_cast<uint64_t>(man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
         exponent = exp + EXPONENT_TABLE_BIAS;
       }
       else
@@ -723,7 +724,7 @@ namespace Helpers::Math
 
         if(shift_internal <= EXPONENT_ST) [[likely]]
         {
-          mantissa = ((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+          mantissa = static_cast<uint64_t>(((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
           exponent = 1 - shift_internal + EXPONENT_TABLE_BIAS;
         }
         else
@@ -741,17 +742,15 @@ namespace Helpers::Math
     }
 
   public:
-    static auto multiply(const underlying &mantissa, const auto *table, auto &result, auto &next_9_digits) noexcept
+    static auto multiply(const std::remove_cvref_t<decltype(IEEE754<float>::mantissa)> &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept
     {
       static const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-      const uint64_t MANTISSA_MAX = static_cast<uint64_t>(mantissa) << 9U;
-
-      const uint32_t p_hi_bottom = MANTISSA_MAX * table->hig;
+      const uint32_t p_hi_bottom = mantissa * table[0];
       const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
-      const uint32_t p_low_top = umulh32(MANTISSA_MAX, table->mid);
+      const uint32_t p_low_top = umulh32(mantissa, table[1]);
 
-      result = umulh32(MANTISSA_MAX, table->hig);
+      result = umulh32(mantissa, table[0]);
       next_9_digits = p_low_top + p_hi_bottom_1e9;
 
       while(next_9_digits >= DEC9)
@@ -771,12 +770,12 @@ namespace Helpers::Math
     using signed_underlying = int64_t;
     using uint128_t = __uint128_t;
 
-    static const constexpr uint8_t NUM_OF_BITS = sizeof(double) * 8;
-    static const constexpr uint8_t EXPONENT_ST = 52;
-    static const constexpr uint8_t shift = EXPONENT_ST + 1;
+    static const constexpr uint8_t NUM_OF_BITS = sizeof(double) * 8U;
+    static const constexpr uint8_t EXPONENT_ST = 52U;
+    static const constexpr uint8_t MANTISSA_SHIFT = 11U;
     static const constexpr uint8_t EXPONENT_LEFT_OFFSET = NUM_OF_BITS - EXPONENT_ST - 1;
 
-    static const constexpr uint16_t EXPONENT_ALL_BITS_ON = 2047; // as defined in IEEE-754
+    static const constexpr uint16_t EXPONENT_ALL_BITS_ON = 2047U; // as defined in IEEE-754
 
     static const constexpr underlying EXPONENT_ONLY = 0x7FF0000000000000ULL;
     static const constexpr underlying MANTISSA_ONLY = 0x000FFFFFFFFFFFFFULL;
@@ -806,7 +805,7 @@ namespace Helpers::Math
 
       if(exp > 0) [[likely]]
       {
-        mantissa = man | MANTISSA_IMPLICIT_1;
+        mantissa = (man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
         exponent = exp + EXPONENT_ST;
       }
       else
@@ -815,7 +814,7 @@ namespace Helpers::Math
 
         if(shift_internal <= EXPONENT_ST) [[likely]]
         {
-          mantissa = ((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1;
+          mantissa = (((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
           exponent = 1 + EXPONENT_ST - shift_internal;
         }
         else
@@ -852,14 +851,12 @@ namespace Helpers::Math
     {
       static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
 
-      const auto MANTISSA_MAX = mantissa << 11U;
-
-      const uint64_t m_high_mid = static_cast<uint64_t>(table->hig) * DEC9 + table->mid;
-      const uint64_t p_hi_mid_bottom = (MANTISSA_MAX)*m_high_mid;
+      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
+      const uint64_t p_hi_mid_bottom = (mantissa)*m_high_mid;
       const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulhi(p_hi_mid_bottom, DEC9));
-      const auto p_low_top = static_cast<uint32_t>(umulhi(MANTISSA_MAX, table->low));
+      const auto p_low_top = static_cast<uint32_t>(umulhi(mantissa, table[2]));
 
-      result = umulhi(MANTISSA_MAX, m_high_mid);
+      result = umulhi(mantissa, m_high_mid);
       next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
 
       while(next_9_digits >= DEC9)

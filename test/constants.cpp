@@ -61,8 +61,8 @@ namespace
     for(int i = Constants::Tables::Floating<float>::MIN_BIN_EXP; i <= Constants::Tables::Floating<float>::MAX_BIN_EXP; i++)
     {
       const auto idx = i + Constants::Tables::Floating<T>::BIAS;
-      const __uint128_t val = static_cast<__uint128_t>(table[idx].hig) * Tests::pow(__uint128_t{ 10 }, 18)
-                              + static_cast<__uint128_t>(table[idx].mid) * Tests::pow(__uint128_t{ 10 }, 9) + table[idx].low;
+      const __uint128_t val = static_cast<__uint128_t>(table[idx][0]) * Tests::pow(__uint128_t{ 10 }, 18)
+                              + static_cast<__uint128_t>(table[idx][1]) * Tests::pow(__uint128_t{ 10 }, 9) + table[idx][2];
       const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 

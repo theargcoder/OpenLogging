@@ -309,7 +309,7 @@ namespace
   {
     const auto float_res = tester_format_exponential(static_cast<T>(0), PRECISION);
 
-    log_time_tables(0.0, PRECISION, BenchResult("OpenLogging", std::get<0>(float_res)), BenchResult("std::to_chars", std::get<1>(float_res)),
+    log_time_tables(T{ 0.0 }, PRECISION, BenchResult("OpenLogging", std::get<0>(float_res)), BenchResult("std::to_chars", std::get<1>(float_res)),
                     BenchResult("ryu", std::get<2>(float_res)));
   };
 

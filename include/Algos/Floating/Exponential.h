@@ -69,7 +69,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18U);
 
-    const auto *table = &Floating::DIGITS[exp];
+    const auto *table = &Floating::DIGITS[exp][0];
     uint32_t extra_digits;
     type digits_10;
     Helpers::Math::IEEE754<T>::multiply(mantissa, table, digits_10, extra_digits);
