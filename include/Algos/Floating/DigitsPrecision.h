@@ -54,11 +54,11 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       buff.start_idx = SIZE_OF_BUFF;
 
-      const auto frexpp = Helpers::Math::IEEE754<T>(input);
-      const auto &exp = frexpp.exponent;
-      const auto &mantissa = frexpp.mantissa;
+      int exp;
+      uint64_t mantissa;
+      Helpers::Math::IEEE754::GetMantissaExponent(input, mantissa, exp);
 
-      if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max()) [[unlikely]]
+      if(exp == std::numeric_limits<std::remove_cvref_t<decltype(exp)>>::max()) [[unlikely]]
       {
         buff.start_idx -= 3;
         if(mantissa == T{ 0 })
@@ -165,11 +165,11 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       buff.start_idx = SIZE_OF_BUFF;
 
-      const auto frexpp = Helpers::Math::IEEE754<T>(input);
-      const auto &exp = frexpp.exponent;
-      const auto &mantissa = frexpp.mantissa;
+      int exp;
+      uint64_t mantissa;
+      Helpers::Math::IEEE754::GetMantissaExponent(input, mantissa, exp);
 
-      if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max()) [[unlikely]]
+      if(exp == std::numeric_limits<std::remove_cvref_t<decltype(exp)>>::max()) [[unlikely]]
       {
         if(mantissa == T{ 0 })
         {
@@ -197,7 +197,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         return buff;
       }
 
-      using base_type = typename Helpers::Math::IEEE754<T>::underlying;
+      using base_type = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
       static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(base_type{ 10 }, std::numeric_limits<base_type>::digits10 - 1);
 
@@ -205,7 +205,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       uint32_t extra_digits;
       base_type digits_10;
-      Helpers::Math::IEEE754<T>::multiply(mantissa, exp_2, digits_10, extra_digits);
+      Helpers::Math::IEEE754::Multiply<T>(mantissa, exp_2, digits_10, extra_digits);
 
       static const constexpr auto base_5_rounding_table = Constants::Tables::GetRoundingTable<T, 5>();
       static const constexpr auto base_10_rounding_table = Constants::Tables::GetRoundingTable<T, 10>();

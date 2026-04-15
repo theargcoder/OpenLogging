@@ -23,7 +23,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   static auto ToStrCharArray(const T &input, int PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<double>;
-    using type = typename Helpers::Math::IEEE754<T>::underlying;
+    using type = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
     static const constexpr type BASE = 10U;
     static const constexpr type DEC8 = 100'000'000U;
@@ -37,11 +37,11 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
     buff.start_idx = SIZE_OF_BUFF;
 
-    const auto frexpp = Helpers::Math::IEEE754<T>(input);
-    const auto &exp = frexpp.exponent;
-    const auto &mantissa = frexpp.mantissa;
+    uint64_t mantissa;
+    int exp_base_10_int;
+    Helpers::Math::IEEE754::GetMantissaExponent<T>(input, mantissa, exp_base_10_int);
 
-    if(exp == std::numeric_limits<decltype(frexpp.exponent)>::max()) [[unlikely]]
+    if(exp_base_10_int == std::numeric_limits<decltype(exp_base_10_int)>::max()) [[unlikely]]
     {
       if(mantissa == T{ 0 })
       {
@@ -67,12 +67,12 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       return buff;
     }
 
-    int exp_base_10_int = (((exp - Floating::BIAS) * 78'913) >> 18U);
+    const auto *table = &Floating::DIGITS[exp_base_10_int][0];
+    exp_base_10_int = (((exp_base_10_int - Floating::BIAS) * 78'913) >> 18U);
 
-    const auto *table = &Floating::DIGITS[exp][0];
     uint32_t extra_digits;
     type digits_10;
-    Helpers::Math::IEEE754<T>::multiply(mantissa, table, digits_10, extra_digits);
+    Helpers::Math::IEEE754::Multiply<T>(mantissa, table, digits_10, extra_digits);
 
     static const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
 

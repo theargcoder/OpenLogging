@@ -6,6 +6,8 @@
 #include <numbers>
 #include <type_traits>
 
+#include "include/Helpers/Assembly.h"
+
 namespace Helpers::Math::Constexpr
 {
   template <typename T>
@@ -662,21 +664,21 @@ namespace Helpers::Math::Precision
   }
 } // namespace Helpers::Math::Precision
 
-namespace Helpers::Math
+namespace Helpers::Math::IEEE754
 {
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-  struct IEEE754;
+  static void GetMantissaExponent(const T &input, uint64_t &mantissa, int &exponent) noexcept;
+
+  template <typename T>
+    requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
+  static auto Multiply(const uint64_t &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept;
 
   template <>
-  struct IEEE754<float>
+  void GetMantissaExponent<float>(const float &input, uint64_t &mantissa, int &exponent) noexcept
   {
     using underlying = uint32_t;
 
-  private:
-    using signed_underlying = int32_t;
-
-    static const constexpr uint8_t NUM_OF_BITS = sizeof(float) * 8U;
     static const constexpr uint8_t EXPONENT_ST = 23U;
     static const constexpr uint8_t MANTISSA_SHIFT = 9U;
     static const constexpr uint8_t EXPONENT_LEFT_OFFSET = sizeof(float) * 8 - EXPONENT_ST - 1;
@@ -691,84 +693,47 @@ namespace Helpers::Math
     static const constexpr underlying MANTISSA_IMPLICIT_1 = underlying{ 1 } << EXPONENT_ST;
     static const constexpr underlying SIGN_ONLY = 0x80000000U;
 
-  public:
-    uint64_t mantissa;
-    int exponent;
+    const auto bits = std::bit_cast<underlying>(input);
 
-  public:
-    explicit IEEE754(const float &input)
+    const underlying man = bits & MANTISSA_ONLY;
+
+    const uint8_t exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
+
+    if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
     {
-      const auto bits = std::bit_cast<underlying>(input);
+      const underlying SIGN = bits & SIGN_ONLY;
+      exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
+      mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
 
-      const underlying man = bits & MANTISSA_ONLY;
+      return;
+    }
 
-      const uint8_t exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
+    if(exp > 0) [[likely]]
+    {
+      mantissa = static_cast<uint64_t>(man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
+      exponent = exp + EXPONENT_TABLE_BIAS;
+    }
+    else
+    {
+      const auto shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
-      if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
+      if(shift_internal <= EXPONENT_ST) [[likely]]
       {
-        const underlying SIGN = bits & SIGN_ONLY;
-        exponent = std::numeric_limits<decltype(exponent)>::max();
-        mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
-
-        return;
-      }
-
-      if(exp > 0) [[likely]]
-      {
-        mantissa = static_cast<uint64_t>(man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
-        exponent = exp + EXPONENT_TABLE_BIAS;
+        mantissa = static_cast<uint64_t>(((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
+        exponent = 1 - shift_internal + EXPONENT_TABLE_BIAS;
       }
       else
       {
-        const auto shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
-
-        if(shift_internal <= EXPONENT_ST) [[likely]]
-        {
-          mantissa = static_cast<uint64_t>(((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
-          exponent = 1 - shift_internal + EXPONENT_TABLE_BIAS;
-        }
-        else
-        {
-          mantissa = std::numeric_limits<decltype(mantissa)>::max();
-          exponent = std::numeric_limits<decltype(exponent)>::max();
-        }
+        mantissa = std::numeric_limits<std::remove_cvref_t<decltype(mantissa)>>::max();
+        exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
       }
     }
-
-  private:
-    __attribute__((always_inline)) static auto umulh32(const uint64_t &a, const uint32_t &b)
-    {
-      return static_cast<uint32_t>((a * b) >> NUM_OF_BITS);
-    }
-
-  public:
-    static auto multiply(const std::remove_cvref_t<decltype(IEEE754<float>::mantissa)> &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept
-    {
-      static const constexpr uint32_t DEC9 = 1'000'000'000U;
-
-      const uint32_t p_hi_bottom = mantissa * table[0];
-      const uint32_t p_hi_bottom_1e9 = umulh32(p_hi_bottom, DEC9);
-      const uint32_t p_low_top = umulh32(mantissa, table[1]);
-
-      result = umulh32(mantissa, table[0]);
-      next_9_digits = p_low_top + p_hi_bottom_1e9;
-
-      while(next_9_digits >= DEC9)
-      {
-        result++;
-        next_9_digits -= DEC9;
-      }
-    }
-  };
+  }
 
   template <>
-  struct IEEE754<double>
+  void GetMantissaExponent<double>(const double &input, uint64_t &mantissa, int &exponent) noexcept
   {
     using underlying = uint64_t;
-
-  private:
-    using signed_underlying = int64_t;
-    using uint128_t = __uint128_t;
 
     static const constexpr uint8_t NUM_OF_BITS = sizeof(double) * 8U;
     static const constexpr uint8_t EXPONENT_ST = 52U;
@@ -783,87 +748,77 @@ namespace Helpers::Math
 
     static const constexpr underlying SIGN_ONLY = 0x8000000000000000ULL;
 
-  public:
-    underlying mantissa;
-    int exponent;
+    const auto bits = std::bit_cast<underlying>(input);
 
-  public:
-    explicit IEEE754(const double &input)
+    const underlying man = bits & MANTISSA_ONLY;
+
+    const uint16_t exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
+
+    if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
     {
-      const auto bits = std::bit_cast<underlying>(input);
+      const underlying SIGN = bits & SIGN_ONLY;
+      exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
+      mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
+    }
 
-      const underlying man = bits & MANTISSA_ONLY;
+    if(exp > 0) [[likely]]
+    {
+      mantissa = (man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
+      exponent = exp + EXPONENT_ST;
+    }
+    else
+    {
+      const auto shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
 
-      const uint16_t exp = ((bits & EXPONENT_ONLY) >> EXPONENT_ST);
-
-      if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
+      if(shift_internal <= EXPONENT_ST) [[likely]]
       {
-        const underlying SIGN = bits & SIGN_ONLY;
-        exponent = std::numeric_limits<decltype(exponent)>::max();
-        mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
-      }
-
-      if(exp > 0) [[likely]]
-      {
-        mantissa = (man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
-        exponent = exp + EXPONENT_ST;
+        mantissa = (((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
+        exponent = 1 + EXPONENT_ST - shift_internal;
       }
       else
       {
-        const auto shift_internal = std::countl_zero(man) - EXPONENT_LEFT_OFFSET;
-
-        if(shift_internal <= EXPONENT_ST) [[likely]]
-        {
-          mantissa = (((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
-          exponent = 1 + EXPONENT_ST - shift_internal;
-        }
-        else
-        {
-          mantissa = std::numeric_limits<decltype(mantissa)>::max();
-          exponent = std::numeric_limits<decltype(exponent)>::max();
-        }
+        mantissa = std::numeric_limits<std::remove_cvref_t<decltype(mantissa)>>::max();
+        exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
       }
     }
+  }
 
-  private:
-    static inline auto umulh64(const uint64_t &a, const uint64_t &b)
+  template <>
+  auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &result, uint32_t &next_9_digits) noexcept
+  {
+    static const constexpr uint32_t DEC9 = 1'000'000'000U;
+
+    const uint32_t p_hi_bottom = mantissa * table[0];
+    const uint32_t p_hi_bottom_1e9 = Helpers::Assembly::umulh32(p_hi_bottom, DEC9);
+    const uint32_t p_low_top = Helpers::Assembly::umulh32(mantissa, table[1]);
+
+    result = Helpers::Assembly::umulh32(mantissa, table[0]);
+    next_9_digits = p_low_top + p_hi_bottom_1e9;
+
+    while(next_9_digits >= DEC9)
     {
-      return static_cast<uint64_t>(static_cast<uint128_t>(a) * b >> NUM_OF_BITS);
+      result++;
+      next_9_digits -= DEC9;
     }
+  }
 
-    __attribute__((always_inline)) static uint64_t umulhi(const uint64_t &a, const uint64_t &b)
+  template <>
+  auto Multiply<double>(const uint64_t &mantissa, const uint32_t *table, uint64_t &result, uint32_t &next_9_digits) noexcept
+  {
+    static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+
+    const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
+    const uint64_t p_hi_mid_bottom = (mantissa)*m_high_mid;
+    const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(p_hi_mid_bottom, DEC9));
+    const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
+
+    result = Helpers::Assembly::umulh64(mantissa, m_high_mid);
+    next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
+
+    while(next_9_digits >= DEC9)
     {
-#if defined(__x86_64__)
-      uint64_t hi;
-      uint64_t lo = a;
-      asm("mul %[b]" : "+a"(lo), "=d"(hi) : [b] "r"(b) : "cc");
-#elif defined(__aarch64__)
-      uint64_t hi;
-      asm("umulh %0, %1, %2" : "=r"(hi) : "r"(a), "r"(b));
-#else
-      return (uint64_t)((__uint128_t)a * b >> 64);
-#endif
-      return hi;
+      result++;
+      next_9_digits -= DEC9;
     }
-
-  public:
-    static auto multiply(const underlying &mantissa, const auto *table, auto &result, auto &next_9_digits) noexcept
-    {
-      static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
-
-      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
-      const uint64_t p_hi_mid_bottom = (mantissa)*m_high_mid;
-      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(umulhi(p_hi_mid_bottom, DEC9));
-      const auto p_low_top = static_cast<uint32_t>(umulhi(mantissa, table[2]));
-
-      result = umulhi(mantissa, m_high_mid);
-      next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
-
-      while(next_9_digits >= DEC9)
-      {
-        result++;
-        next_9_digits -= DEC9;
-      }
-    }
-  };
-} // namespace Helpers::Math
+  }
+}

@@ -191,6 +191,44 @@ struct table_3_way
   uint32_t low;
 };
 
+__attribute__((always_inline)) static uint64_t umul64hi(const uint64_t &a, const uint64_t &b)
+{
+#if defined(__x86_64__)
+  uint64_t hi;
+  uint64_t lo = a;
+  asm("mul %[b]" : "+a"(lo), "=d"(hi) : [b] "r"(b) : "cc");
+  return hi;
+#elif defined(__aarch64__)
+  uint64_t hi;
+  asm("umulh %0, %1, %2" : "=r"(hi) : "r"(a), "r"(b));
+  return hi;
+#else
+  return (uint64_t)((__uint128_t)a * b >> 64);
+#endif
+}
+
+template <typename Type>
+  requires std::is_same_v<uint64_t, Type>
+auto mul_carry(const Type &mantissa, const uint32_t &m_to_multiply, uint32_t &digits, uint64_t &remainder)
+{
+  static const constexpr uint32_t DEC9 = 1'000'000'000U;
+
+  // 1. Calculate the carry coming down from the previous stage's remainder
+  // (If this is the first call, 'remainder' is 0, so these cleanly become 0)
+  const uint32_t carry_down = umul64hi(remainder, DEC9);
+  const uint32_t local_digits = umul64hi(mantissa, m_to_multiply);
+  const uint64_t rem_shifted = remainder * DEC9;
+  const uint64_t local_rem = mantissa * m_to_multiply;
+
+  digits = local_digits + carry_down;
+  remainder = local_rem + rem_shifted;
+
+  if(remainder < local_rem)
+  {
+    digits++;
+  }
+}
+
 BOOST_AUTO_TEST_CASE(multiplytest)
 {
 
