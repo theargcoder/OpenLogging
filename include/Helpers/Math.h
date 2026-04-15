@@ -222,15 +222,17 @@ namespace Helpers::Math::Magic::Division
     static_assert(N <= std::numeric_limits<uint32_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { return Helpers::Assembly::umulh32(n ,0xCCCCCCCDULL) >> 3U; }
-    else if constexpr(N == 2) { return Helpers::Assembly::umulh32(n ,0xA3D70A3EULL) >> 6U; }
-    else if constexpr(N == 3) { return Helpers::Assembly::umulh32(n ,0x83126E98ULL) >> 9U; }
-    else if constexpr(N == 4) { return Helpers::Assembly::umulh32(n ,0xD1B71759ULL) >> 13U; }
-    else if constexpr(N == 5) { return Helpers::Assembly::umulh32(n ,0xA7C5AC48ULL) >> 16U; }
-    else if constexpr(N == 6) { return Helpers::Assembly::umulh32(n ,0x8637BD06ULL) >> 19U; }
-    else if constexpr(N == 7) { return Helpers::Assembly::umulh32(n ,0xD6BF94D6ULL) >> 23U; }
-    else if constexpr(N == 8) { return Helpers::Assembly::umulh32(n ,0xABCC7712ULL) >> 26U; }
-    else if constexpr(N == 9) { return Helpers::Assembly::umulh32(n ,0x89705F42ULL) >> 29U; }
+    // --- 32-bit divide by 10^p ---
+    if constexpr(N == 1) {      return Helpers::Assembly::umulh32(n, 0xCCCCCCCDULL) >> 3U; }
+    else if constexpr(N == 2) { return Helpers::Assembly::umulh32(n, 0x51EB851FULL) >> 5U; }
+    else if constexpr(N == 3) { return Helpers::Assembly::umulh32(n, 0x10624DD3ULL) >> 6U; }
+    else if constexpr(N == 4) { return Helpers::Assembly::umulh32(n, 0xD1B71759ULL) >> 13U; }
+    else if constexpr(N == 5) { const uint32_t t = Helpers::Assembly::umulh32(n, 0x4F8B588FULL); return (((n - t) >> 1) + t) >> 16U; }
+    else if constexpr(N == 6) { return Helpers::Assembly::umulh32(n, 0x431BDE83ULL) >> 18; }
+    else if constexpr(N == 7) { return Helpers::Assembly::umulh32(n, 0x6B5FCA6BULL) >> 22; }
+    else if constexpr(N == 8) { return Helpers::Assembly::umulh32(n, 0x55E63B89ULL) >> 25; }
+    else if constexpr(N == 9) { const uint32_t t = Helpers::Assembly::umulh32(n, 0x12E0BE83ULL); return (((n - t) >> 1) + t) >> 29U; }
+
     // clang-format on
   }
 
@@ -241,15 +243,15 @@ namespace Helpers::Math::Magic::Division
     static_assert(N <= std::numeric_limits<uint32_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { n = Helpers::Assembly::umulh32(n ,0xCCCCCCCDULL) >> 3U; }
-    else if constexpr(N == 2) { n = Helpers::Assembly::umulh32(n ,0xA3D70A3EULL) >> 6U; }
-    else if constexpr(N == 3) { n = Helpers::Assembly::umulh32(n ,0x83126E98ULL) >> 9U; }
-    else if constexpr(N == 4) { n = Helpers::Assembly::umulh32(n ,0xD1B71759ULL) >> 13U; }
-    else if constexpr(N == 5) { n = Helpers::Assembly::umulh32(n ,0xA7C5AC48ULL) >> 16U; }
-    else if constexpr(N == 6) { n = Helpers::Assembly::umulh32(n ,0x8637BD06ULL) >> 19U; }
-    else if constexpr(N == 7) { n = Helpers::Assembly::umulh32(n ,0xD6BF94D6ULL) >> 23U; }
-    else if constexpr(N == 8) { n = Helpers::Assembly::umulh32(n ,0xABCC7712ULL) >> 26U; }
-    else if constexpr(N == 9) { n = Helpers::Assembly::umulh32(n ,0x89705F42ULL) >> 29U; }
+    if constexpr(N == 1) { n = Helpers::Assembly::umulh32(n, 0xCCCCCCCDULL) >> 3U; }
+    else if constexpr(N == 2) { n = Helpers::Assembly::umulh32(n, 0x51EB851FULL) >> 5U; }
+    else if constexpr(N == 3) { n = Helpers::Assembly::umulh32(n, 0x10624DD3ULL) >> 6U; }
+    else if constexpr(N == 4) { n = Helpers::Assembly::umulh32(n, 0xD1B71759ULL) >> 13U; }
+    else if constexpr(N == 5) { const uint32_t t = Helpers::Assembly::umulh32(n, 0x4F8B588FULL); n = (((n - t) >> 1) + t) >> 16U; }
+    else if constexpr(N == 6) { n = Helpers::Assembly::umulh32(n, 0x431BDE83ULL) >> 18; }
+    else if constexpr(N == 7) { n = Helpers::Assembly::umulh32(n, 0x6B5FCA6BULL) >> 22; }
+    else if constexpr(N == 8) { n = Helpers::Assembly::umulh32(n, 0x55E63B89ULL) >> 25; }
+    else if constexpr(N == 9) { const uint32_t t = Helpers::Assembly::umulh32(n, 0x12E0BE83ULL); n = (((n - t) >> 1) + t) >> 29U; }
     // clang-format on
   }
 
@@ -298,25 +300,25 @@ namespace Helpers::Math::Magic::Division
     static_assert(N <= std::numeric_limits<uint64_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { return  Helpers::Assembly::umulh64(n , 0xCCCCCCCCCCCCCCCDULL) >> 3U; }
-    else if constexpr(N == 2) { return Helpers::Assembly::umulh64(n ,0xA3D70A3D70A3D70BULL) >> 6; }  
-    else if constexpr(N == 3) { return Helpers::Assembly::umulh64(n, 0x83126E978D4FDF3CULL) >> 9; }  
-    else if constexpr(N == 4) { return Helpers::Assembly::umulh64(n, 0xD1B71758E219652CULL) >> 13; }  
-    else if constexpr(N == 5) { return Helpers::Assembly::umulh64(n, 0xA7C5AC471B478424ULL) >> 16; }  
-    else if constexpr(N == 6) { return Helpers::Assembly::umulh64(n, 0x8637BD05AF6C69B6ULL) >> 19; }  
-    else if constexpr(N == 7) { return Helpers::Assembly::umulh64(n, 0xD6BF94D5E57A42BDULL) >> 23; }  
-    else if constexpr(N == 8) { return Helpers::Assembly::umulh64(n, 0xABCC77118461CEFDULL) >> 26; }  
-    else if constexpr(N == 9) { return Helpers::Assembly::umulh64(n, 0x89705F4136B4A598ULL) >> 29; }  
-    else if constexpr(N == 10) { return Helpers::Assembly::umulh64(n, 0xDBE6FECEBDEDD5C0ULL) >> 33; }  
-    else if constexpr(N == 11) { return Helpers::Assembly::umulh64(n, 0xAFEBFF0BCB24AAFFULL) >> 36; }  
-    else if constexpr(N == 12) { return Helpers::Assembly::umulh64(n, 0x8CBCCC096F5088CCULL) >> 39; }  
-    else if constexpr(N == 13) { return Helpers::Assembly::umulh64(n, 0xE12E13424BB40E14ULL) >> 43; }  
-    else if constexpr(N == 14) { return Helpers::Assembly::umulh64(n, 0xB424DC35095CD810ULL) >> 46; }  
-    else if constexpr(N == 15) { return Helpers::Assembly::umulh64(n, 0x901D7CF73AB0ACDCULL) >> 49; }  
-    else if constexpr(N == 16) { return Helpers::Assembly::umulh64(n, 0xE69594BEC44DE15CULL) >> 53; }  
-    else if constexpr(N == 17) { return Helpers::Assembly::umulh64(n, 0xB877AA3236A4B44AULL) >> 56; }  
-    else if constexpr(N == 18) { return Helpers::Assembly::umulh64(n, 0x9392EE8E921D5D08ULL) >> 59; }  
-    else if constexpr(N == 19) { return Helpers::Assembly::umulh64(n, 0xEC1E4A7DB69561A6ULL) >> 63; }
+    if constexpr(N == 1) { return Helpers::Assembly::umulh64(n , 0xCCCCCCCCCCCCCCCDULL) >> 3; }
+    else if constexpr(N == 2) { uint64_t t = Helpers::Assembly::umulh64(n , 0x47AE147AE147AE15ULL); return (((n - t) >> 1) + t) >> 6; }
+    else if constexpr(N == 3) { uint64_t t = Helpers::Assembly::umulh64(n , 0x624DD2F1A9FBE77ULL); return (((n - t) >> 1) + t) >> 9; }
+    else if constexpr(N == 4) { return Helpers::Assembly::umulh64(n , 0x346DC5D63886594BULL) >> 11; }
+    else if constexpr(N == 5) { uint64_t t = Helpers::Assembly::umulh64(n , 0x4F8B588E368F0847ULL); return (((n - t) >> 1) + t) >> 16; }
+    else if constexpr(N == 6) { return Helpers::Assembly::umulh64(n , 0x431BDE82D7B634DBULL) >> 18U; }
+    else if constexpr(N == 7) { return Helpers::Assembly::umulh64(n , 0xD6BF94D5E57A42BDULL) >> 23U; }
+    else if constexpr(N == 8) { return Helpers::Assembly::umulh64(n , 0xABCC77118461CEFDULL) >> 26U; }
+    else if constexpr(N == 9) { uint64_t t = Helpers::Assembly::umulh64(n, 0x12E0BE826D694B2FULL); return (((n - t) >> 1) + t) >> 29; }
+    else if constexpr(N == 10) { return Helpers::Assembly::umulh64(n, 0xDBE6FECEBDEDD5BFULL) >> 33U; }
+    else if constexpr(N == 11) { return Helpers::Assembly::umulh64(n, 0xAFEBFF0BCB24AAFFULL) >> 36U; }
+    else if constexpr(N == 12) { return Helpers::Assembly::umulh64(n, 0x232F33025BD42233ULL) >> 37U; }
+    else if constexpr(N == 13) { return Helpers::Assembly::umulh64(n, 0x384B84D092ED0385ULL) >> 41U; }
+    else if constexpr(N == 14) { return Helpers::Assembly::umulh64(n, 0xB424DC35095CD81ULL) >> 42U; }
+    else if constexpr(N == 15) { uint64_t t = Helpers::Assembly::umulh64(n, 0x203AF9EE756159B3ULL); return (((n - t) >> 1) + t) >> 49; }
+    else if constexpr(N == 16) { return Helpers::Assembly::umulh64(n, 0x39A5652FB1137857ULL) >> 51U; }
+    else if constexpr(N == 17) { uint64_t t = Helpers::Assembly::umulh64(n, 0x70EF54646D496893ULL); return (((n - t) >> 1) + t) >> 56; }
+    else if constexpr(N == 18) { uint64_t t = Helpers::Assembly::umulh64(n, 0x2725DD1D243ABA0FULL); return (((n - t) >> 1) + t) >> 59; }
+    else if constexpr(N == 19) { return Helpers::Assembly::umulh64(n, 0x760F253EDB4AB0D3ULL) >> 62U; }
     // clang-format on
   }
 
@@ -327,25 +329,25 @@ namespace Helpers::Math::Magic::Division
     static_assert(N <= std::numeric_limits<uint64_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { n= Helpers::Assembly::umulh64(n , 0xCCCCCCCCCCCCCCCDULL) >> 3U; }
-    else if constexpr(N == 2) { n= Helpers::Assembly::umulh64(n ,0xA3D70A3D70A3D70BULL) >> 6; }  
-    else if constexpr(N == 3) { n= Helpers::Assembly::umulh64(n, 0x83126E978D4FDF3CULL) >> 9; }  
-    else if constexpr(N == 4) { n= Helpers::Assembly::umulh64(n, 0xD1B71758E219652CULL) >> 13; } 
-    else if constexpr(N == 5) { n= Helpers::Assembly::umulh64(n, 0xA7C5AC471B478424ULL) >> 16; } 
-    else if constexpr(N == 6) { n= Helpers::Assembly::umulh64(n, 0x8637BD05AF6C69B6ULL) >> 19; } 
-    else if constexpr(N == 7) { n= Helpers::Assembly::umulh64(n, 0xD6BF94D5E57A42BDULL) >> 23; } 
-    else if constexpr(N == 8) { n= Helpers::Assembly::umulh64(n, 0xABCC77118461CEFDULL) >> 26; } 
-    else if constexpr(N == 9) { n= Helpers::Assembly::umulh64(n, 0x89705F4136B4A598ULL) >> 29; } 
-    else if constexpr(N == 10) { n= Helpers::Assembly::umulh64(n, 0xDBE6FECEBDEDD5C0ULL) >> 33; } 
-    else if constexpr(N == 11) { n= Helpers::Assembly::umulh64(n, 0xAFEBFF0BCB24AAFFULL) >> 36; } 
-    else if constexpr(N == 12) { n= Helpers::Assembly::umulh64(n, 0x8CBCCC096F5088CCULL) >> 39; } 
-    else if constexpr(N == 13) { n= Helpers::Assembly::umulh64(n, 0xE12E13424BB40E14ULL) >> 43; } 
-    else if constexpr(N == 14) { n= Helpers::Assembly::umulh64(n, 0xB424DC35095CD810ULL) >> 46; } 
-    else if constexpr(N == 15) { n= Helpers::Assembly::umulh64(n, 0x901D7CF73AB0ACDCULL) >> 49; } 
-    else if constexpr(N == 16) { n= Helpers::Assembly::umulh64(n, 0xE69594BEC44DE15CULL) >> 53; } 
-    else if constexpr(N == 17) { n= Helpers::Assembly::umulh64(n, 0xB877AA3236A4B44AULL) >> 56; } 
-    else if constexpr(N == 18) { n= Helpers::Assembly::umulh64(n, 0x9392EE8E921D5D08ULL) >> 59; } 
-    else if constexpr(N == 19) { n= Helpers::Assembly::umulh64(n, 0xEC1E4A7DB69561A6ULL) >> 63; }
+    if constexpr(N == 1) { n = Helpers::Assembly::umulh64(n , 0xCCCCCCCCCCCCCCCDULL) >> 3; }
+    else if constexpr(N == 2) { uint64_t t = Helpers::Assembly::umulh64(n , 0x47AE147AE147AE15ULL); n = (((n - t) >> 1) + t) >> 6; }
+    else if constexpr(N == 3) { uint64_t t = Helpers::Assembly::umulh64(n , 0x624DD2F1A9FBE77ULL); n = (((n - t) >> 1) + t) >> 9; }
+    else if constexpr(N == 4) { n = Helpers::Assembly::umulh64(n , 0x346DC5D63886594BULL) >> 11; }
+    else if constexpr(N == 5) { uint64_t t = Helpers::Assembly::umulh64(n , 0x4F8B588E368F0847ULL); n = (((n - t) >> 1) + t) >> 16; }
+    else if constexpr(N == 6) { n = Helpers::Assembly::umulh64(n , 0x431BDE82D7B634DBULL) >> 18U; }
+    else if constexpr(N == 7) { n = Helpers::Assembly::umulh64(n , 0xD6BF94D5E57A42BDULL) >> 23U; }
+    else if constexpr(N == 8) { n = Helpers::Assembly::umulh64(n , 0xABCC77118461CEFDULL) >> 26U; }
+    else if constexpr(N == 9) { uint64_t t = Helpers::Assembly::umulh64(n, 0x12E0BE826D694B2FULL); n = (((n - t) >> 1) + t) >> 29; }
+    else if constexpr(N == 10) { n = Helpers::Assembly::umulh64(n, 0xDBE6FECEBDEDD5BFULL) >> 33U; }
+    else if constexpr(N == 11) { n = Helpers::Assembly::umulh64(n, 0xAFEBFF0BCB24AAFFULL) >> 36U; }
+    else if constexpr(N == 12) { n = Helpers::Assembly::umulh64(n, 0x232F33025BD42233ULL) >> 37U; }
+    else if constexpr(N == 13) { n = Helpers::Assembly::umulh64(n, 0x384B84D092ED0385ULL) >> 41U; }
+    else if constexpr(N == 14) { n = Helpers::Assembly::umulh64(n, 0xB424DC35095CD81ULL) >> 42U; }
+    else if constexpr(N == 15) { uint64_t t = Helpers::Assembly::umulh64(n, 0x203AF9EE756159B3ULL); n = (((n - t) >> 1) + t) >> 49; }
+    else if constexpr(N == 16) { n = Helpers::Assembly::umulh64(n, 0x39A5652FB1137857ULL) >> 51U; }
+    else if constexpr(N == 17) { uint64_t t = Helpers::Assembly::umulh64(n, 0x70EF54646D496893ULL); n = (((n - t) >> 1) + t) >> 56; }
+    else if constexpr(N == 18) { uint64_t t = Helpers::Assembly::umulh64(n, 0x2725DD1D243ABA0FULL); n = (((n - t) >> 1) + t) >> 59; }
+    else if constexpr(N == 19) { n = Helpers::Assembly::umulh64(n, 0x760F253EDB4AB0D3ULL) >> 62U; }
     // clang-format on
   }
   template <uint64_t DIV>
@@ -411,6 +413,7 @@ namespace Helpers::Math::Magic::Division
   {
     return div_by_10_denominator(input, input / 10);
   }
+
 } // namespace Helpers::Math::Magic::Division
 
 namespace Helpers::Math::Magic::Modulo
@@ -422,15 +425,15 @@ namespace Helpers::Math::Magic::Modulo
     static_assert(N <= std::numeric_limits<uint32_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-    if constexpr(N == 1) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<1>(n) * 10U); }
-    else if constexpr(N == 2) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<2>(n) * 100U); }
-    else if constexpr(N == 3) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<3>(n) * 1000U); }
-    else if constexpr(N == 4) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<4>(n) * 10000U); }
-    else if constexpr(N == 5) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<5>(n) * 100000U); }
-    else if constexpr(N == 6) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<6>(n) * 1000000U); }
-    else if constexpr(N == 7) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<7>(n) * 10000000U); }
-    else if constexpr(N == 8) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<8>(n) * 100000000U); }
-    else if constexpr(N == 9) { return n - (Helpers::Math::Magic::Division::div_by_10_pow_n<9>(n) * 1000000000U); }
+    if constexpr(N == 1) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10U)); }
+    else if constexpr(N == 2) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100U)); }
+    else if constexpr(N == 3) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000U)); }
+    else if constexpr(N == 4) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000U)); }
+    else if constexpr(N == 5) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000U)); }
+    else if constexpr(N == 6) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000U)); }
+    else if constexpr(N == 7) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000000U)); }
+    else if constexpr(N == 8) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000000U)); }
+    else if constexpr(N == 9) { return static_cast<uint32_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000000U)); }
     // clang-format on
   }
 
@@ -443,15 +446,15 @@ namespace Helpers::Math::Magic::Modulo
 
     const uint32_t A = quotient;
     // clang-format off
-    if constexpr(N == 1) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 10U); }
-    else if constexpr(N == 2) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 100U); }
-    else if constexpr(N == 3) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 1000U); }
-    else if constexpr(N == 4) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 10000U); }
-    else if constexpr(N == 5) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 100000U); }
-    else if constexpr(N == 6) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 1000000U); }
-    else if constexpr(N == 7) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 10000000U); }
-    else if constexpr(N == 8) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 100000000U); }
-    else if constexpr(N == 9) {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 1000000000U); }
+    if constexpr(N == 1)       {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 10U); }
+    else if constexpr(N == 2)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 100U); }
+    else if constexpr(N == 3)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 1000U); }
+    else if constexpr(N == 4)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 10000U); }
+    else if constexpr(N == 5)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 100000U); }
+    else if constexpr(N == 6)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 1000000U); }
+    else if constexpr(N == 7)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 10000000U); }
+    else if constexpr(N == 8)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 100000000U); }
+    else if constexpr(N == 9)  {Helpers::Math::Magic::Division::div_by_10_pow_n_void<N>(quotient); remainder = A - (quotient * 1000000000U); }
     // clang-format on
   }
 
@@ -498,25 +501,25 @@ namespace Helpers::Math::Magic::Modulo
     static_assert(N <= std::numeric_limits<uint64_t>::digits10, "10 ^exp is greater that num of digits");
 
     // clang-format off
-      if constexpr(N == 1)      {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<1>(n) * 10ULL)); }
-      else if constexpr(N == 2) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<2>(n) * 100ULL)); }
-      else if constexpr(N == 3) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<3>(n) * 1000ULL)); }
-      else if constexpr(N == 4) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<4>(n) * 10000ULL)); }
-      else if constexpr(N == 5) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<5>(n) * 100000ULL)); }
-      else if constexpr(N == 6) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<6>(n) * 1000000ULL)); }
-      else if constexpr(N == 7) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<7>(n) * 10000000ULL)); }
-      else if constexpr(N == 8) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<8>(n) * 100000000ULL)); }
-      else if constexpr(N == 9) {  return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<9>(n) * 1000000000ULL)); }
-      else if constexpr(N == 10) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<10>(n) * 10000000000ULL)); }
-      else if constexpr(N == 11) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<11>(n) * 100000000000ULL)); }
-      else if constexpr(N == 12) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<12>(n) * 1000000000000ULL)); }
-      else if constexpr(N == 13) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<13>(n) * 10000000000000ULL)); }
-      else if constexpr(N == 14) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<14>(n) * 100000000000000ULL)); }
-      else if constexpr(N == 15) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<15>(n) * 1000000000000000ULL)); }
-      else if constexpr(N == 16) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<16>(n) * 10000000000000000ULL)); }
-      else if constexpr(N == 17) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<17>(n) * 100000000000000000ULL)); }
-      else if constexpr(N == 18) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<18>(n) * 1000000000000000000ULL)); }
-      else if constexpr(N == 19) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<19>(n) * 10000000000000000000ULL)); }
+      if constexpr(N == 1)      { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10ULL)); }
+      else if constexpr(N == 2) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100ULL)); }
+      else if constexpr(N == 3) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000ULL)); }
+      else if constexpr(N == 4) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000ULL)); }
+      else if constexpr(N == 5) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000ULL)); }
+      else if constexpr(N == 6) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000ULL)); }
+      else if constexpr(N == 7) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000000ULL)); }
+      else if constexpr(N == 8) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000000ULL)); }
+      else if constexpr(N == 9) { return static_cast<uint64_t>(n -  (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000000ULL)); }
+      else if constexpr(N == 10) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000000000ULL)); }
+      else if constexpr(N == 11) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000000000ULL)); }
+      else if constexpr(N == 12) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000000000ULL)); }
+      else if constexpr(N == 13) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000000000000ULL)); }
+      else if constexpr(N == 14) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000000000000ULL)); }
+      else if constexpr(N == 15) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000000000000ULL)); }
+      else if constexpr(N == 16) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000000000000000ULL)); }
+      else if constexpr(N == 17) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 100000000000000000ULL)); }
+      else if constexpr(N == 18) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 1000000000000000000ULL)); }
+      else if constexpr(N == 19) { return static_cast<uint64_t>(n - (Helpers::Math::Magic::Division::div_by_10_pow_n<N>(n) * 10000000000000000000ULL)); }
     // clang-format on
   }
 

@@ -21,7 +21,8 @@ namespace
     LogHexStr(const std::string &_label, const std::string &_num_str) : label(_label), num_str(_num_str) {};
   };
 
-  const auto log_str_and_into_hex = []<typename... Args>(const Args &...logs)
+  template <typename... Args>
+  auto log_str_and_into_hex(const Args &...logs)
   {
     std::string log = "we have:";
 
@@ -48,7 +49,8 @@ namespace
     BenchResult(const char *str, std::chrono::nanoseconds nano) : label(str), time(nano) {};
   };
 
-  const auto log_time_tables = []<typename T, typename... Args>(T, const Args &...times)
+  template <typename T, typename... Args>
+  auto log_time_tables(T, const char *ACTION, const int &N, const Args &...times)
   {
     using namespace std::chrono;
 
@@ -98,8 +100,8 @@ namespace
     std::string row_micro = std::format("{:>15}", "Microseconds");
     ((row_micro += get_val_cell(times, microseconds{})), ...);
 
-    std::string type_name = std::is_floating_point_v<T> ? "FLOAT" : "INT";
-    std::string title = std::format(" {} COMPARISON (Avg: {:.3f} millisec) ", type_name, average / 1'000'000);
+    std::string type_name = std::is_same_v<uint32_t, T> ? "uint32_t" : "uint64_t";
+    std::string title = std::format("Action '{}' by '10^({})' {} COMPARISON (Avg: {:.3f} millisec) ", ACTION, N, type_name, average / 1'000'000);
     int total_width = 15 + (SIZE * 18); // 15 for label + 18 per column (| + color + 15 chars)
 
     std::cout << "\n" << std::format("{:=^{}}", title, total_width) << "\n";
@@ -109,7 +111,7 @@ namespace
     std::cout << row_milli << "\n";
     std::cout << row_micro << "\n";
     std::cout << std::string(total_width, '=') << "\n";
-  };
+  }
 
 } // namespace
 
@@ -118,7 +120,7 @@ namespace
   template <uint64_t N, typename Type>
   auto looper_magic_division(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging, auto &std_to_string) -> void
   {
-    const constexpr auto WISHED_RANGE = 100'000;
+    const constexpr auto WISHED_RANGE = 100'000'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -155,7 +157,7 @@ namespace
   template <uint64_t N, typename Type>
   auto looper_magic_modulus(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging, auto &std_to_string) -> void
   {
-    const constexpr auto WISHED_RANGE = 100'000;
+    const constexpr auto WISHED_RANGE = 100'000'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -284,7 +286,9 @@ namespace
   const auto test_and_benchmark_div_magic_impl(std::index_sequence<I...>)
   {
     auto res = tester_magic_division<1>(T{ 0 });
-    ((res = tester_magic_division<I + 1>(T{ 0 }), log_time_tables(0, BenchResult("div_by_10_denom", std::get<0>(res)), BenchResult("IDIV instr", std::get<1>(res)))), ...);
+    ((res = tester_magic_division<I + 1>(T{ 0 }),
+      log_time_tables(T{ 0 }, "DIVISION", I + 1, BenchResult("div_by_10_denom", std::get<0>(res)), BenchResult("IDIV instr", std::get<1>(res)))),
+     ...);
   };
 
   template <typename T>
@@ -299,7 +303,9 @@ namespace
   const auto test_and_benchmark_mod_magic_impl(std::index_sequence<I...>)
   {
     auto res = tester_magic_modulus<1>(T{ 0 });
-    ((res = tester_magic_modulus<I + 1>(T{ 0 }), log_time_tables(0, BenchResult("mod_by_10_denom", std::get<0>(res)), BenchResult("IMOD instr", std::get<1>(res)))), ...);
+    ((res = tester_magic_modulus<I + 1>(T{ 0 }),
+      log_time_tables<T>(T{ 0 }, "MODULO", I + 1, BenchResult("mod_by_10_denom", std::get<0>(res)), BenchResult("IMOD instr", std::get<1>(res)))),
+     ...);
   };
 
   template <typename T>
