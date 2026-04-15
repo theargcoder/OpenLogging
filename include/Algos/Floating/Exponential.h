@@ -128,8 +128,8 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       else
       {
         // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-        const auto last_digit = digits_10 % 10;
-        if(last_digit & 1U)
+        remainder = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<1>(digits_10); // digits_10 % 10;
+        if(remainder & 1U)
         {
           digits_10++;
         }
