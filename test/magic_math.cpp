@@ -1,4 +1,3 @@
-#include <utility>
 #define BOOST_TEST_MODULE IntegerTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -9,6 +8,7 @@
 #include <limits>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include "include/Helpers/Math.h"
 
@@ -45,8 +45,9 @@ namespace
   {
     std::string_view label;
     std::chrono::nanoseconds time;
+    uint64_t cycles;
 
-    BenchResult(const char *str, std::chrono::nanoseconds nano) : label(str), time(nano) {};
+    BenchResult(const char *str, std::chrono::nanoseconds nano, uint64_t cpu_cycles) : label(str), time(nano), cycles(cpu_cycles) {};
   };
 
   template <typename T, typename... Args>
@@ -63,29 +64,37 @@ namespace
     const auto SIZE = sizeof...(times);
 
     // Calculate average time (using double to keep precision)
+    const auto total_cpu_cycles = (times.cycles + ...);
+    const double average_cycles = static_cast<double>(total_cpu_cycles) / SIZE;
     const auto total_ns = (times.time + ...).count();
-    const double average = static_cast<double>(total_ns) / SIZE;
+    const double average_ns = static_cast<double>(total_ns) / SIZE;
 
     auto get_color = [&](nanoseconds val) -> std::string_view
     {
       if(val.count() == 0)
         return RESET;
 
-      double ratio = static_cast<double>(val.count()) / average;
+      double ratio = static_cast<double>(val.count()) / average_ns;
 
       if(std::abs(1.0 - ratio) <= 0.03)
         return YELLOW;
 
-      return (val.count() < average) ? GREEN : RED;
+      return (val.count() < average_ns) ? GREEN : RED;
     };
 
-    auto get_label_cell = [&](const BenchResult &res) { return std::format(" | {: >15}", res.label); };
+    const auto get_label_cell = [&](const BenchResult &res) { return std::format(" | {: >15}", res.label); };
 
-    auto get_val_cell = [&](const BenchResult &res, auto unit_type)
+    const auto get_val_cell = [&](const BenchResult &res, auto unit_type)
     {
       auto color = get_color(res.time);
       auto val = duration_cast<duration<double, typename decltype(unit_type)::period>>(res.time).count();
       return std::format(" | {}{: >15.3f}{}", color, val, RESET);
+    };
+
+    auto get_val_cpu_cycles = [&](const BenchResult &res)
+    {
+      auto color = (static_cast<double>(res.cycles) < average_cycles) ? GREEN : RED;
+      return std::format(" | {}{: >15}{}", color, res.cycles, RESET);
     };
 
     std::string header_row = std::format("{:>15}", "Unit");
@@ -100,8 +109,11 @@ namespace
     std::string row_micro = std::format("{:>15}", "Microseconds");
     ((row_micro += get_val_cell(times, microseconds{})), ...);
 
+    std::string row_cpu_cycles = std::format("{:>15}", "Cpu Cycles");
+    ((row_cpu_cycles += get_val_cpu_cycles(times)), ...);
+
     std::string type_name = std::is_same_v<uint32_t, T> ? "uint32_t" : "uint64_t";
-    std::string title = std::format("Action '{}' by '10^({})' {} COMPARISON (Avg: {:.3f} millisec) ", ACTION, N, type_name, average / 1'000'000);
+    std::string title = std::format("Action '{}' by '10^({})' {} COMPARISON (Avg: {:.3f} millisec) ", ACTION, N, type_name, average_ns / 1'000'000);
     int total_width = 15 + (SIZE * 18); // 15 for label + 18 per column (| + color + 15 chars)
 
     std::cout << "\n" << std::format("{:=^{}}", title, total_width) << "\n";
@@ -110,6 +122,7 @@ namespace
     std::cout << row_sec << "\n";
     std::cout << row_milli << "\n";
     std::cout << row_micro << "\n";
+    std::cout << row_cpu_cycles << "\n";
     std::cout << std::string(total_width, '=') << "\n";
   }
 
@@ -118,9 +131,10 @@ namespace
 namespace
 {
   template <uint64_t N, typename Type>
-  auto looper_magic_division(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging, auto &std_to_string) -> void
+  auto looper_magic_division(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_time, auto &open_logging_cpu_cycles, auto &std_lib_time,
+                             auto &std_lib_cpu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 100'000'000;
+    const constexpr auto WISHED_RANGE = 1'000'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -131,16 +145,18 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      const auto st_log = std::chrono::high_resolution_clock::now();
+      const auto st_log = Helpers::Assembly::rdtsc();
       const auto our_div_10 = Helpers::Math::Magic::Division::div_by_10_pow_n<N>(i);
-      const auto en_log = std::chrono::high_resolution_clock::now();
+      const auto en_log = Helpers::Assembly::rdtsc();
 
-      const auto st_std_to_str = std::chrono::high_resolution_clock::now();
+      const auto st_std_to_str = Helpers::Assembly::rdtsc();
       const auto regular_div_10 = i / divisor;
-      const auto en_std_to_str = std::chrono::high_resolution_clock::now();
+      const auto en_std_to_str = Helpers::Assembly::rdtsc();
 
-      open_logging += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
-      std_to_string += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str);
+      open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_log - st_log));
+      open_logging_cpu_cycles += en_log - st_log;
+      std_lib_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str));
+      std_lib_cpu_cycles += en_std_to_str - st_std_to_str;
 
       if(our_div_10 != regular_div_10)
       {
@@ -155,9 +171,10 @@ namespace
   };
 
   template <uint64_t N, typename Type>
-  auto looper_magic_modulus(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging, auto &std_to_string) -> void
+  auto looper_magic_modulus(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_time, auto &open_logging_cpu_cycles, auto &std_lib_time,
+                            auto &std_lib_cpu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 100'000'000;
+    const constexpr auto WISHED_RANGE = 1'000'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -168,16 +185,18 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      const auto st_log = std::chrono::high_resolution_clock::now();
+      const uint64_t st_log = Helpers::Assembly::rdtsc();
       const auto our_div_10 = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<N>(i);
-      const auto en_log = std::chrono::high_resolution_clock::now();
+      const uint64_t en_log = Helpers::Assembly::rdtsc();
 
-      const auto st_std_to_str = std::chrono::high_resolution_clock::now();
+      const uint64_t st_std_to_str = Helpers::Assembly::rdtsc();
       const auto regular_div_10 = i % divisor;
-      const auto en_std_to_str = std::chrono::high_resolution_clock::now();
+      const uint64_t en_std_to_str = Helpers::Assembly::rdtsc();
 
-      open_logging += std::chrono::duration_cast<std::chrono::nanoseconds>(en_log - st_log);
-      std_to_string += std::chrono::duration_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str);
+      open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_log - st_log));
+      open_logging_cpu_cycles += en_log - st_log;
+      std_lib_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str));
+      std_lib_cpu_cycles += en_std_to_str - st_std_to_str;
 
       if(our_div_10 != regular_div_10)
       {
@@ -196,44 +215,46 @@ namespace
   {
     std::chrono::nanoseconds helpers_math_magic_took{ 0 };
     std::chrono::nanoseconds regular_idiv_instruction_took{ 0 };
+    uint64_t helpers_math_cpu_cycles{ 0 };
+    uint64_t std_lib_cpu_cycles{ 0 };
 
     const constexpr auto MIN = std::numeric_limits<T>::min();
     const constexpr auto MAX = std::numeric_limits<T>::max();
     const constexpr T UNIT = T{ 1 };
 
     // ---- Extremes and Zero Region ----
-    looper_magic_division<N>(true, MIN, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_division<N>(false, MAX, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_division<N>(true, T{ 0 }, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_division<N>(false, T{ 0 }, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+    looper_magic_division<N>(true, MIN, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_division<N>(false, MAX, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_division<N>(true, T{ 0 }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_division<N>(false, T{ 0 }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
 
     // ---- Around powers of two (Bit boundaries) ----
     for(int e = 1; e < std::numeric_limits<T>::digits; ++e)
     {
       const T val = UNIT << e;
-      looper_magic_division<N>(true, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-      looper_magic_division<N>(false, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+      looper_magic_division<N>(true, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+      looper_magic_division<N>(false, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
     }
 
     // ---- Around powers of ten (String length boundaries) ----
     for(T val = 10; val > 0 && val < MAX / 10; val *= 10)
     {
-      looper_magic_division<N>(true, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-      looper_magic_division<N>(false, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+      looper_magic_division<N>(true, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+      looper_magic_division<N>(false, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
     }
 
     // ---- Large magnitude sweeps (Sparse) ----
     if constexpr(sizeof(T) >= 4)
     {
-      looper_magic_division<N>(true, MIN / 2, T{ 123 }, helpers_math_magic_took, regular_idiv_instruction_took);
-      looper_magic_division<N>(false, MAX / 2, T{ 123 }, helpers_math_magic_took, regular_idiv_instruction_took);
+      looper_magic_division<N>(true, MIN / 2, T{ 123 }, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+      looper_magic_division<N>(false, MAX / 2, T{ 123 }, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
     }
 
     // ---- Randomish coverage ----
-    looper_magic_division<N>(true, static_cast<T>(MAX * 0.1), UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_division<N>(false, static_cast<T>(MAX * 0.9), UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+    looper_magic_division<N>(true, T{ MAX / T{ 10 } }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_division<N>(false, T{ MAX / T{ 10 } * T{ 9 } }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
 
-    return std::make_tuple(helpers_math_magic_took, regular_idiv_instruction_took);
+    return std::make_tuple(helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
   }
 
   template <uint64_t N, typename T>
@@ -241,44 +262,46 @@ namespace
   {
     std::chrono::nanoseconds helpers_math_magic_took{ 0 };
     std::chrono::nanoseconds regular_idiv_instruction_took{ 0 };
+    uint64_t helpers_math_cpu_cycles{ 0 };
+    uint64_t std_lib_cpu_cycles{ 0 };
 
     const constexpr auto MIN = std::numeric_limits<T>::min();
     const constexpr auto MAX = std::numeric_limits<T>::max();
     const constexpr T UNIT = T{ 1 };
 
     // ---- Extremes and Zero Region ----
-    looper_magic_modulus<N>(true, MIN, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_modulus<N>(false, MAX, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_modulus<N>(true, T{ 0 }, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_modulus<N>(false, T{ 0 }, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+    looper_magic_modulus<N>(true, MIN, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_modulus<N>(false, MAX, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_modulus<N>(true, T{ 0 }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_modulus<N>(false, T{ 0 }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
 
     // ---- Around powers of two (Bit boundaries) ----
     for(int e = 1; e < std::numeric_limits<T>::digits; ++e)
     {
       const T val = UNIT << e;
-      looper_magic_modulus<N>(true, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-      looper_magic_modulus<N>(false, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+      looper_magic_modulus<N>(true, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+      looper_magic_modulus<N>(false, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
     }
 
     // ---- Around powers of ten (String length boundaries) ----
     for(T val = 10; val > 0 && val < MAX / 10; val *= 10)
     {
-      looper_magic_modulus<N>(true, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-      looper_magic_modulus<N>(false, val, UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+      looper_magic_modulus<N>(true, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+      looper_magic_modulus<N>(false, val, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
     }
 
     // ---- Large magnitude sweeps (Sparse) ----
     if constexpr(sizeof(T) >= 4)
     {
-      looper_magic_modulus<N>(true, MIN / 2, T{ 123 }, helpers_math_magic_took, regular_idiv_instruction_took);
-      looper_magic_modulus<N>(false, MAX / 2, T{ 123 }, helpers_math_magic_took, regular_idiv_instruction_took);
+      looper_magic_modulus<N>(true, MIN / 2, T{ 123 }, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+      looper_magic_modulus<N>(false, MAX / 2, T{ 123 }, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
     }
 
     // ---- Randomish coverage ----
-    looper_magic_modulus<N>(true, static_cast<T>(MAX * 0.1), UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
-    looper_magic_modulus<N>(false, static_cast<T>(MAX * 0.9), UNIT, helpers_math_magic_took, regular_idiv_instruction_took);
+    looper_magic_modulus<N>(true, T{ MAX / T{ 10 } }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
+    looper_magic_modulus<N>(false, T{ MAX / T{ 10 } * T{ 9 } }, UNIT, helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
 
-    return std::make_tuple(helpers_math_magic_took, regular_idiv_instruction_took);
+    return std::make_tuple(helpers_math_magic_took, helpers_math_cpu_cycles, regular_idiv_instruction_took, std_lib_cpu_cycles);
   };
 
   template <typename T, size_t... I>
@@ -286,8 +309,8 @@ namespace
   const auto test_and_benchmark_div_magic_impl(std::index_sequence<I...>)
   {
     auto res = tester_magic_division<1>(T{ 0 });
-    ((res = tester_magic_division<I + 1>(T{ 0 }),
-      log_time_tables(T{ 0 }, "DIVISION", I + 1, BenchResult("div_by_10_denom", std::get<0>(res)), BenchResult("IDIV instr", std::get<1>(res)))),
+    ((res = tester_magic_division<I + 1>(T{ 0 }), log_time_tables(T{ 0 }, "DIVISION", I + 1, BenchResult("div_by_10_denom", std::get<0>(res), std::get<1>(res)),
+                                                                  BenchResult("IDIV instr", std::get<2>(res), std::get<3>(res)))),
      ...);
   };
 
@@ -303,8 +326,8 @@ namespace
   const auto test_and_benchmark_mod_magic_impl(std::index_sequence<I...>)
   {
     auto res = tester_magic_modulus<1>(T{ 0 });
-    ((res = tester_magic_modulus<I + 1>(T{ 0 }),
-      log_time_tables<T>(T{ 0 }, "MODULO", I + 1, BenchResult("mod_by_10_denom", std::get<0>(res)), BenchResult("IMOD instr", std::get<1>(res)))),
+    ((res = tester_magic_modulus<I + 1>(T{ 0 }), log_time_tables<T>(T{ 0 }, "MODULO", I + 1, BenchResult("mod_by_10_denom", std::get<0>(res), std::get<1>(res)),
+                                                                    BenchResult("IMOD instr", std::get<2>(res), std::get<3>(res)))),
      ...);
   };
 
