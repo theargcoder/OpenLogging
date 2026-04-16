@@ -164,11 +164,12 @@ namespace
       ryu = Helpers::Numeric::Ryu::ToStr(val);
       const auto en_ryu = Helpers::Assembly::rdtsc();
 
-      open_logging_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_open_logging - st_open_logging));
+      open_logging_took
+          += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_open_logging - st_open_logging)));
       open_logging_cycles += en_open_logging - st_open_logging;
-      std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_std_fmt - st_std_fmt));
+      std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_std_fmt - st_std_fmt)));
       std_cycles += en_std_fmt - st_std_fmt;
-      ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_ryu - st_ryu));
+      ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_ryu - st_ryu)));
       ryu_cycles += en_ryu - st_ryu;
 
       if(open_logging != std_format)
@@ -230,11 +231,12 @@ namespace
 
       const auto en_ryu = Helpers::Assembly::rdtsc();
 
-      open_logging_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_open_logging - st_open_logging));
+      open_logging_took
+          += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_open_logging - st_open_logging)));
       open_logging_cycles += en_open_logging - st_open_logging;
-      std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_std_fmt - st_std_fmt));
+      std_fmt_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_std_fmt - st_std_fmt)));
       std_cycles += en_std_fmt - st_std_fmt;
-      ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_ryu - st_ryu));
+      ryu_took += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_ryu - st_ryu)));
       ryu_cycles += en_ryu - st_ryu;
 
       if(open_logging != std_format)
