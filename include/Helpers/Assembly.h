@@ -1,4 +1,9 @@
 #include <cstdint>
+#if defined(__x86_64__)
+#include <chrono>
+#include <thread>
+#include <x86intrin.h>
+#endif
 
 namespace Helpers::Assembly
 {
