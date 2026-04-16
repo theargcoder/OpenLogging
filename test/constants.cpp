@@ -1,5 +1,12 @@
+#include "include/Helpers/Math.h"
 #include <istream>
 #define BOOST_TEST_MODULE ConstantsTests
+
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h> // x86 SIMD
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h> // ARM SIMD
+#endif
 
 #include <boost/multiprecision/cpp_bin_float.hpp>
 #include <boost/test/included/unit_test.hpp>
@@ -257,6 +264,78 @@ BOOST_AUTO_TEST_CASE(multiplytest)
     BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
   }
 }
+
+__attribute__((always_inline)) static auto umul_hi_32x4_t(const uint32x4_t &v_a, const uint32x4_t &v_b) noexcept
+{
+  const uint64x2_t prod_low = vmull_u32(vget_low_u32(v_a), vget_low_u32(v_b));
+  const uint64x2_t prod_high = vmull_high_u32(v_a, v_b);
+
+  // Re-combine the high 32-bits of each 64-bit result into one 128-bit vector This is essentially 'mulhi'
+  return vcombine_u32(vshrn_n_u64(prod_low, 32), vshrn_n_u64(prod_high, 32));
+}
+
+__attribute__((always_inline)) static auto umul_low_32x4_t(const uint32x4_t &v_a, const uint32x4_t &v_b) noexcept
+{
+  return vmulq_u32(v_a, v_b);
+}
+
+static auto simdy_to_str(const uint32_t &input)
+{
+  static const constexpr uint32x4_t v_magics_10e1_10e4 = { 0xD1B71759ULL, 0x10624DD3ULL, 0x51EB851FULL, 0xCCCCCCCDULL };
+  static const constexpr int32x4_t v_shifts = { -13, -6, -5, -3 };
+
+  static const constexpr uint32_t magic_div_10 = 0xCCCCCCCDULL;
+  static const constexpr int32_t magic_div_10_shift = -3;
+
+  static const constexpr uint32x4_t v_10s = { 10U, 10U, 10U, 10U };
+
+  char buff[32];
+
+  uint32_t top_val = 12'340, bottom_val = 56780;
+
+  // vdupq_n_u32 is the NEON equivalent of _mm_set1_epi32
+  const uint32x4_t v_top = vdupq_n_u32(top_val);
+  const uint32x4_t v_btm = vdupq_n_u32(bottom_val);
+
+  const uint32x4_t v_prod_top = umul_hi_32x4_t(v_top, v_magics_10e1_10e4);
+  const uint32x4_t v_prod_btm = umul_hi_32x4_t(v_btm, v_magics_10e1_10e4);
+
+  const uint32x4_t v_div_top = vshlq_u32(v_prod_top, v_shifts);
+  const uint32x4_t v_div_btm = vshlq_u32(v_prod_btm, v_shifts);
+
+  const uint32x4_t v_div_by_10_top = vshlq_u32(umul_hi_32x4_t(v_div_top, vdupq_n_u32(magic_div_10)), vdupq_n_u32(magic_div_10_shift));
+  const uint32x4_t v_div_by_10_btm = vshlq_u32(umul_hi_32x4_t(v_div_btm, vdupq_n_u32(magic_div_10)), vdupq_n_u32(magic_div_10_shift));
+
+  const uint32x4_t v_div_by_10_mul_10_top = umul_low_32x4_t(v_div_by_10_top, v_10s);
+  const uint32x4_t v_div_by_10_mul_10_btm = umul_low_32x4_t(v_div_by_10_btm, v_10s);
+
+  const uint32x4_t res_top = vsubq_u32(v_div_top, v_div_by_10_mul_10_top);
+  const uint32x4_t res_bottom = vsubq_u32(v_div_btm, v_div_by_10_mul_10_btm);
+
+  // 1. Narrow each 32x4 to 16x4
+  const uint16x4_t top_16 = vmovn_u32(res_top);       // [d0, d1, d2, d3] in 16-bit
+  const uint16x4_t bottom_16 = vmovn_u32(res_bottom); // [d4, d5, d6, d7] in 16-bit
+
+  // 2. Combine top and bottom into one 16x8 register
+  const uint16x8_t combined_16 = vcombine_u16(top_16, bottom_16);
+
+  // 3. Narrow 16x8 to 8x8
+  const uint8x8_t digits_8 = vmovn_u16(combined_16); // [d0, d1, d2, d3, d4, d5, d6, d7] in 8-bit
+
+  // 4. Convert to ASCII by adding '0' (0x30)
+  const uint8x8_t ascii_8 = vadd_u8(digits_8, vdup_n_u8('0'));
+
+  // 5. Write to char buffer in one op
+  // vst1_u8 writes 8 bytes (64 bits) from an 8x8 register
+  vst1_u8(reinterpret_cast<uint8_t *>(buff), ascii_8);
+}
+
+BOOST_AUTO_TEST_CASE(SimDVecorization)
+{
+  simdy_to_str(123'456'789);
+}
+
+// 'results' now contains [i/10, i/100, i/1000, i/10000]}
 
 /*
 template <typename T>
