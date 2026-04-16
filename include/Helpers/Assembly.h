@@ -2,12 +2,12 @@
 
 namespace Helpers::Assembly
 {
-  __attribute__((always_inline)) static auto umulh32(const uint64_t &a, const uint32_t &b)
+  __attribute__((always_inline)) static auto umulh32(const uint64_t &a, const uint32_t &b) noexcept
   {
     return static_cast<uint32_t>((a * b) >> 32U);
   }
 
-  __attribute__((always_inline)) static uint64_t umulh64(const uint64_t &a, const uint64_t &b)
+  __attribute__((always_inline)) static uint64_t umulh64(const uint64_t &a, const uint64_t &b) noexcept
   {
 #if defined(__x86_64__)
     uint64_t hi;

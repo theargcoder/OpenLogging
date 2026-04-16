@@ -671,14 +671,14 @@ namespace Helpers::Math::IEEE754
 {
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-  static void GetMantissaExponent(const T &input, uint64_t &mantissa, int &exponent) noexcept;
+  static bool GetMantissaExponent(const T &input, uint64_t &mantissa, int &exponent) noexcept;
 
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
   static auto Multiply(const uint64_t &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept;
 
   template <>
-  void GetMantissaExponent<float>(const float &input, uint64_t &mantissa, int &exponent) noexcept
+  bool GetMantissaExponent<float>(const float &input, uint64_t &mantissa, int &exponent) noexcept
   {
     using underlying = uint32_t;
 
@@ -705,10 +705,8 @@ namespace Helpers::Math::IEEE754
     if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
     {
       const underlying SIGN = bits & SIGN_ONLY;
-      exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
       mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
-
-      return;
+      return true;
     }
 
     if(exp > 0) [[likely]]
@@ -728,13 +726,15 @@ namespace Helpers::Math::IEEE754
       else
       {
         mantissa = std::numeric_limits<std::remove_cvref_t<decltype(mantissa)>>::max();
-        exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
+        return true;
       }
     }
+
+    return false;
   }
 
   template <>
-  void GetMantissaExponent<double>(const double &input, uint64_t &mantissa, int &exponent) noexcept
+  bool GetMantissaExponent<double>(const double &input, uint64_t &mantissa, int &exponent) noexcept
   {
     using underlying = uint64_t;
 
@@ -760,8 +760,8 @@ namespace Helpers::Math::IEEE754
     if(exp >= EXPONENT_ALL_BITS_ON) [[unlikely]]
     {
       const underlying SIGN = bits & SIGN_ONLY;
-      exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
       mantissa = (man == 0) ? (SIGN) ? 2 : 1 : 0;
+      return true;
     }
 
     if(exp > 0) [[likely]]
@@ -781,9 +781,11 @@ namespace Helpers::Math::IEEE754
       else
       {
         mantissa = std::numeric_limits<std::remove_cvref_t<decltype(mantissa)>>::max();
-        exponent = std::numeric_limits<std::remove_cvref_t<decltype(exponent)>>::max();
+        return true;
       }
     }
+
+    return false;
   }
 
   template <>

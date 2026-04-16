@@ -32,6 +32,11 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
 
+    static const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
+
+    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number);
+    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number + 1);
+
     assert(PRECISION <= MAX_PRECISION); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
     Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
@@ -39,11 +44,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     uint64_t mantissa;
     int exp_base_10_int;
-    Helpers::Math::IEEE754::GetMantissaExponent<T>(input, mantissa, exp_base_10_int);
-
-    if(exp_base_10_int == std::numeric_limits<decltype(exp_base_10_int)>::max()) [[unlikely]]
+    if(Helpers::Math::IEEE754::GetMantissaExponent<T>(input, mantissa, exp_base_10_int)) [[unlikely]]
     {
-      if(mantissa == T{ 0 })
+      if(mantissa == 0)
       {
         buff.start_idx = 3;
         std::memcpy(&buff.array[3], "nan", 3);
@@ -71,15 +74,8 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     exp_base_10_int = (((exp_base_10_int - Floating::BIAS) * 78'913) >> 18U);
 
     uint32_t extra_digits;
-    type digits_10;
+    type digits_10, remainder;
     Helpers::Math::IEEE754::Multiply<T>(mantissa, table, digits_10, extra_digits);
-
-    static const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
-
-    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number);
-    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number + 1);
-
-    type remainder;
 
     if(digits_10 < min_precision)
     {
