@@ -80,6 +80,7 @@ namespace Helpers::Numeric::Integral
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
     return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
   }
+
   template <typename T>
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
   static uint32_t ToStrFowardWriteSIMDReturnLen(char *__restrict__ buff, const T &input)
@@ -89,6 +90,32 @@ namespace Helpers::Numeric::Integral
 #elif defined(__ARM_NEON) || defined(__aarch64__)
     return Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(buff, input);
 #endif
+  }
+
+  template <typename T>
+    requires std::is_integral_v<T>
+  static std::string ToStrSIMD(const T &input)
+  {
+
+    char buff[32];
+
+    const bool NEGATIVE = input < 0;
+    using UT = Helpers::Templating::Types::make_unsigned_t<T>;
+    UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+
+    uint32_t len = 0;
+    if(NEGATIVE)
+    {
+      buff[len++] = '-';
+    }
+
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+#error "this functions has not been implemented for this architecture"
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+    len += Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
+#endif
+
+    return std::string(&buff[0], len);
   }
 
   template <int N, typename T>
