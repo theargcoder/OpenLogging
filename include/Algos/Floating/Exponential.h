@@ -39,8 +39,13 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     assert(PRECISION <= MAX_PRECISION); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
-    Helpers::Numeric::Integral::char_array<SIZE_OF_BUFF> buff;
-    buff.start_idx = SIZE_OF_BUFF;
+    Helpers::Numeric::Integral::char_array_len<SIZE_OF_BUFF> buff;
+    buff.length = 0;
+
+    if(input < 0)
+    {
+      buff.array[buff.length++] = '-';
+    }
 
     uint64_t mantissa;
     int exp_base_10_int;
@@ -48,22 +53,22 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     {
       if(mantissa == 0)
       {
-        buff.start_idx = 3;
+        buff.length = 3;
         std::memcpy(&buff.array[3], "nan", 3);
       }
       else if(mantissa == 1)
       {
-        buff.start_idx = 3;
+        buff.length = 3;
         std::memcpy(&buff.array[3], "inf", 3);
       }
       else if(mantissa == 2)
       {
-        buff.start_idx = 4;
+        buff.length = 4;
         std::memcpy(&buff.array[3], "-inf", 4);
       }
       else
       {
-        buff.start_idx = 5;
+        buff.length = 5;
         std::memcpy(&buff.array[5], "0.0E0", 5);
       }
 
@@ -139,31 +144,21 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       exp_base_10_int++;
     }
 
+    buff.array[buff.length++] = '.';
+
+    remainder = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff.array[0] + buff.length, digits_10);
+
+    std::swap(buff.array[buff.length - 1], buff.array[buff.length]);
+
+    buff.length += remainder;
+
+    buff.array[buff.length++] = 'e';
+
+    buff.array[buff.length++] = (exp_base_10_int < 0) ? '-' : '+';
+
     uint32_t exp_abs = std::abs(exp_base_10_int);
 
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(exp_abs, extra_digits, buff);
-
-    if(exp_base_10_int < 0)
-    {
-      buff.array[--buff.start_idx] = '-';
-    }
-    else
-    {
-      buff.array[--buff.start_idx] = '+';
-    }
-
-    buff.array[--buff.start_idx] = 'e';
-
-    Helpers::Numeric::Integral::ToStrReverseWriteToCharArrayResult(digits_10, remainder, buff);
-
-    buff.array[--buff.start_idx] = '.';
-
-    std::swap(buff.array[buff.start_idx], buff.array[buff.start_idx + 1]);
-
-    if(input < 0)
-    {
-      buff.array[--buff.start_idx] = '-';
-    }
+    buff.length += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff.array[0] + buff.length, exp_abs);
 
     return buff;
   }
@@ -173,6 +168,6 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     const auto buff = Helpers::Numeric::Floating::ExponentialNotation::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+    return std::string(&buff.array[0], buff.length);
   }
 } // namespace Helpers::Numeric::Floating::ExponentialNotation

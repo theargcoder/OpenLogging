@@ -1,3 +1,5 @@
+#include "include/Algos/Integer.h"
+#include <string>
 #define BOOST_TEST_MODULE ConstantsTests
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
@@ -526,80 +528,11 @@ auto normalize_simd(const Type &mantissa, const uint32_t &first_9_digits, const 
 
 BOOST_AUTO_TEST_CASE(SimDVecorization)
 {
+  for(uint32_t i = 123'456'789'1U; i > 0; i /= 10)
   {
     char buff[32];
     buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'456'789'1U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'456'789U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'456'78U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'456'7U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'456U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'45U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'4U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 12U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 1U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 0U);
+    const auto len = simdy_uint32_t_to_str(buff, i);
     bool trukjsadlk = true;
     std::cout << &buff[0] << '\n';
   }
@@ -609,6 +542,41 @@ BOOST_AUTO_TEST_CASE(SimDVecorization)
     table_3_way tablevals = { 13'552'527, 15'606'880, 54'250'931 };
     mul_simd(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
     BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
+  }
+}
+
+BOOST_AUTO_TEST_CASE(SimDVecorizationARM64)
+{
+  for(uint32_t i = 123'456'789'1U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0]), std::to_string(i));
+  }
+
+  for(uint32_t i = 123'000'000'0U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0]), std::to_string(i));
+  }
+
+  for(uint64_t i = 123'456'789'123'456'789'12ULL; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint64_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0]), std::to_string(i));
+  }
+
+  for(uint64_t i = 123'456'000'000'000'000'00ULL; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint64_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0]), std::to_string(i));
   }
 }
 

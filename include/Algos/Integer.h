@@ -1,6 +1,13 @@
 #pragma once
 
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h> // x86 SIMD
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h> // ARM SIMD
+#endif
+
 #include "include/Helpers/Math.h"
+#include "include/Helpers/Simd.h"
 #include "include/Helpers/Templating.h"
 
 #include <cstdint>
@@ -72,6 +79,16 @@ namespace Helpers::Numeric::Integral
   {
     const auto buff = Helpers::Numeric::Integral::ToStrCharArray<FORCE_SIGN>(input);
     return std::string(&buff.array[buff.start_idx], sizeof(buff.array) - buff.start_idx);
+  }
+  template <typename T>
+    requires(std::is_integral_v<T> && std::is_unsigned_v<T>) || std::is_same_v<T, __uint128_t>
+  static uint32_t ToStrFowardWriteSIMDReturnLen(char *__restrict__ buff, const T &input)
+  {
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+#error "this functions has not been implemented for this architecture"
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+    return Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(buff, input);
+#endif
   }
 
   template <int N, typename T>
