@@ -292,7 +292,8 @@ static auto simdy_uint32_t_to_str(char *__restrict__ buff, const uint32_t &input
   if(input == 0)
   {
     *buff = '0';
-    return;
+    *(buff + 1) = '\0';
+    return 1U;
   }
 
   uint32_t top_val = Helpers::Math::Magic::Division::div_by_10_pow_n<6>(input) * 10;
@@ -334,8 +335,8 @@ static auto simdy_uint32_t_to_str(char *__restrict__ buff, const uint32_t &input
   const uint16x8_t low_0_16 = vcombine_u16(low_16, vdup_n_u16(0U));
 
   // 3. Narrow 16x8 to 8x8
-  const uint16x8_t top_mid_mask = vmulq_u16(vandq_u16(vcgtq_u16(top_mid_16, vdupq_n_u16(0)), vdupq_n_u16(1)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
-  const uint16x8_t low_mask = vmulq_u16(vandq_u16(vcgtq_u16(low_0_16, vdupq_n_u16(0)), vdupq_n_u16(1)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
+  const uint16x8_t top_mid_mask = vandq_u16(vcgtq_u16(top_mid_16, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
+  const uint16x8_t low_mask = vandq_u16(vcgtq_u16(low_0_16, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
   const uint16_t top_mid_bitmask = vaddlvq_u8(top_mid_mask);
   const uint16_t low_bitmask = vaddlvq_u8(low_mask);
   const uint16_t combined_mask = (top_mid_bitmask << 8U) | low_bitmask;
@@ -347,16 +348,20 @@ static auto simdy_uint32_t_to_str(char *__restrict__ buff, const uint32_t &input
   const uint8x16_t v_and = vaddq_u8(combined, vandq_s8(vcgtq_u8(combined, vdupq_n_u8(0)), vdupq_n_s8('0')));
 
   const uint16_t leading_z = std::countl_zero(combined_mask);
+  const uint16_t trailing_z = std::countr_zero(combined_mask);
   static const constexpr int8x16_t indices = int8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
   const int8x16_t shift_vector = vdupq_n_s8(leading_z);
   const int8x16_t selector = vaddq_s8(indices, shift_vector);
 
   // 3. Use TBL to "pick" the bytes at those new positions
-  // v_and is your source vector
   const uint8x16_t result = vqtbl1q_u8(v_and, selector);
 
   vst1q_s8(reinterpret_cast<int8_t *>(buff), result);
+
+  const uint32_t len = (sizeof(std::remove_cvref_t<decltype(combined_mask)>) * 8 - trailing_z) - leading_z;
+
+  return len;
 }
 
 static auto simdy_uint64_t_to_str(const uint64_t &input)
@@ -560,13 +565,6 @@ BOOST_AUTO_TEST_CASE(SimDVecorization)
     char buff[32];
     buff[31] = '\0';
     simdy_uint32_t_to_str(buff, 123'45U);
-    bool trukjsadlk = true;
-    std::cout << &buff[0] << '\n';
-  }
-  {
-    char buff[32];
-    buff[31] = '\0';
-    simdy_uint32_t_to_str(buff, 123'4U);
     bool trukjsadlk = true;
     std::cout << &buff[0] << '\n';
   }
