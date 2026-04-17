@@ -1,5 +1,3 @@
-#include "include/Helpers/Math.h"
-#include <istream>
 #define BOOST_TEST_MODULE ConstantsTests
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
@@ -11,6 +9,7 @@
 #include <boost/multiprecision/cpp_bin_float.hpp>
 #include <boost/test/included/unit_test.hpp>
 
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -18,6 +17,7 @@
 #include <type_traits>
 
 #include "include/Constants/Constants.h"
+#include "include/Helpers/Math.h"
 
 namespace
 {
@@ -68,8 +68,8 @@ namespace
     for(int i = Constants::Tables::Floating<float>::MIN_BIN_EXP; i <= Constants::Tables::Floating<float>::MAX_BIN_EXP; i++)
     {
       const auto idx = i + Constants::Tables::Floating<T>::BIAS;
-      const __uint128_t val = static_cast<__uint128_t>(table[idx][0]) * Tests::pow(__uint128_t{ 10 }, 18)
-                              + static_cast<__uint128_t>(table[idx][1]) * Tests::pow(__uint128_t{ 10 }, 9) + table[idx][2];
+      const __uint128_t val = static_cast<__uint128_t>(table[idx][0]) * Tests::pow(__uint128_t{ 10 }, 16)
+                              + static_cast<__uint128_t>(table[idx][1]) * Tests::pow(__uint128_t{ 10 }, 8) + table[idx][2];
       const int digits = static_cast<int>(boost::multiprecision::log10((BigFloat{ val }))) + 1;
       const BigFloat scale = boost::multiprecision::pow(BigFloat(10), digits - 1);
 
@@ -84,14 +84,14 @@ namespace
       BigFloat rel_error = abs_error / expected;
 
       // Bounds testing
-      BOOST_CHECK_EQUAL(digits, 9 + 9 + 9);
+      BOOST_CHECK_EQUAL(digits, 8 + 8 + 8);
 
       // Convert back to standard double for the BOOST_CHECK if needed, or just use Boost's native comparisons.
-      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * (27 - 1));
+      BigFloat max_tolerance = boost::multiprecision::pow(BigFloat{ 10.0 }, -1 * (24 - 1));
 
       BOOST_CHECK_SMALL(rel_error, max_tolerance);
 
-      bool log = !(digits == 27) || !(rel_error <= max_tolerance);
+      bool log = !(digits == 24) || !(rel_error <= max_tolerance);
 
       if(log)
       {
@@ -279,7 +279,87 @@ __attribute__((always_inline)) static auto umul_low_32x4_t(const uint32x4_t &v_a
   return vmulq_u32(v_a, v_b);
 }
 
-static auto simdy_to_str(const uint32_t &input)
+static auto simdy_uint32_t_to_str(char *__restrict__ buff, const uint32_t &input)
+{
+  static const constexpr uint32x4_t v_magics_10e1_10e4 = { 0xD1B71759ULL, 0x10624DD3ULL, 0x51EB851FULL, 0xCCCCCCCDULL };
+  static const constexpr int32x4_t v_shifts = { -13, -6, -5, -3 };
+
+  static const constexpr uint32_t magic_div_10 = 0xCCCCCCCDULL;
+  static const constexpr int32_t magic_div_10_shift = -3;
+
+  static const constexpr uint32x4_t v_10s = { 10U, 10U, 10U, 10U };
+
+  if(input == 0)
+  {
+    *buff = '0';
+    return;
+  }
+
+  uint32_t top_val = Helpers::Math::Magic::Division::div_by_10_pow_n<6>(input) * 10;
+  uint32_t middle_val = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<4>(Helpers::Math::Magic::Division::div_by_10_pow_n<2>(input)) * 10;
+  uint32_t bottom_val = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<2>(input) * 1'000;
+
+  // vdupq_n_u32 is the NEON equivalent of _mm_set1_epi32
+  const uint32x4_t v_top = vdupq_n_u32(top_val);
+  const uint32x4_t v_mid = vdupq_n_u32(middle_val);
+  const uint32x4_t v_low = vdupq_n_u32(bottom_val);
+
+  const uint32x4_t v_prod_top = umul_hi_32x4_t(v_top, v_magics_10e1_10e4);
+  const uint32x4_t v_prod_mid = umul_hi_32x4_t(v_mid, v_magics_10e1_10e4);
+  const uint32x4_t v_prod_low = umul_hi_32x4_t(v_low, v_magics_10e1_10e4);
+
+  const uint32x4_t v_div_top = vshlq_u32(v_prod_top, v_shifts);
+  const uint32x4_t v_div_mid = vshlq_u32(v_prod_mid, v_shifts);
+  const uint32x4_t v_div_low = vshlq_u32(v_prod_low, v_shifts);
+
+  const uint32x4_t v_div_by_10_top = vshlq_u32(umul_hi_32x4_t(v_div_top, vdupq_n_u32(magic_div_10)), vdupq_n_u32(magic_div_10_shift));
+  const uint32x4_t v_div_by_10_mid = vshlq_u32(umul_hi_32x4_t(v_div_mid, vdupq_n_u32(magic_div_10)), vdupq_n_u32(magic_div_10_shift));
+  const uint32x4_t v_div_by_10_low = vshlq_u32(umul_hi_32x4_t(v_div_low, vdupq_n_u32(magic_div_10)), vdupq_n_u32(magic_div_10_shift));
+
+  const uint32x4_t v_div_by_10_mul_10_top = umul_low_32x4_t(v_div_by_10_top, v_10s);
+  const uint32x4_t v_div_by_10_mul_10_mid = umul_low_32x4_t(v_div_by_10_mid, v_10s);
+  const uint32x4_t v_div_by_10_mul_10_low = umul_low_32x4_t(v_div_by_10_low, v_10s);
+
+  const uint32x4_t res_top = vsubq_u32(v_div_top, v_div_by_10_mul_10_top);
+  const uint32x4_t res_mid = vsubq_u32(v_div_mid, v_div_by_10_mul_10_mid);
+  const uint32x4_t res_low = vsubq_u32(v_div_low, v_div_by_10_mul_10_low);
+
+  // 1. Narrow each 32x4 to 16x4
+  const uint16x4_t top_16 = vmovn_u32(res_top); // [d0, d1, d2, d3] in 16-bit
+  const uint16x4_t mid_16 = vmovn_u32(res_mid); // [d4, d5, d6, d7] in 16-bit
+  const uint16x4_t low_16 = vmovn_u32(res_low); // [d4, d5, d6, d7] in 16-bit
+
+  // 2. Combine top and bottom into one 16x8 register
+  const uint16x8_t top_mid_16 = vcombine_u16(top_16, mid_16);
+  const uint16x8_t low_0_16 = vcombine_u16(low_16, vdup_n_u16(0U));
+
+  // 3. Narrow 16x8 to 8x8
+  const uint16x8_t top_mid_mask = vmulq_u16(vandq_u16(vcgtq_u16(top_mid_16, vdupq_n_u16(0)), vdupq_n_u16(1)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
+  const uint16x8_t low_mask = vmulq_u16(vandq_u16(vcgtq_u16(low_0_16, vdupq_n_u16(0)), vdupq_n_u16(1)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
+  const uint16_t top_mid_bitmask = vaddlvq_u8(top_mid_mask);
+  const uint16_t low_bitmask = vaddlvq_u8(low_mask);
+  const uint16_t combined_mask = (top_mid_bitmask << 8U) | low_bitmask;
+
+  const uint8x8_t top_mid_8 = vmovn_u16(top_mid_16); // [d0, d1, d2, d3, d4, d5, d6, d7] in 8-bit
+  const uint8x8_t low_8 = vmovn_u16(low_0_16);       // [d0, d1, d2, d3, d4, d5, d6, d7] in 8-bit
+  const uint8x16_t combined = vcombine_u8(top_mid_8, low_8);
+
+  const uint8x16_t v_and = vaddq_u8(combined, vandq_s8(vcgtq_u8(combined, vdupq_n_u8(0)), vdupq_n_s8('0')));
+
+  const uint16_t leading_z = std::countl_zero(combined_mask);
+  static const constexpr int8x16_t indices = int8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+  const int8x16_t shift_vector = vdupq_n_s8(leading_z);
+  const int8x16_t selector = vaddq_s8(indices, shift_vector);
+
+  // 3. Use TBL to "pick" the bytes at those new positions
+  // v_and is your source vector
+  const uint8x16_t result = vqtbl1q_u8(v_and, selector);
+
+  vst1q_s8(reinterpret_cast<int8_t *>(buff), result);
+}
+
+static auto simdy_uint64_t_to_str(const uint64_t &input)
 {
   static const constexpr uint32x4_t v_magics_10e1_10e4 = { 0xD1B71759ULL, 0x10624DD3ULL, 0x51EB851FULL, 0xCCCCCCCDULL };
   static const constexpr int32x4_t v_shifts = { -13, -6, -5, -3 };
@@ -330,14 +410,212 @@ static auto simdy_to_str(const uint32_t &input)
   vst1_u8(reinterpret_cast<uint8_t *>(buff), ascii_8);
 }
 
-BOOST_AUTO_TEST_CASE(SimDVecorization)
+template <typename Type>
+  requires std::is_same_v<uint64_t, Type>
+auto mul_simd(const Type &mantissa, const uint32_t &m_high, const uint32_t &m_mid, const uint32_t &m_low)
 {
-  simdy_to_str(123'456'789);
+  static const constexpr uint32_t DEC8 = 100'000'000U;
+  static const constexpr uint32_t DEC7 = 10'000'000U;
+
+  const auto MANTISSA_MAX = mantissa << 11U;
+
+  const uint64_t m_high_mid = static_cast<uint64_t>(m_high) * DEC8 + m_mid;
+  const uint64_t p_hi_mid_bottom = (MANTISSA_MAX)*m_high_mid;
+  const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(p_hi_mid_bottom, DEC8));
+  const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(MANTISSA_MAX, m_low));
+
+  auto result = Helpers::Assembly::umulh64(MANTISSA_MAX, m_high_mid);
+  auto next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
+
+  while(next_9_digits >= DEC8)
+  {
+    result++;
+    next_9_digits -= DEC8;
+  }
+
+  const uint32_t m_hig_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(MANTISSA_MAX, m_high));
+  const uint32_t m_mid_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(MANTISSA_MAX, m_mid));
+  const uint32_t m_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(MANTISSA_MAX, m_low));
+  const uint64_t m_hig_low = MANTISSA_MAX * m_high;
+  const uint64_t m_mid_low = MANTISSA_MAX * m_mid;
+
+  const uint32_t m_high_carry = Helpers::Assembly::umulh64(m_hig_low, DEC8);
+  const uint32_t m_mid_rem_for_low = Helpers::Assembly::umulh64(m_mid_low, DEC8);
+  const uint64_t m_hig_rem_for_mid = m_hig_low * DEC8;
+  const uint32_t m_hig_rem_for_low = Helpers::Assembly::umulh64(m_hig_rem_for_mid, DEC8);
+
+  const uint32x4_t digits = { m_hig_top, m_mid_top + m_high_carry, m_low_top + m_hig_rem_for_low + m_mid_rem_for_low, 0 };
+
+  static const constexpr uint32_t magic_div_10e1 = 0xCCCCCCCDULL;
+  static const constexpr uint32_t magic_div_10e8 = 0x55E63B89ULL;
+  static const constexpr uint32_t magic_div_10e7 = 0x6B5FCA6BULL;
+
+  static const constexpr int8_t magic_div_10e1_shft = -3;
+  static const constexpr int8_t magic_div_10e8_shft = -25;
+  static const constexpr int8_t magic_div_10e7_shft = -22;
+
+  const uint32x4_t v_prod_top = umul_hi_32x4_t(digits, vdupq_n_u32(magic_div_10e8));
+  const uint32x4_t v_div_top = vshlq_u32(v_prod_top, vdupq_n_s32(magic_div_10e8_shft));
+  const uint32x4_t v_div_1e8 = umul_low_32x4_t(v_div_top, vdupq_n_s32(DEC8));
+  const uint32x4_t shifted_top = vextq_u32(v_div_top, vdupq_n_u32(0), 1);
+  const uint32x4_t normal_digits = vaddq_u32(digits, shifted_top);
+  uint32x4_t res = vsubq_u32(normal_digits, v_div_1e8);
+
+  const uint32x4_t underflow_mask = vcltq_u32(res, vdupq_n_u32(DEC7));
+
+  // if(vaddvq_u32(underflow_mask)) // if any underflow ---- OR all bits
+  //{
+  const uint32x4_t underflow = vandq_u32(underflow_mask, vdupq_n_u32(1U));
+  const uint32x4_t neg_underflow = vsubq_u32(vdupq_n_u32(1U), underflow);
+  const uint32x4_t neg_underflow_mask = vsubq_u32(vdupq_n_u32(std::numeric_limits<uint32_t>::max()), underflow_mask);
+
+  const uint32x4_t underflow_correction = vaddq_u32(umul_low_32x4_t(underflow, vdupq_n_u32(10U)), neg_underflow);
+  const uint32x4_t underflow_neg_correction = vaddq_u32(umul_low_32x4_t(neg_underflow, vdupq_n_u32(10U)), underflow);
+  const uint32x4_t normal_no_underflow = umul_low_32x4_t(underflow_correction, res);
+
+  const uint32x4_t normal_nouflow_prod = umul_hi_32x4_t(normal_no_underflow, vdupq_n_u32(magic_div_10e7));
+  const uint32x4_t normal_nouflow_div = vshlq_u32(normal_nouflow_prod, vdupq_n_s32(magic_div_10e7_shft));
+  const uint32x4_t normal_nouflow_div_1e7 = umul_low_32x4_t(normal_nouflow_div, vdupq_n_s32(DEC7));
+  const uint32x4_t normal_nouflow_div_shifted = vextq_u32(normal_nouflow_div, vdupq_n_u32(0), 1);
+  const uint32x4_t normal_nouflow_div_1e7_shifted = vandq_u32(normal_nouflow_div_1e7, neg_underflow_mask);
+  const uint32x4_t normal_no_underflow_taken = vsubq_u32(normal_no_underflow, normal_nouflow_div_1e7_shifted);
+  const uint32x4_t normal_no_underflow_taken_normal = umul_low_32x4_t(normal_no_underflow_taken, underflow_neg_correction);
+  res = vaddq_u32(normal_no_underflow_taken_normal, normal_nouflow_div_shifted);
+  //}
+
+  const uint32x4_t overflow_mask = vcgeq_u32(res, vdupq_n_u32(DEC8));
+  // if(vaddvq_u32(overflow_mask)) // if any overflow ---- OR all bits
+  //{
+  const uint32x4_t overflow = vandq_u32(overflow_mask, vdupq_n_u32(1U));
+  const uint32x4_t overflow_shift = vandq_u32(vextq_u32(vdupq_n_u32(0), overflow_mask, 3), vdupq_n_u32(1U));
+  const uint32x4_t neg_overflow = vsubq_u32(vdupq_n_u32(1U), overflow);
+
+  const uint32x4_t normal_nooflow_prod = umul_hi_32x4_t(res, vdupq_n_u32(magic_div_10e1));
+  const uint32x4_t normal_nooflow_div = vshlq_u32(normal_nooflow_prod, vdupq_n_s32(magic_div_10e1_shft));
+  const uint32x4_t normal_nooflow_mod = umul_low_32x4_t(normal_nooflow_div, vdupq_n_u32(10U));
+  const uint32x4_t normal_nooflow_diffl = vsubq_u32(res, normal_nooflow_mod);
+
+  const uint32x4_t overflow_correction = vaddq_u32(umul_low_32x4_t(overflow, normal_nooflow_div), umul_low_32x4_t(neg_overflow, res));
+
+  const uint32x4_t normal_nooflow_diffl_masked = vandq_u32(normal_nooflow_diffl, overflow_mask);
+  const uint32x4_t normal_nooflow_div_shifted = vextq_u32(vdupq_n_u32(0), normal_nooflow_diffl_masked, 3);
+  const uint32x4_t normal_nooflow_div_normal = umul_low_32x4_t(normal_nooflow_div_shifted, vdupq_n_u32(DEC7));
+  const uint32x4_t normal_no_overflow_taken = vaddq_u32(normal_nooflow_div, normal_nooflow_div_normal);
+  res = vaddq_u32(overflow_correction, normal_nooflow_div_shifted);
+  //}
+
+  // 1. Compare A >= B
+  //    If lane is true, mask is 0xFFFFFFFF. If false, 0x00000000.
+  // 2. Convert 0xFFFFFFFF to 1
+  //    Bitwise AND with {1, 1, 1, 1}
+  //    'result' is now {1, 0, 1, 1} based on the comparison
+
+  const bool kajslfjsl = true;
 }
 
-// 'results' now contains [i/10, i/100, i/1000, i/10000]}
+template <typename Type>
+  requires std::is_same_v<uint64_t, Type>
+auto normalize_simd(const Type &mantissa, const uint32_t &first_9_digits, const uint32_t &middle_9_digits, const uint32_t &last_9_digits)
+{
+}
+
+BOOST_AUTO_TEST_CASE(SimDVecorization)
+{
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'456'789'1U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'456'789U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'456'78U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'456'7U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'456U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'45U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'4U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123'4U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 123U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 12U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 1U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    simdy_uint32_t_to_str(buff, 0U);
+    bool trukjsadlk = true;
+    std::cout << &buff[0] << '\n';
+  }
+
+  {
+    const uint64_t mantissa = 6646139978835021;
+    table_3_way tablevals = { 13'552'527, 15'606'880, 54'250'931 };
+    mul_simd(mantissa, tablevals.hig, tablevals.mid, tablevals.low);
+    BOOST_CHECK_EQUAL(1, 99999'99999'86524'7550ULL); //'500'019'082);
+  }
+}
 
 /*
+// 'results' now contains [i/10, i/100, i/1000, i/10000]}
 template <typename T>
 static boost::multiprecision::cpp_int pow10_int(int n)
 {
@@ -354,7 +632,6 @@ std::string get_digits_range(int exp)
   static_assert(Begin >= 0, "Begin must be >= 0");
   static_assert(End > Begin, "End must be > Begin");
 
-  constexpr std::size_t Len = End - Begin;
   using BigInt = boost::multiprecision::cpp_int;
 
   // Exact integer math to prevent floating-point anomalies.
@@ -391,15 +668,15 @@ BOOST_AUTO_TEST_CASE(bannananana)
   {
     std::cout << '{';
     {
-      const auto res = get_digits_range<0, 9>(i);
+      const auto res = get_digits_range<0, 8>(i);
       std::cout << std::format("{}U,", res);
     }
     {
-      const auto res = get_digits_range<9, 18>(i);
+      const auto res = get_digits_range<8, 16>(i);
       std::cout << std::format("{}U,", res);
     }
     {
-      const auto res = get_digits_range<18, 27>(i);
+      const auto res = get_digits_range<16, 24>(i);
       std::cout << std::format("{}U", res);
     }
 
