@@ -2,7 +2,6 @@
 #include <boost/test/included/unit_test.hpp>
 #include <boost/type_index.hpp>
 
-#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -145,7 +144,7 @@ namespace
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
       const auto st_log = Helpers::Assembly::rdtsc();
-      const auto our_log = Helpers::Numeric::Integral::ToStrSIMD(i);
+      const auto our_log = Helpers::Numeric::Integral::ToStr(i);
       const auto en_log = Helpers::Assembly::rdtsc();
 
       const auto st_std_to_str = Helpers::Assembly::rdtsc();
@@ -153,11 +152,11 @@ namespace
       const auto en_std_to_str = Helpers::Assembly::rdtsc();
 
       const auto std_lib_to_st = Helpers::Assembly::rdtsc();
-      const auto std_lib_to_str_log = Helpers::Numeric::Std::to_string<false>(i, 123);
+      const auto std_lib_to_str_log = std::to_string(i);
       const auto std_lib_to_en = Helpers::Assembly::rdtsc();
 
       const auto simdy_st = Helpers::Assembly::rdtsc();
-      const auto simdy_log = Helpers::Numeric::Std::to_string<false>(i, 123);
+      const auto simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
       const auto simdy_en = Helpers::Assembly::rdtsc();
 
       open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_log - st_log));
@@ -260,7 +259,7 @@ namespace
     requires std::is_integral_v<T>
   const auto test_and_benchmark_ints(T)
   {
-    test_and_benchmark_int_impl<T>(std::make_index_sequence<std::numeric_limits<T>::digits10>{});
+    test_and_benchmark_int_impl<T>(std::make_index_sequence<2>{});
   };
 
 } // namespace

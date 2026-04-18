@@ -19,16 +19,16 @@
 namespace Helpers::Numeric::Integral
 {
   template <int N>
-  struct char_array
+  struct char_array_len
   {
-    int start_idx;
+    int length;
     char array[N];
   };
 
   template <int N>
-  struct char_array_len
+  struct char_array
   {
-    int length;
+    int start_idx;
     char array[N];
   };
 
@@ -41,14 +41,13 @@ namespace Helpers::Numeric::Integral
     char_array<MAX_DIGITS10> buff;
     buff.start_idx = MAX_DIGITS10;
 
-    static const constexpr auto BASE = 10;
-
     char *__restrict__ it = &buff.array[buff.start_idx];
 
-    const bool NEGATIVE = input < 0;
-
     using UT = Helpers::Templating::Types::make_unsigned_t<T>;
+
+    const bool NEGATIVE = input < 0;
     UT val = NEGATIVE ? static_cast<UT>(-(input + 1)) + 1 : static_cast<UT>(input);
+    static const constexpr UT BASE = UT{ 10 };
 
     do
     {
