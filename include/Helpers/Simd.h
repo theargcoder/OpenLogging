@@ -235,16 +235,15 @@ namespace Helpers::Simd::ARM64
     static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -13, -9, -6, -3, 0, 0, 0, 0 };
     static const constexpr auto MASK_REG_SHIFT = uint16x8_t{ 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000 };
     static const constexpr auto INDICES = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
-    static const constexpr auto MUL_CORRECTIONS = uint16x8_t{ 0, 0, 0, 0, 1, 0, 0, 1 };
     static const constexpr auto CHARS_OFFSET = uint8x8_t{ '0', '0', '0', '0', '0', 0, 0, 0 };
 
-    const auto n = vaddq_u16(vdupq_n_u16(input), MUL_CORRECTIONS);
+    const auto n = vdupq_n_u16(input);
     const auto t = umul_hi_u16x8(n, M_MAGIC_U16);
     const auto n_sub_t = vsubq_u16(n, t);
     const auto n_sub_t_shf = vshlq_u16(n_sub_t, vdupq_n_u16(-1));
     const auto n_sub_t_shf_add_t = vaddq_u16(n_sub_t_shf, t);
-    const auto n_sub_t_shf_add_t_shf = vshlq_u16(n_sub_t_shf_add_t, M_SHIFTS_U16);
-    const auto res_times_10 = vaddq_u16(vshlq_u16(n_sub_t_shf_add_t_shf, vdupq_n_u16(3)), vshlq_u16(n_sub_t_shf_add_t_shf, vdupq_n_u16(1)));
+    const auto n_sub_t_shf_add_t_shf = vsetq_lane_u16(input, vshlq_u16(n_sub_t_shf_add_t, M_SHIFTS_U16), 4);
+    const auto res_times_10 = umul_low_u16x8(n_sub_t_shf_add_t_shf, vdupq_n_u16(10));
     const auto res_slided = vandq_u16(vextq_u16(vdupq_n_u16(0), res_times_10, 7), MASK_REG_SHIFT);
 
     uint32_t len = 1;
@@ -256,12 +255,7 @@ namespace Helpers::Simd::ARM64
 
     const auto full_res = vsubq_u16(n_sub_t_shf_add_t_shf, res_slided);
 
-    uint8x8_t VEC_1_8x8, VEC_2_8x8;
-    VEC_1_8x8 = vmovn_u16(full_res);
-    VEC_1_8x8 = vadd_s8(VEC_1_8x8, CHARS_OFFSET);
-    VEC_2_8x8 = vadd_s8(INDICES, vdup_n_s8(lead_z));
-
-    VEC_1_8x8 = vtbl1_s8(VEC_1_8x8, VEC_2_8x8);
+    const uint8x8_t VEC_1_8x8 = vtbl1_s8(vadd_s8(vmovn_u16(full_res), CHARS_OFFSET), vadd_s8(INDICES, vdup_n_s8(lead_z)));
 
     vst1_s8(reinterpret_cast<int8_t *>(buff), VEC_1_8x8);
 
@@ -279,5 +273,45 @@ namespace Helpers::Simd::ARM64
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 namespace Helpers::Simd::x86_64
 {
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
+  {
+    if(input == 0)
+    {
+      *buff = '0';
+      *(buff + 1) = '\0';
+      return 1U;
+    }
+
+    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0xA36F, 0x625U, 0x47AFU, 0x999AU, 0xFFFFU, 0U, 0U, 0U };
+    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -13, -9, -6, -3, 0, 0, 0, 0 };
+    static const constexpr auto MASK_REG_SHIFT = uint16x8_t{ 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000 };
+    static const constexpr auto INDICES = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
+    static const constexpr auto CHARS_OFFSET = uint8x8_t{ '0', '0', '0', '0', '0', 0, 0, 0 };
+
+    const auto n = vdupq_n_u16(input);
+    const auto t = umul_hi_u16x8(n, M_MAGIC_U16);
+    const auto n_sub_t = vsubq_u16(n, t);
+    const auto n_sub_t_shf = vshlq_u16(n_sub_t, vdupq_n_u16(-1));
+    const auto n_sub_t_shf_add_t = vaddq_u16(n_sub_t_shf, t);
+    const auto n_sub_t_shf_add_t_shf = vsetq_lane_u16(input, vshlq_u16(n_sub_t_shf_add_t, M_SHIFTS_U16), 4);
+    const auto res_times_10 = umul_low_u16x8(n_sub_t_shf_add_t_shf, vdupq_n_u16(10));
+    const auto res_slided = vandq_u16(vextq_u16(vdupq_n_u16(0), res_times_10, 7), MASK_REG_SHIFT);
+
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9999);
+    const uint32_t lead_z = 5 - len;
+
+    const auto full_res = vsubq_u16(n_sub_t_shf_add_t_shf, res_slided);
+
+    const uint8x8_t VEC_1_8x8 = vtbl1_s8(vadd_s8(vmovn_u16(full_res), CHARS_OFFSET), vadd_s8(INDICES, vdup_n_s8(lead_z)));
+
+    vst1_s8(reinterpret_cast<int8_t *>(buff), VEC_1_8x8);
+
+    return len;
+  }
 } // namespace Helpers::Simd::x86_64
 #endif
