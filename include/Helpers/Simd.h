@@ -243,36 +243,38 @@ namespace Helpers::Simd::ARM64
       return 1U;
     }
 
-    const uint16_t top_val = Helpers::Math::Magic::Division::div_by_10_pow_n<1>(input);
-    const uint16_t botom_val = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<1>(input) * 1000;
+    uint16_t top_val = input, bottom_val;
+    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(top_val, bottom_val);
+    bottom_val *= 1000;
 
     static const constexpr uint16x8_t v_magics_u16_10e3 = { 0x8313, 0xA3D8, 0x199A, 0xFFFF, 0x8313, 0xA3D8, 0x199A, 0xFFFF };
     static const constexpr uint16x8_t mask_val = { 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF };
     static const constexpr int16x8_t v_first_shifts = { -9, -6, 0, 0, -9, -6, 0, 0 };
     static const constexpr uint8x8_t indices = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
 
-    const uint16x8_t top_mid_16x8 = vaddq_u16(vcombine_u16(vdup_n_u16(top_val), vdup_n_u16(botom_val)), uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 });
-    const uint16x8_t v_prod_16x8 = umul_hi_u16x8(top_mid_16x8, v_magics_u16_10e3);
-    const uint16x8_t v_shif_16x8 = vshlq_u16(v_prod_16x8, v_first_shifts);
-    const uint16x8_t v_mul_10_16x8 = umul_low_u16x8(v_shif_16x8, vdupq_n_u16(10));
-    const uint16x8_t shifted_1 = vandq_u16(vextq_u16(vdupq_n_u16(0), v_mul_10_16x8, 7), mask_val);
+    uint16x8_t VEC_1_16x8, VEC_2_16x8;
 
-    const uint16x8_t top_full_res = vsubq_u16(v_shif_16x8, shifted_1);
-    const uint16x8_t top_mid_mask = vandq_u16(vcgtq_u16(top_full_res, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
+    VEC_1_16x8 = vaddq_u16(vcombine_u16(vdup_n_u16(top_val), vdup_n_u16(bottom_val)), uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 });
+    VEC_1_16x8 = umul_hi_u16x8(VEC_1_16x8, v_magics_u16_10e3);
+    VEC_2_16x8 = vshlq_u16(VEC_1_16x8, v_first_shifts);
+    VEC_1_16x8 = vaddq_u16(vshlq_u16(VEC_2_16x8, vdupq_n_u16(3)), vshlq_u16(VEC_2_16x8, vdupq_n_u16(1)));
+    VEC_1_16x8 = vandq_u16(vextq_u16(vdupq_n_u16(0), VEC_1_16x8, 7), mask_val);
 
-    const uint16_t bitmask = vaddlvq_u8(top_mid_mask) << 8U;
-    const uint16_t leading_z = std::countl_zero(bitmask);
+    VEC_2_16x8 = vsubq_u16(VEC_2_16x8, VEC_1_16x8);
+    VEC_1_16x8 = vandq_u16(vcgtq_u16(VEC_2_16x8, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
 
-    const uint8x8_t top_mid_8 = vmovn_u16(top_full_res);
-    const int8x8_t v_and = vadd_s8(top_mid_8, uint8x8_t{ '0', '0', '0', '0', '0', 0, 0, 0 });
-    const int8x8_t shift_vector = vdup_n_s8(leading_z);
-    const int8x8_t selector = vadd_s8(indices, shift_vector);
+    const uint16_t LEAD_Z = std::countl_zero(static_cast<uint16_t>(vaddlvq_u8(VEC_1_16x8) << 8U));
 
-    const int8x8_t result = vtbl1_s8(v_and, selector);
+    uint8x8_t VEC_1_8x8, VEC_2_8x8;
+    VEC_1_8x8 = vmovn_u16(VEC_2_16x8);
+    VEC_1_8x8 = vadd_s8(VEC_1_8x8, uint8x8_t{ '0', '0', '0', '0', '0', 0, 0, 0 });
+    VEC_2_8x8 = vadd_s8(indices, vdup_n_s8(LEAD_Z));
 
-    vst1_s8(reinterpret_cast<int8_t *>(buff), result);
+    VEC_1_8x8 = vtbl1_s8(VEC_1_8x8, VEC_2_8x8);
 
-    const uint32_t len = (std::numeric_limits<uint16_t>::digits10 + 1) - leading_z;
+    vst1_s8(reinterpret_cast<int8_t *>(buff), VEC_1_8x8);
+
+    const uint32_t len = (std::numeric_limits<uint16_t>::digits10 + 1) - LEAD_Z;
 
     return len;
   }

@@ -230,6 +230,20 @@ namespace Helpers::Math::Magic::Division
   }
 
   template <uint32_t N>
+  static auto div_by_10_pow_n_void(uint16_t &n)
+  {
+    static_assert(N != 0, "why divide by 1");
+    static_assert(N <= std::numeric_limits<uint16_t>::digits10, "10 ^exp is greater that num of digits");
+
+    // clang-format off
+    if constexpr(N == 1)      { n = static_cast<uint16_t>((uint32_t(n) * 0xCCCDU) >> 19); }
+    else if constexpr(N == 2) { const uint16_t t = static_cast<uint16_t>((uint32_t(n) * 0x47AFU) >> 16); n = (((n - t) >> 1) + t) >> 6;  }
+    else if constexpr(N == 3) { const uint16_t t = static_cast<uint16_t>((uint32_t(n) * 0x625U) >> 16); n = (((n - t) >> 1) + t) >> 9;   }
+    else if constexpr(N == 4) { const uint16_t t = static_cast<uint16_t>((uint32_t(n) * 0xA36FU) >> 16); n = (((n - t) >> 1) + t) >> 13; }
+    // clang-format on
+  }
+
+  template <uint32_t N>
   static auto div_by_10_pow_n(const uint32_t &n)
   {
     static_assert(N != 0, "why divide by 1");
@@ -443,6 +457,21 @@ namespace Helpers::Math::Magic::Modulo
     else if constexpr(N == 2) { const uint16_t t = static_cast<uint16_t>((uint32_t(n) * 0x47AFU) >> 16); const uint16_t q = (((n - t) >> 1) + t) >> 6; return static_cast<uint16_t>(n - (q * 100U)); }
     else if constexpr(N == 3) { const uint16_t t = static_cast<uint16_t>((uint32_t(n) * 0x625U) >> 16); const uint16_t q = (((n - t) >> 1) + t) >> 9; return static_cast<uint16_t>(n - (q * 1000U)); }
     else if constexpr(N == 4) { const uint16_t t = static_cast<uint16_t>((uint32_t(n) * 0xA36FU) >> 16); const uint16_t q = (((n - t) >> 1) + t) >> 13; return static_cast<uint16_t>(n - (q * 10000U)); }
+    // clang-format on
+  }
+
+  template <uint32_t N>
+  static inline auto mod_by_10_pow_n_void(uint16_t &quotient, uint16_t &remainder)
+  {
+    static_assert(N != 0, "why modide by 1");
+    static_assert(N <= std::numeric_limits<uint16_t>::digits10, "10 ^exp is greater that num of digits");
+
+    const uint16_t A = quotient;
+    // clang-format off
+    if constexpr(N == 1) { Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(quotient); remainder = A - (quotient * 10U); }
+    else if constexpr(N == 2) { Helpers::Math::Magic::Division::div_by_10_pow_n_void<2>(quotient); remainder = A - (quotient * 100U); }
+    else if constexpr(N == 3) { Helpers::Math::Magic::Division::div_by_10_pow_n_void<3>(quotient); remainder = A - (quotient * 1000U); }
+    else if constexpr(N == 4) { Helpers::Math::Magic::Division::div_by_10_pow_n_void<4>(quotient); remainder = A - (quotient * 10000U); }
     // clang-format on
   }
 
