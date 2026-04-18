@@ -11,6 +11,7 @@
 
 #include "include/Helpers/Math.h"
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
 namespace Helpers::Simd::ARM64
 {
   __attribute__((always_inline)) static auto umul_hi_32x4_t(const uint32x4_t &v_a, const uint32x4_t &v_b) noexcept
@@ -249,3 +250,10 @@ namespace Helpers::Simd::ARM64
   }
 
 }
+#endif
+
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+namespace Helpers::Simd::x86_64
+{
+} // namespace Helpers::Simd::x86_64
+#endif
