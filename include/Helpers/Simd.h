@@ -159,12 +159,12 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
-    static const constexpr uint16x8_t v_magics_u16_10e3 = { 0x625U, 0x47AFU, 0xCCCDU, 0xFFFF, 0x625U, 0x47AFU, 0xCCCDU, 0xFFFF };
-    static const constexpr int16x8_t v_first_shifts = { -9, -6, -3, 0, -9, -6, -3, 0 };
-    static const constexpr uint16_t MAX_uin16 = std::numeric_limits<uint16_t>::max();
-    static const constexpr uint16_t v_magic_div_10e3 = 0xCCCDU;
-    static const constexpr uint16_t v_magic_div_10e3_shf = -3;
-    static const constexpr int8x16_t indices = int8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0x8313, 0xA3D8, 0x199A, 0xFFFF, 0x8313, 0xA3D8, 0x199A, 0xFFFF };
+    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -9, -6, 0, 0, -9, -6, 0, 0 };
+    static const constexpr auto MASK_REG_SHIFT = uint16x8_t{ 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF };
+    static const constexpr auto MUL_CORRECTIONS = uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 };
+    static const constexpr auto CHARS_OFFSET = uint8x8_t{ '0', '0', 0, 0, 0, 0, 0, 0 };
+    static const constexpr auto SELECT_8x16_INICES = int8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
     if(input == 0)
     {
@@ -177,58 +177,46 @@ namespace Helpers::Simd::ARM64
     uint16_t middle_val = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<4>(Helpers::Math::Magic::Division::div_by_10_pow_n<2>(input));
     uint16_t bottom_val = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<2>(input) * 100;
 
-    // vdupq_n_u32 is the NEON equivalent of _mm_set1_epi32
-    const uint16x8_t top_mid_16x8 = vcombine_u16(vdup_n_u16(top_val), vdup_n_u16(middle_val));
-    const uint16x8_t low_16x8 = vdupq_n_u16(bottom_val);
+    uint16x8_t VEC_1_16x8, VEC_2_16x8, VEC_3_16x8, VEC_4_16x8;
 
-    const uint16x8_t v_prod_16x8 = umul_hi_u16x8(top_mid_16x8, v_magics_u16_10e3);
-    const uint16x8_t v_prod_low_16x8 = umul_hi_u16x8(low_16x8, v_magics_u16_10e3);
+    VEC_1_16x8 = vaddq_u16(vcombine_u16(vdup_n_u16(top_val), vdup_n_u16(middle_val)), MUL_CORRECTIONS);
+    VEC_3_16x8 = vaddq_u16(vdupq_n_u16(bottom_val), MUL_CORRECTIONS);
+    VEC_1_16x8 = umul_hi_u16x8(VEC_1_16x8, M_MAGIC_U16);
+    VEC_3_16x8 = umul_hi_u16x8(VEC_3_16x8, M_MAGIC_U16);
+    VEC_2_16x8 = vshlq_u16(VEC_1_16x8, M_SHIFTS_U16);
+    VEC_4_16x8 = vshlq_u16(VEC_3_16x8, M_SHIFTS_U16);
+    VEC_1_16x8 = vaddq_u16(vshlq_u16(VEC_2_16x8, vdupq_n_u16(3)), vshlq_u16(VEC_2_16x8, vdupq_n_u16(1)));
+    VEC_3_16x8 = vaddq_u16(vshlq_u16(VEC_4_16x8, vdupq_n_u16(3)), vshlq_u16(VEC_4_16x8, vdupq_n_u16(1)));
+    VEC_1_16x8 = vandq_u16(vextq_u16(vdupq_n_u16(0), VEC_1_16x8, 7), MASK_REG_SHIFT);
+    VEC_3_16x8 = vandq_u16(vextq_u16(vdupq_n_u16(0), VEC_3_16x8, 7), MASK_REG_SHIFT);
 
-    const uint16x8_t v_orig_minus_v_subs = vandq_u16(vsubq_u16(top_mid_16x8, v_prod_16x8), uint16x8_t{ MAX_uin16, MAX_uin16, 0U, 0U, MAX_uin16, MAX_uin16, 0U, 0U });
-    const uint16x8_t v_low_orig_minus_v_subs = vsubq_u16(low_16x8, v_prod_low_16x8);
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9'999);
+    len += (input > 99'999);
+    len += (input > 999'999);
+    len += (input > 9'999'999);
+    len += (input > 99'999'999);
+    len += (input > 999'999'999);
+    const uint32_t lead_z = 10 - len;
 
-    const uint16x8_t v_shf = vshlq_u16(v_orig_minus_v_subs, vdupq_n_u16(-1));
-    const uint16x8_t v_low_shf = vshlq_u16(v_low_orig_minus_v_subs, vdupq_n_u16(-1));
+    VEC_2_16x8 = vsubq_u16(VEC_2_16x8, VEC_1_16x8);
+    VEC_4_16x8 = vsubq_u16(VEC_4_16x8, VEC_3_16x8);
 
-    const uint16x8_t v_add = vaddq_u16(v_shf, v_prod_16x8);
-    const uint16x8_t v_low_add = vaddq_u16(v_low_shf, v_prod_low_16x8);
+    uint8x8_t VEC_1_8x8, VEC_3_8x8;
+    VEC_1_8x8 = vmovn_u16(VEC_2_16x8);
+    VEC_3_8x8 = vmovn_u16(VEC_4_16x8);
+    VEC_1_8x8 = vadd_s8(VEC_1_8x8, vdup_n_s8('0'));
+    VEC_3_8x8 = vadd_s8(VEC_3_8x8, CHARS_OFFSET);
 
-    const uint16x8_t v_digits_16x8 = vaddq_u16(vshlq_u16(v_add, v_first_shifts), vandq_u16(vcgtq_u16(top_mid_16x8, vdupq_n_u16(0)), uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 }));
-    const uint16x8_t v_low_digits_16x8 = vshlq_u16(v_low_add, v_first_shifts);
+    uint8x16_t VEC_FULL;
 
-    const uint16x8_t v_digits_16x8_div_by_10 = vshlq_u16(umul_hi_u16x8(v_digits_16x8, vdupq_n_u16(v_magic_div_10e3)), vdupq_n_u16(v_magic_div_10e3_shf));
-    const uint16x8_t v_low_digits_16x8_div_by_10 = vshlq_u16(umul_hi_u16x8(v_low_digits_16x8, vdupq_n_u16(v_magic_div_10e3)), vdupq_n_u16(v_magic_div_10e3_shf));
+    VEC_FULL = vcombine_u8(VEC_1_8x8, VEC_3_8x8);
+    VEC_FULL = vqtbl1q_s8(VEC_FULL, vaddq_s8(SELECT_8x16_INICES, vdupq_n_s8(lead_z)));
 
-    const uint16x8_t v_digits_16x8_div_by_10_mul_10_top = umul_low_u16x8(v_digits_16x8_div_by_10, vdupq_n_u16(10U));
-    const uint16x8_t v_low_digits_16x8_div_by_10_mul_10_top = umul_low_u16x8(v_low_digits_16x8_div_by_10, vdupq_n_u16(10U));
-
-    const uint16x8_t top_full_res = vsubq_u16(v_digits_16x8, v_digits_16x8_div_by_10_mul_10_top);
-    const uint16x8_t low_full_res = vandq_u16(vsubq_u16(v_low_digits_16x8, v_low_digits_16x8_div_by_10_mul_10_top), uint16x8_t{ MAX_uin16, MAX_uin16, 0, 0, 0, 0, 0, 0 });
-
-    const uint16x8_t top_mid_mask = vandq_u16(vcgtq_u16(top_full_res, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
-    const uint16x8_t low_mask = vandq_u16(vcgtq_u16(low_full_res, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
-
-    const uint16_t top_mid_bitmask = vaddlvq_u8(top_mid_mask);
-    const uint16_t low_bitmask = vaddlvq_u8(low_mask);
-    const uint16_t combined_mask = (top_mid_bitmask << 8U) | low_bitmask;
-
-    const uint8x8_t top_mid_8 = vmovn_u16(top_full_res); // [d0, d1, d2, d3, d4, d5, d6, d7] in 8-bit
-    const uint8x8_t low_8 = vmovn_u16(low_full_res);     // [d0, d1, d2, d3, d4, d5, d6, d7] in 8-bit
-    const int8x16_t combined = vcombine_u8(top_mid_8, low_8);
-
-    const uint8x16_t v_and = vaddq_s8(combined, vandq_u8(vdupq_n_s8('0'), uint8x16_t{ 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0 }));
-
-    const uint16_t leading_z = std::countl_zero(combined_mask);
-
-    const int8x16_t shift_vector = vdupq_n_s8(leading_z);
-    const int8x16_t selector = vaddq_s8(indices, shift_vector);
-
-    // 3. Use TBL to "pick" the bytes at those new positions
-    const uint8x16_t result = vqtbl1q_u8(v_and, selector);
-
-    vst1q_s8(reinterpret_cast<int8_t *>(buff), result);
-
-    const uint32_t len = (std::numeric_limits<uint32_t>::digits10 + 1) - leading_z;
+    vst1q_s8(reinterpret_cast<int8_t *>(buff), VEC_FULL);
 
     return len;
   }
@@ -243,16 +231,6 @@ namespace Helpers::Simd::ARM64
       return 1U;
     }
 
-    // 1. FREE SUPERSCALAR LENGTH CALC:
-    // This runs on the integer ALU in parallel with the NEON arithmetic below.
-    // It entirely replaces the vcgtq/vandq/vaddlvq/clz dependency chain.
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9999);
-    const uint32_t lead_z = 5 - len;
-
     uint16_t top_val = input, bottom_val;
     Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(top_val, bottom_val);
     bottom_val *= 1000;
@@ -262,7 +240,6 @@ namespace Helpers::Simd::ARM64
     static const constexpr auto MASK_REG_SHIFT = uint16x8_t{ 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF };
     static const constexpr auto INDICES = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
     static const constexpr auto MUL_CORRECTIONS = uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 };
-    static const constexpr auto BITMASK_NUMBS = uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 };
     static const constexpr auto CHARS_OFFSET = uint8x8_t{ '0', '0', '0', '0', '0', 0, 0, 0 };
 
     uint16x8_t VEC_1_16x8, VEC_2_16x8;
@@ -273,8 +250,14 @@ namespace Helpers::Simd::ARM64
     VEC_1_16x8 = vaddq_u16(vshlq_u16(VEC_2_16x8, vdupq_n_u16(3)), vshlq_u16(VEC_2_16x8, vdupq_n_u16(1)));
     VEC_1_16x8 = vandq_u16(vextq_u16(vdupq_n_u16(0), VEC_1_16x8, 7), MASK_REG_SHIFT);
 
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9999);
+    const uint32_t lead_z = 5 - len;
+
     VEC_2_16x8 = vsubq_u16(VEC_2_16x8, VEC_1_16x8);
-    VEC_1_16x8 = vandq_u16(vcgtq_u16(VEC_2_16x8, vdupq_n_u16(0)), BITMASK_NUMBS);
 
     uint8x8_t VEC_1_8x8, VEC_2_8x8;
     VEC_1_8x8 = vmovn_u16(VEC_2_16x8);
