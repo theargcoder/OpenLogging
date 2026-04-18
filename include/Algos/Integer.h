@@ -85,7 +85,7 @@ namespace Helpers::Numeric::Integral
   static uint32_t ToStrFowardWriteSIMDReturnLen(char *__restrict__ buff, const T &input)
   {
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
-#error "this functions has not been implemented for this architecture"
+    return Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<T>(buff, input);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
     return Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(buff, input);
 #endif
@@ -109,7 +109,7 @@ namespace Helpers::Numeric::Integral
     }
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
-#error "this functions has not been implemented for this architecture"
+    len += Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
     len += Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
 #endif

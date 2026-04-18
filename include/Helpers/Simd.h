@@ -273,45 +273,201 @@ namespace Helpers::Simd::ARM64
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 namespace Helpers::Simd::x86_64
 {
+  template <typename T>
+    requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
+  static uint32_t WriteCharsToPtrFowardReturnLength(char *__restrict__ buff, const auto &input);
+
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
     if(input == 0)
     {
-      *buff = '0';
-      *(buff + 1) = '\0';
+      buff[0] = '0';
+      buff[1] = '\0';
       return 1U;
     }
 
-    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0xA36F, 0x625U, 0x47AFU, 0x999AU, 0xFFFFU, 0U, 0U, 0U };
-    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -13, -9, -6, -3, 0, 0, 0, 0 };
-    static const constexpr auto MASK_REG_SHIFT = uint16x8_t{ 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000 };
-    static const constexpr auto INDICES = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
-    static const constexpr auto CHARS_OFFSET = uint8x8_t{ '0', '0', '0', '0', '0', 0, 0, 0 };
+    // Constants
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0xFFFF, 0, 0, 0);
+    const __m128i MASK_REG_SHIFT = _mm_setr_epi16(0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-    const auto n = vdupq_n_u16(input);
-    const auto t = umul_hi_u16x8(n, M_MAGIC_U16);
-    const auto n_sub_t = vsubq_u16(n, t);
-    const auto n_sub_t_shf = vshlq_u16(n_sub_t, vdupq_n_u16(-1));
-    const auto n_sub_t_shf_add_t = vaddq_u16(n_sub_t_shf, t);
-    const auto n_sub_t_shf_add_t_shf = vsetq_lane_u16(input, vshlq_u16(n_sub_t_shf_add_t, M_SHIFTS_U16), 4);
-    const auto res_times_10 = umul_low_u16x8(n_sub_t_shf_add_t_shf, vdupq_n_u16(10));
-    const auto res_slided = vandq_u16(vextq_u16(vdupq_n_u16(0), res_times_10, 7), MASK_REG_SHIFT);
+    // Line 240-244: Math setup
+    const __m128i n = _mm_set1_epi16(input);
+    const __m128i t = _mm_mulhi_epu16(n, M_MAGIC_U16);
+    const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(n, t), 1), t);
 
+    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip
+    // We upcast to 32-bit to use _mm_srlv_epi32
+    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
+    __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
+    __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+
+    // Pack back to 16-bit and insert the original input into lane 4
+    __m128i res_vec = _mm_packus_epi32(shifted_32, _mm_setzero_si128());
+    res_vec = _mm_insert_epi16(res_vec, input, 4);
+
+    // Digit Extraction logic
+    const __m128i res_times_10 = _mm_mullo_epi16(res_vec, _mm_set1_epi16(10));
+    const __m128i res_slided = _mm_and_si128(_mm_alignr_epi8(res_times_10, _mm_setzero_si128(), 14), MASK_REG_SHIFT);
+    const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
+
+    // Branchless Length Calculation (Optimized for modern CPUs)
     uint32_t len = 1;
     len += (input > 9);
     len += (input > 99);
     len += (input > 999);
     len += (input > 9999);
-    const uint32_t lead_z = 5 - len;
+    const int32_t lead_z = 5 - len;
 
-    const auto full_res = vsubq_u16(n_sub_t_shf_add_t_shf, res_slided);
+    // Table Lookup conversion to ASCII
+    __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
+    __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8((char)lead_z));
+    __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
-    const uint8x8_t VEC_1_8x8 = vtbl1_s8(vadd_s8(vmovn_u16(full_res), CHARS_OFFSET), vadd_s8(INDICES, vdup_n_s8(lead_z)));
-
-    vst1_s8(reinterpret_cast<int8_t *>(buff), VEC_1_8x8);
+    // Final Store (8 bytes)
+    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), output_chars);
 
     return len;
+  }
+
+#elif defined(__AVX2__)
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
+  {
+    if(input == 0)
+    {
+      buff[0] = '0';
+      buff[1] = '\0';
+      return 1U;
+    }
+
+    // Constants
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0xFFFF, 0, 0, 0);
+    const __m128i MASK_REG_SHIFT = _mm_setr_epi16(0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+
+    // Line 240-244: Math setup
+    const __m128i n = _mm_set1_epi16(input);
+    const __m128i t = _mm_mulhi_epu16(n, M_MAGIC_U16);
+    const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(n, t), 1), t);
+
+    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip
+    // We upcast to 32-bit to use _mm_srlv_epi32
+    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
+    __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
+    __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+
+    // Pack back to 16-bit and insert the original input into lane 4
+    __m128i res_vec = _mm_packus_epi32(shifted_32, _mm_setzero_si128());
+    res_vec = _mm_insert_epi16(res_vec, input, 4);
+
+    // Digit Extraction logic
+    const __m128i res_times_10 = _mm_mullo_epi16(res_vec, _mm_set1_epi16(10));
+    const __m128i res_slided = _mm_and_si128(_mm_alignr_epi8(res_times_10, _mm_setzero_si128(), 14), MASK_REG_SHIFT);
+    const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
+
+    // Branchless Length Calculation (Optimized for modern CPUs)
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9999);
+    const int32_t lead_z = 5 - len;
+
+    // Table Lookup conversion to ASCII
+    __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
+    __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8((char)lead_z));
+    __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+
+    // Final Store (8 bytes)
+    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), output_chars);
+
+    return len;
+  }
+
+#else
+
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
+  {
+    if(input == 0)
+    {
+      buff[0] = '0';
+      buff[1] = '\0';
+      return 1U;
+    }
+
+    // Constants mapped to __m128i
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0xFFFF, 0, 0, 0);
+    const __m128i MASK_REG_SHIFT = _mm_setr_epi16(0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    const __m128i CHARS_OFFSET = _mm_set1_epi8('0');
+
+    // Line 240: vdupq_n_u16
+    const __m128i n = _mm_set1_epi16(input);
+
+    // Line 241: umul_hi_u16x8 (Directly supported in SSE)
+    const __m128i t = _mm_mulhi_epu16(n, M_MAGIC_U16);
+
+    // Line 242-243: vsubq_u16 and vshlq_u16 (right shift by 1)
+    const __m128i n_sub_t = _mm_sub_epi16(n, t);
+    const __m128i n_sub_t_shf = _mm_srli_epi16(n_sub_t, 1);
+
+    // Line 244: vaddq_u16
+    const __m128i n_sub_t_shf_add_t = _mm_add_epi16(n_sub_t_shf, t);
+
+    // Line 245: Variable shift simulation + Lane set
+    // x86 lacks _mm_srlv_epi16. We perform manual shifts for the first 4 lanes.
+    alignas(16) uint16_t temp[8];
+    _mm_store_si128((__m128i *)temp, n_sub_t_shf_add_t);
+    temp[0] >>= 13;
+    temp[1] >>= 9;
+    temp[2] >>= 6;
+    temp[3] >>= 3;
+    // temp[4] is replaced by input per vsetq_lane_u16(..., 4)
+    temp[4] = input;
+    __m128i n_sub_t_shf_add_t_shf = _mm_load_si128((__m128i *)temp);
+
+    // Line 246: umul_low_u16x8
+    const __m128i res_times_10 = _mm_mullo_epi16(n_sub_t_shf_add_t_shf, _mm_set1_epi16(10));
+
+    // Line 247: vextq_u16 (7 elements = 14 bytes) + vandq_u16
+    // NEON vext(zero, res, 7) extracts the high bytes. In SSE: _mm_alignr_epi8
+    const __m128i res_slided = _mm_and_si128(_mm_alignr_epi8(res_times_10, _mm_setzero_si128(), 14), MASK_REG_SHIFT);
+
+    // Length calculation (Logic unchanged)
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9999);
+    const int32_t lead_z = 5 - len;
+
+    // Line 256: vsubq_u16
+    const __m128i full_res = _mm_sub_epi16(n_sub_t_shf_add_t_shf, res_slided);
+
+    // Line 258: Narrowing + Table Lookup (vtbl)
+    // vmovn_u16 + vadd + vtbl is equivalent to pack + PSHUFB
+    __m128i narrowed = _mm_packus_epi16(full_res, _mm_setzero_si128());
+    __m128i ascii_vec = _mm_add_epi8(narrowed, CHARS_OFFSET);
+
+    // Shift indices by lead_z to handle alignment
+    __m128i shift_vec = _mm_set1_epi8((char)lead_z);
+    __m128i final_indices = _mm_add_epi8(INDICES, shift_vec);
+    __m128i VEC_1_8x8 = _mm_shuffle_epi8(ascii_vec, final_indices);
+
+    // Line 260: Store (8 bytes for uint16 version)
+    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), VEC_1_8x8);
+
+    return len;
+  }
+#endif
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input)
+  {
+    return WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(input));
   }
 } // namespace Helpers::Simd::x86_64
 #endif

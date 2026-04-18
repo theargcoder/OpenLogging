@@ -52,12 +52,12 @@ namespace Helpers::Assembly
     {
       using namespace std::chrono;
 
-      auto start_tsc = __rdtscp((unsigned *)nullptr);
+      auto start_tsc = Helpers::Assembly::rdtsc();
       auto start = steady_clock::now();
 
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-      auto end_tsc = __rdtscp((unsigned *)nullptr);
+      auto end_tsc = Helpers::Assembly::rdtsc();
       auto end = steady_clock::now();
 
       auto ns = duration_cast<nanoseconds>(end - start).count();
@@ -81,7 +81,7 @@ namespace Helpers::Assembly
     static const uint64_t freq = rdtsc_freq();
 
     // avoid overflow with 128-bit math
-    return (uint64_t)((__uint128_t)ticks * 1'000'000'000ULL / freq);
+    return (uint64_t)(static_cast<__uint128_t>(ticks) * 1'000'000'000ULL / freq);
   }
 
-};
+} // namespace Helpers::Assembly
