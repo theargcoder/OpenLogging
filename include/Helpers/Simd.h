@@ -243,6 +243,16 @@ namespace Helpers::Simd::ARM64
       return 1U;
     }
 
+    // 1. FREE SUPERSCALAR LENGTH CALC:
+    // This runs on the integer ALU in parallel with the NEON arithmetic below.
+    // It entirely replaces the vcgtq/vandq/vaddlvq/clz dependency chain.
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9999);
+    const uint32_t lead_z = 5 - len;
+
     uint16_t top_val = input, bottom_val;
     Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(top_val, bottom_val);
     bottom_val *= 1000;
@@ -266,18 +276,14 @@ namespace Helpers::Simd::ARM64
     VEC_2_16x8 = vsubq_u16(VEC_2_16x8, VEC_1_16x8);
     VEC_1_16x8 = vandq_u16(vcgtq_u16(VEC_2_16x8, vdupq_n_u16(0)), BITMASK_NUMBS);
 
-    const uint16_t LEAD_Z = std::countl_zero(static_cast<uint16_t>(vaddlvq_u8(VEC_1_16x8) << 8U));
-
     uint8x8_t VEC_1_8x8, VEC_2_8x8;
     VEC_1_8x8 = vmovn_u16(VEC_2_16x8);
     VEC_1_8x8 = vadd_s8(VEC_1_8x8, CHARS_OFFSET);
-    VEC_2_8x8 = vadd_s8(INDICES, vdup_n_s8(LEAD_Z));
+    VEC_2_8x8 = vadd_s8(INDICES, vdup_n_s8(lead_z));
 
     VEC_1_8x8 = vtbl1_s8(VEC_1_8x8, VEC_2_8x8);
 
     vst1_s8(reinterpret_cast<int8_t *>(buff), VEC_1_8x8);
-
-    const uint32_t len = (std::numeric_limits<uint16_t>::digits10 + 1) - LEAD_Z;
 
     return len;
   }
