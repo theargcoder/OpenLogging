@@ -167,10 +167,7 @@ namespace Helpers::Simd::ARM64
     static const constexpr auto M_SHIFTS_6_2 = int32x4_t{ -16, -13, -9, -6 };
     static const constexpr auto M_SHIFTS_2_0 = int32x4_t{ -3, 0, 0, 0 };
 
-    static const constexpr auto TENS = uint32x4_t{ 10, 10, 10, 10 };
-
     static const constexpr auto INDICES = uint8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-    static const constexpr auto CHARS_OFFSET = uint8x16_t{ '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', 0, 0, 0, 0, 0, 0 };
 
     if(input == 0)
     {
@@ -186,9 +183,9 @@ namespace Helpers::Simd::ARM64
     const auto ntop_sub_top = vsubq_u32(input_x4, mul_top);
     const auto nmid_sub_mid = vsubq_u32(input_x4, mul_mid);
     const auto nbot_sub_bot = vsubq_u32(input_x4, mul_bot);
-    const auto ntop_sub_t_shf = vshlq_u32(ntop_sub_top, vdupq_n_u32(-1));
-    const auto nmid_sub_t_shf = vshlq_u32(nmid_sub_mid, vdupq_n_u32(-1));
-    const auto nbot_sub_t_shf = vshlq_u32(nbot_sub_bot, vdupq_n_u32(-1));
+    const auto ntop_sub_t_shf = vshrq_n_u32(ntop_sub_top, 1);
+    const auto nmid_sub_t_shf = vshrq_n_u32(nmid_sub_mid, 1);
+    const auto nbot_sub_t_shf = vshrq_n_u32(nbot_sub_bot, 1);
     const auto ntop_sub_t_shf_add_top = vaddq_u32(ntop_sub_t_shf, mul_top);
     const auto nmid_sub_t_shf_add_top = vaddq_u32(nmid_sub_t_shf, mul_mid);
     const auto nbot_sub_t_shf_add_bot = vaddq_u32(nbot_sub_t_shf, mul_bot);
@@ -221,7 +218,7 @@ namespace Helpers::Simd::ARM64
     const uint8x8_t top_mid_chars = vmovn_u16(vcombine_u16(vmovn_u32(top_full_res), vmovn_u32(mid_full_res)));
     const uint8x8_t bot_chars = vmovn_u16(vcombine_u16(vmovn_u32(bot_full_res), vdup_n_u16(0U)));
 
-    const uint8x16_t combined = vaddq_u8(vcombine_u8(top_mid_chars, bot_chars), CHARS_OFFSET);
+    const uint8x16_t combined = vaddq_u8(vcombine_u8(top_mid_chars, bot_chars), vdupq_n_u8('0'));
 
     const uint8x16_t out = vqtbl1q_u8(combined, vaddq_u8(INDICES, vdupq_n_u8(lead_z)));
 
