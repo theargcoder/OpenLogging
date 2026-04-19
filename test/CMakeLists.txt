@@ -1,8 +1,8 @@
 # Remove find_package(ryu REQUIRED)
 
 # Set library manually
-set(RYU_INCLUDE_DIR /home/lucca/Work/ryu/include)
-set(RYU_LIB /home/lucca/Work/ryu/build/libryu.a)
+set(RYU_INCLUDE_DIR /Users/luccalabattaglia/Work/ryu/include)
+set(RYU_LIB /Users/luccalabattaglia/Work/ryu/build/libryu.a)
 
 # Test: Logging
 add_executable(test_logging logging.cpp)
