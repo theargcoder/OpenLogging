@@ -267,6 +267,7 @@ BOOST_AUTO_TEST_CASE(multiplytest)
   }
 }
 
+#if defined(__aarch64__)
 __attribute__((always_inline)) static auto umul_hi_32x4_t(const uint32x4_t &v_a, const uint32x4_t &v_b) noexcept
 {
   const uint64x2_t prod_low = vmull_u32(vget_low_u32(v_a), vget_low_u32(v_b));
@@ -633,6 +634,7 @@ BOOST_AUTO_TEST_CASE(SimDVecorizationARM64)
     BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
   }
 }
+#endif
 
 /*
 // 'results' now contains [i/10, i/100, i/1000, i/10000]}

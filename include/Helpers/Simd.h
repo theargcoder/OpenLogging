@@ -281,11 +281,90 @@ namespace Helpers::Simd::ARM64
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 namespace Helpers::Simd::x86_64
 {
+  __attribute__((always_inline)) static inline __m512i umul_hi_32x16(__m512i a, __m512i b) noexcept
+  {
+    const __m512i even_prod = _mm512_mul_epu32(a, b);
+    const __m512i odd_prod = _mm512_mul_epu32(_mm512_srli_epi64(a, 32U), _mm512_srli_epi64(b, 32U));
+    return _mm512_mask_blend_epi32(0xAAAAU, _mm512_srli_epi64(even_prod, 32U), odd_prod);
+  }
+
   template <typename T>
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
   static uint32_t WriteCharsToPtrFowardReturnLength(char *__restrict__ buff, const auto &input);
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__)
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
+  {
+    if(input == 0)
+    {
+      buff[0] = '0';
+      buff[1] = '\0';
+      return 1U;
+    }
+
+    // Padded to 16 elements for full 512-bit registers
+    static const constexpr uint32_t M_MAGIC_10_0[]
+        = { 0x12E0BE83U, 0x5798EE24U, 0xAD7F29ACU, 0x0C6F7A0CU, 0x4F8B588FU, 0xA36E2EB2U, 0x0624DD30U, 0x47AE147BU, 0x9999999AU, 0xFFFFFFFFU, 0, 0, 0, 0, 0, 0 };
+
+    // AVX-512 shifts must be positive. Padded to 16 elements.
+    static const constexpr uint32_t M_SHIFTS_10_0[] = { 29, 26, 23, 19, 16, 13, 9, 6, 3, 0, 0, 0, 0, 0, 0, 0 };
+
+    static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+    const __m512i val = _mm512_set1_epi32(input);
+    const __m512i magics = _mm512_loadu_si512((const void *)&M_MAGIC_10_0[0]);
+
+    // Emulate umul_hi_32x16 by calculating even and odd lane 64-bit products and blending the high 32-bits
+    const __m512i t = umul_hi_32x16(val, magics);
+
+    // Math setup
+    const __m512i n_sub_t = _mm512_sub_epi32(val, t);
+    const __m512i n_sub_t_shf = _mm512_srli_epi32(n_sub_t, 1);
+    const __m512i n_sub_t_shf_add_t = _mm512_add_epi32(n_sub_t_shf, t);
+
+    // AVX-512 Variable Shifts (using positive shift counts)
+    const __m512i shift_counts = _mm512_loadu_si512((const void *)&M_SHIFTS_10_0[0]);
+    const __m512i shifted_32 = _mm512_srlv_epi32(n_sub_t_shf_add_t, shift_counts);
+
+    // Override lane 9 (the 10^0 digit) with the original val to preserve precision 1 << 9 = 512 = 0x0200
+    const __m512i res_vec = _mm512_mask_blend_epi32(0x0200, shifted_32, val);
+
+    // Digit Extraction logic
+    const __m512i res_times_10 = _mm512_mullo_epi32(res_vec, _mm512_set1_epi32(10));
+
+    // Slide vector right by 1 element using permutation across lanes
+    const __m512i slide_indices = _mm512_setr_epi32(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+    const __m512i_u res_slided = _mm512_maskz_mov_epi32(0xFFFE, _mm512_permutexvar_epi32(slide_indices, res_times_10)); // Zero out lane 0
+
+    const __m512i full_res = _mm512_sub_epi32(res_vec, res_slided);
+
+    // Branchless Length Calculation
+    uint32_t len = 1;
+    len += (input > 9);
+    len += (input > 99);
+    len += (input > 999);
+    len += (input > 9'999);
+    len += (input > 99'999);
+    len += (input > 999'999);
+    len += (input > 9'999'999);
+    len += (input > 99'999'999);
+    len += (input > 999'999'999);
+    const uint32_t lead_z = 10 - len;
+
+    // Table Lookup conversion to ASCII
+    // _mm512_cvtepi32_epi8 seamlessly truncates 16x32-bit into 16x8-bit in a 128-bit vector
+    const __m128i ascii_vec = _mm_add_epi8(_mm512_cvtepi32_epi8(full_res), _mm_set1_epi8('0'));
+    const __m128i indices_vec = _mm_loadu_si128((const __m128i *)&INDICES[0]);
+    const __m128i final_indices = _mm_add_epi8(indices_vec, _mm_set1_epi8((char)lead_z));
+    const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+
+    // Final Store (16 bytes accommodates up to 10 digits comfortably)
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars);
+
+    return len;
+  }
+
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
@@ -309,12 +388,11 @@ namespace Helpers::Simd::x86_64
     // FIX: Use AVX2 Variable Shifts to avoid memory round-trip
     // We upcast to 32-bit to use _mm_srlv_epi32
     const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
-    __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
-    __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+    const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
+    const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
 
     // Pack back to 16-bit and insert the original input into lane 4
-    __m128i res_vec = _mm_packus_epi32(shifted_32, _mm_setzero_si128());
-    res_vec = _mm_insert_epi16(res_vec, input, 4);
+    const __m128i res_vec = _mm_insert_epi16(_mm_packus_epi32(shifted_32, _mm_setzero_si128()), input, 4);
 
     // Digit Extraction logic
     const __m128i res_times_10 = _mm_mullo_epi16(res_vec, _mm_set1_epi16(10));
