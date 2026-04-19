@@ -580,6 +580,12 @@ BOOST_AUTO_TEST_CASE(SimDVecorizationARM64)
     const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, i);
     BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
   }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, 999'999U);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(999'999U));
+  }
 
   for(uint16_t i = 123'45U; i > 0; i /= 10)
   {

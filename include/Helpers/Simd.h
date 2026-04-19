@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <limits>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
@@ -159,12 +160,6 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
-    if(input == 0)
-    {
-      *buff = '0';
-      *(buff + 1) = '\0';
-      return 1U;
-    }
 
     static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0, 0x8313U, 0xA3D8U, 0x199AU, 0, 0x8313U, 0xA3D8U, 0x199AU };
     static const constexpr auto M_SHIFTS_U16 = int16x8_t{ 0, -9, -6, 0, 0, -9, -6, 0 };
@@ -172,6 +167,7 @@ namespace Helpers::Simd::ARM64
     static const constexpr auto INDICES = uint8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
     static const constexpr auto M_MAGIC_U32 = uint32x2_t{ 0x431BDE83ULL, 0x51EB851FULL };
     static const constexpr auto M_SHIFTS_U32 = int64x2_t{ -50, -37 };
+    static const constexpr uint32_t LEN_TABLE[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
 
     const auto A = vdup_n_u32(input);
     const auto prod = vmull_u32(A, M_MAGIC_U32);
@@ -192,23 +188,18 @@ namespace Helpers::Simd::ARM64
     const auto res_times_10 = vmulq_n_u16(n_div, 10U);
     const auto res_slided = vsetq_lane_u16(lane_1, vextq_u16(n_div, vdupq_n_u16(lane_2), 1), 3);
 
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9'999);
-    len += (input > 99'999);
-    len += (input > 999'999);
-    len += (input > 9'999'999);
-    len += (input > 99'999'999);
-    len += (input > 999'999'999);
-    const uint32_t lead_z = 10 - len;
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= LEN_TABLE[len]);
+
+    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
     const auto full_res = vmovn_u16(vsubq_u16(res_slided, res_times_10));
 
-    const uint8x16_t combined = vaddq_u8(vcombine_u8(full_res, uint8x8_t{ static_cast<uint8_t>(remainder), static_cast<uint8_t>(remrem) }), vdupq_n_u8('0'));
+    const uint8x16_t combined = vcombine_u8(full_res, uint8x8_t{ static_cast<uint8_t>(remainder), static_cast<uint8_t>(remrem) });
 
-    const uint8x16_t out = vqtbl1q_u8(combined, vaddq_u8(INDICES, vdupq_n_u8(lead_z)));
+    const uint8x16_t out = vaddq_u8(vqtbl1q_u8(combined, vaddq_u8(INDICES, vdupq_n_u8(lead_z))), vdupq_n_u8('0'));
 
     vst1q_s8(reinterpret_cast<int8_t *>(buff), out);
 
@@ -218,15 +209,9 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    if(input == 0)
-    {
-      *buff = '0';
-      *(buff + 1) = '\0';
-      return 1U;
-    }
-
     static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0xA36F, 0x625U, 0x47AFU, 0x999AU, 0, 0, 0, 0 };
     static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -13, -9, -6, -3, 0, 0, 0, 0 };
+    static const constexpr uint32_t LEN_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
 
     static const constexpr auto INDICES = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -239,12 +224,12 @@ namespace Helpers::Simd::ARM64
     const auto res_times_10 = vmulq_n_u16(n_sub_t_shf_add_t_shf, 10U);
     const auto res_slided = vextq_u16(vdupq_n_u16(0), res_times_10, 7);
 
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9999);
-    const uint32_t lead_z = 5 - len;
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= LEN_TABLE[len]);
+
+    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
     const auto full_res = vsubq_u16(n_sub_t_shf_add_t_shf, res_slided);
 
@@ -282,13 +267,6 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
-    if(input == 0)
-    {
-      buff[0] = '0';
-      buff[1] = '\0';
-      return 1U;
-    }
-
     // Padded to 16 elements for full 512-bit registers
     static const constexpr uint32_t M_MAGIC_10_0[]
         = { 0x12E0BE83U, 0x5798EE24U, 0xAD7F29ACU, 0x0C6F7A0CU, 0x4F8B588FU, 0xA36E2EB2U, 0x0624DD30U, 0x47AE147BU, 0x9999999AU, 0xFFFFFFFFU, 0, 0, 0, 0, 0, 0 };
@@ -326,17 +304,14 @@ namespace Helpers::Simd::x86_64
     const __m512i full_res = _mm512_sub_epi32(res_vec, res_slided);
 
     // Branchless Length Calculation
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9'999);
-    len += (input > 99'999);
-    len += (input > 999'999);
-    len += (input > 9'999'999);
-    len += (input > 99'999'999);
-    len += (input > 999'999'999);
-    const uint32_t lead_z = 10 - len;
+    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= table[len]);
+
+    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
     // Table Lookup conversion to ASCII
     // _mm512_cvtepi32_epi8 seamlessly truncates 16x32-bit into 16x8-bit in a 128-bit vector
@@ -354,13 +329,6 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    if(input == 0)
-    {
-      buff[0] = '0';
-      buff[1] = '\0';
-      return 1U;
-    }
-
     // Constants
     const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0xFFFF, 0, 0, 0);
     const __m128i MASK_REG_SHIFT = _mm_setr_epi16(0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000);
@@ -386,12 +354,14 @@ namespace Helpers::Simd::x86_64
     const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9999);
-    const int32_t lead_z = 5 - len;
+    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000 };
+
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= table[len]);
+
+    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
     // Table Lookup conversion to ASCII
     __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
