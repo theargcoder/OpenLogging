@@ -1,8 +1,10 @@
 #pragma once
 
+#include <ammintrin.h>
 #include <bit>
 #include <cstdint>
 #include <limits>
+#include <smmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -252,6 +254,12 @@ namespace Helpers::Simd::ARM64
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 namespace Helpers::Simd::x86_64
 {
+  template <typename T>
+    requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
+  static uint32_t WriteCharsToPtrFowardReturnLength(char *__restrict__ buff, const auto &input);
+
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
+
   __attribute__((always_inline)) static inline __m512i umul_hi_32x16(__m512i a, __m512i b) noexcept
   {
     const __m512i even_prod = _mm512_mul_epu32(a, b);
@@ -259,11 +267,171 @@ namespace Helpers::Simd::x86_64
     return _mm512_mask_blend_epi32(0xAAAAU, _mm512_srli_epi64(even_prod, 32U), odd_prod);
   }
 
-  template <typename T>
-    requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
-  static uint32_t WriteCharsToPtrFowardReturnLength(char *__restrict__ buff, const auto &input);
+  // Helper to fix the narrowing conversion warning
+  inline __m512i set1_u64(uint64_t val)
+  {
+    return _mm512_set1_epi64(static_cast<long long>(val));
+  }
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__)
+  // Full 64-bit Unsigned Multiply High
+  inline __m512i _mm512_mulhi_epu64(const __m512i &a, const __m512i &b)
+  {
+    const __m512i a_high = _mm512_srli_epi64(a, 32);
+    const __m512i b_high = _mm512_srli_epi64(b, 32);
+
+    const __m512i ll = _mm512_mul_epu32(a, b);           // AL * BL
+    const __m512i lh = _mm512_mul_epu32(a, b_high);      // AL * BH
+    const __m512i hl = _mm512_mul_epu32(a_high, b);      // AH * BL
+    const __m512i hh = _mm512_mul_epu32(a_high, b_high); // AH * BH
+
+    __m512i mid = _mm512_add_epi64(_mm512_srli_epi64(ll, 32), _mm512_and_si512(lh, _mm512_set1_epi64(0xFFFFFFFF)));
+    mid = _mm512_add_epi64(mid, _mm512_and_si512(hl, _mm512_set1_epi64(0xFFFFFFFF)));
+
+    __m512i result = _mm512_add_epi64(hh, _mm512_srli_epi64(lh, 32));
+    result = _mm512_add_epi64(result, _mm512_srli_epi64(hl, 32));
+    result = _mm512_add_epi64(result, _mm512_srli_epi64(mid, 32));
+
+    return result;
+  }
+
+  inline __m256i _mm256_mulhi_epu64(const __m256i &a, const __m256i &b)
+  {
+    // Mask to isolate the lower 32 bits of each 64-bit lane
+    const __m256i mask = _mm256_set1_epi64x(0xFFFFFFFF);
+
+    const __m256i a_high = _mm256_srli_epi64(a, 32);
+    const __m256i b_high = _mm256_srli_epi64(b, 32);
+
+    // _mm256_mul_epu32 multiplies the low 32 bits of each 64-bit slot
+    const __m256i ll = _mm256_mul_epu32(a, b);           // AL * BL
+    const __m256i lh = _mm256_mul_epu32(a, b_high);      // AL * BH
+    const __m256i hl = _mm256_mul_epu32(a_high, b);      // AH * BL
+    const __m256i hh = _mm256_mul_epu32(a_high, b_high); // AH * BH
+
+    // Extract carries from the low * low product and add to middle products
+    __m256i mid = _mm256_add_epi64(_mm256_srli_epi64(ll, 32), _mm256_and_si256(lh, mask));
+    mid = _mm256_add_epi64(mid, _mm256_and_si256(hl, mask));
+
+    // Combine high product with carries from the middle products
+    __m256i result = _mm256_add_epi64(hh, _mm256_srli_epi64(lh, 32));
+    result = _mm256_add_epi64(result, _mm256_srli_epi64(hl, 32));
+    result = _mm256_add_epi64(result, _mm256_srli_epi64(mid, 32));
+
+    return result;
+  }
+
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input)
+  {
+    // div by [10^16, 10^12, 10^8, 10^4, 0]
+    static const constexpr uint64_t M_MAGIC_U64[] = { 0x39A5652FB1137857ULL, 0x232F33025BD42233ULL, 0xABCC77118461CEFDULL, 0x346DC5D63886594BULL };
+    static const constexpr uint64_t M_SHIFTS_U64[] = { 51U, 37U, 26ULL, 11ULL };
+
+    // Padded to 16 elements for full 512-bit registers
+    static const constexpr uint16_t M_MAGIC_U16[] = { 0x20C5, 0x51EC, 0xCCCD, 0x0001, 0x20C5, 0x51EC, 0xCCCD, 0x0001, 0x20C5, 0x51EC, 0xCCCD, 0x0001, 0x20C5, 0x51EC,
+                                                      0xCCCD, 0x0001, 0x20C5, 0x51EC, 0xCCCD, 0x0001, 0,      0,      0,      0,      0,      0,      0,      0 };
+    static const constexpr uint16_t M_SHIFTS_U16[] = { 17, 19, 19, 0, 17, 19, 19, 0, 17, 19, 19, 0, 17, 19, 19, 0, 17, 19, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
+
+    static const constexpr uint64_t LEN_TABLE[] = { 0,
+                                                    10,
+                                                    100,
+                                                    1000,
+                                                    10000,
+                                                    100000,
+                                                    1000000,
+                                                    10000000,
+                                                    100000000,
+                                                    1000000000,
+                                                    10000000000ULL,
+                                                    100000000000ULL,
+                                                    1000000000000ULL,
+                                                    10000000000000ULL,
+                                                    100000000000000ULL,
+                                                    1000000000000000ULL,
+                                                    10000000000000000ULL,
+                                                    100000000000000000ULL,
+                                                    1000000000000000000ULL,
+                                                    10000000000000000000ULL };
+
+    const __m256i u64val = _mm256_set1_epi64x(input);
+    const __m256i u64magics = _mm256_load_epi64((const void *)&M_MAGIC_U64[0]);
+
+    const __m256i u64prod = _mm256_mulhi_epu64(u64val, u64magics);
+
+    const __m256i u64shfts = _mm256_loadu_epi64((const void *)&M_SHIFTS_U64[0]);
+    const __m256i u64shfted = _mm256_srlv_epi64(u64prod, u64shfts);
+    const __m256i u64regshift = _mm256_alignr_epi64(u64shfted, _mm256_setzero_si256(), 7);
+    const __m256i multipliers = _mm256_set1_epi64x(10'000ULL);
+    const __m256i u64resultx10 = _mm256_mullo_epi64(u64regshift, multipliers);
+    const __m256i u64final = _mm256_sub_epi64(u64shfted, u64resultx10);
+
+    const __m128i low128 = _mm256_extracti128_si256(u64final, 0);
+    const __m128i high128 = _mm256_extracti128_si256(u64final, 1);
+    const auto val1 = static_cast<uint16_t>(_mm_extract_epi64(low128, 0));
+    const auto val2 = static_cast<uint16_t>(_mm_extract_epi64(low128, 1));
+    const auto val3 = static_cast<uint16_t>(_mm_extract_epi64(high128, 0));
+    const auto val4 = static_cast<uint16_t>(_mm_extract_epi64(high128, 1));
+    const auto val5 = static_cast<uint16_t>(input - _mm_extract_epi64(_mm256_extracti128_si256(u64shfted, 1), 1) * 10'000ULL);
+
+    // 2. Load val5 into the lowest 64-bit slot of a new 256-bit register. Note: _mm256_set_epi64x takes arguments in reverse order (e3, e2, e1, e0).
+    const __m256i upper256 = _mm256_set_epi64x(0, 0, 0, val5);
+
+    // 3. Upcast your existing u64final to 512-bit (this occupies the lower 256 bits)
+    // 4. Insert upper256 into the upper half (index 1) of the 512-bit register. _mm512_inserti64x4 inserts a 256-bit vector into a 512-bit vector.
+    const __m512i v512 = _mm512_inserti64x4(_mm512_castsi256_si512(u64final), upper256, 1);
+
+    // 5. Shuffle to broadcast the lower 16 bits of each 64-bit chunk 4 times.
+    const __m512i shuf_mask = _mm512_broadcast_i32x4(_mm_setr_epi8(0, 1, 0, 1, 0, 1, 0, 1, 8, 9, 8, 9, 8, 9, 8, 9));
+
+    const __m512i val = _mm512_shuffle_epi8(v512, shuf_mask);
+
+    const __m512i magics = _mm512_loadu_si512((const void *)&M_MAGIC_U16[0]);
+
+    // Emulate umul_hi_32x16 by calculating even and odd lane 64-bit products and blending the high 32-bits
+    const __m512i t = _mm512_mulhi_epu16(val, magics);
+
+    // Math setup
+    const __m512i n_sub_t = _mm512_sub_epi16(val, t);
+    const __m512i n_sub_t_shf = _mm512_srli_epi16(n_sub_t, 1);
+    const __m512i n_sub_t_shf_add_t = _mm512_add_epi16(n_sub_t_shf, t);
+
+    // AVX-512 Variable Shifts (using positive shift counts)
+    const __m512i shift_counts = _mm512_loadu_si512((const void *)&M_SHIFTS_U16[0]);
+    const __m512i shifted_16 = _mm512_srlv_epi16(n_sub_t_shf_add_t, shift_counts);
+
+    // Override lane 9 (the 10^0 digit) with the original val to preserve precision 1 << 9 = 512 = 0x0200 | 0x8200 targets index 9 AND index 15
+    const __m512i res_vec = _mm512_mask_blend_epi16(0x88888888, shifted_16, val);
+
+    // Digit Extraction logic
+    const __m512i res_times_10 = _mm512_mullo_epi16(res_vec, _mm512_set1_epi16(10));
+
+    // 1. Updated slide indices to prevent Lane 9 from sliding into Lane 10
+    const __m512i slide_indices = _mm512_set_epi16(31, 0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30);
+
+    // 2. Updated mask to 0xFBFE (zeroes out Lane 0 indexed [3,7,11,15,19])
+    const __m512i_u res_slided = _mm512_maskz_mov_epi16(0x88888888, _mm512_permutexvar_epi16(slide_indices, res_times_10));
+    const __m512i full_res = _mm512_sub_epi16(res_vec, res_slided);
+
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= LEN_TABLE[len]);
+
+    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+
+    // Table Lookup conversion to ASCII
+    const __m256i ascii_vec = _mm256_add_epi8(_mm512_cvtepi16_epi8(full_res), _mm256_set1_epi8('0'));
+    const __m256i indices_vec = _mm256_load_si256((const __m256i *)&INDICES[0]);
+    const __m256i final_indices = _mm256_add_epi8(indices_vec, _mm256_set1_epi8((char)lead_z));
+    const __m256i output_chars = _mm256_shuffle_epi8(ascii_vec, final_indices);
+
+    // Final Store (16 bytes accommodates up to 10 digits comfortably)
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(buff), output_chars);
+
+    return len;
+  }
+
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
@@ -411,12 +579,12 @@ namespace Helpers::Simd::x86_64
     const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9999);
-    const int32_t lead_z = 5 - len;
+    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000 };
+
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= table[len]);
 
     // Table Lookup conversion to ASCII
     __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
@@ -430,78 +598,55 @@ namespace Helpers::Simd::x86_64
   }
 
 #else
-
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    if(input == 0)
-    {
-      buff[0] = '0';
-      buff[1] = '\0';
-      return 1U;
-    }
+    static const constexpr uint32_t LEN_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
 
-    // Constants mapped to __m128i
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0xFFFF, 0, 0, 0);
-    const __m128i MASK_REG_SHIFT = _mm_setr_epi16(0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000);
-    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-    const __m128i CHARS_OFFSET = _mm_set1_epi8('0');
+    // _mm_set_epi16 populates registers in reverse order (lane 7 down to lane 0)
+    const __m128i M_MAGIC_U16 = _mm_set_epi16(0, 0, 0, 0, 0x999A, 0x47AF, 0x0625, 0xA36F);
 
-    // Line 240: vdupq_n_u16
+    // Simulating vshlq_u16 right shifts (-13, -9, -6, -3) via multiplication.
+    // (x >> k) is mathematically equivalent to (x * 2^(16 - k)) >> 16.
+    // We compute 2^(16-13)=8, 2^(16-9)=128, 2^(16-6)=1024, 2^(16-3)=8192.
+    const __m128i M_SHIFT_MUL = _mm_set_epi16(0, 0, 0, 0, 8192, 1024, 128, 8);
+
     const __m128i n = _mm_set1_epi16(input);
-
-    // Line 241: umul_hi_u16x8 (Directly supported in SSE)
     const __m128i t = _mm_mulhi_epu16(n, M_MAGIC_U16);
 
-    // Line 242-243: vsubq_u16 and vshlq_u16 (right shift by 1)
     const __m128i n_sub_t = _mm_sub_epi16(n, t);
     const __m128i n_sub_t_shf = _mm_srli_epi16(n_sub_t, 1);
-
-    // Line 244: vaddq_u16
     const __m128i n_sub_t_shf_add_t = _mm_add_epi16(n_sub_t_shf, t);
 
-    // Line 245: Variable shift simulation + Lane set
-    // x86 lacks _mm_srlv_epi16. We perform manual shifts for the first 4 lanes.
-    alignas(16) uint16_t temp[8];
-    _mm_store_si128((__m128i *)temp, n_sub_t_shf_add_t);
-    temp[0] >>= 13;
-    temp[1] >>= 9;
-    temp[2] >>= 6;
-    temp[3] >>= 3;
-    // temp[4] is replaced by input per vsetq_lane_u16(..., 4)
-    temp[4] = input;
-    __m128i n_sub_t_shf_add_t_shf = _mm_load_si128((__m128i *)temp);
+    // Apply "shifts" and manually insert the original input into lane 4
+    const __m128i shifted = _mm_mulhi_epu16(n_sub_t_shf_add_t, M_SHIFT_MUL);
+    const __m128i n_sub_t_shf_add_t_shf = _mm_insert_epi16(shifted, input, 4);
 
-    // Line 246: umul_low_u16x8
     const __m128i res_times_10 = _mm_mullo_epi16(n_sub_t_shf_add_t_shf, _mm_set1_epi16(10));
 
-    // Line 247: vextq_u16 (7 elements = 14 bytes) + vandq_u16
-    // NEON vext(zero, res, 7) extracts the high bytes. In SSE: _mm_alignr_epi8
-    const __m128i res_slided = _mm_and_si128(_mm_alignr_epi8(res_times_10, _mm_setzero_si128(), 14), MASK_REG_SHIFT);
+    // _mm_slli_si128 shifts left by bytes. Shifting 2 bytes = 1 element,
+    // emulating ARM's vextq_u16(0, val, 7) behavior of shifting elements to higher lanes.
+    const __m128i res_slided = _mm_slli_si128(res_times_10, 2);
 
-    // Length calculation (Logic unchanged)
-    uint32_t len = 1;
-    len += (input > 9);
-    len += (input > 99);
-    len += (input > 999);
-    len += (input > 9999);
-    const int32_t lead_z = 5 - len;
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+    len += (input >= LEN_TABLE[len]);
 
-    // Line 256: vsubq_u16
+    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+
     const __m128i full_res = _mm_sub_epi16(n_sub_t_shf_add_t_shf, res_slided);
 
-    // Line 258: Narrowing + Table Lookup (vtbl)
-    // vmovn_u16 + vadd + vtbl is equivalent to pack + PSHUFB
-    __m128i narrowed = _mm_packus_epi16(full_res, _mm_setzero_si128());
-    __m128i ascii_vec = _mm_add_epi8(narrowed, CHARS_OFFSET);
+    // vmovn_u16 narrow truncation mapped to _mm_packus_epi16
+    const __m128i chars16 = _mm_add_epi16(full_res, _mm_set1_epi16('0'));
+    const __m128i chars = _mm_packus_epi16(chars16, chars16);
 
-    // Shift indices by lead_z to handle alignment
-    __m128i shift_vec = _mm_set1_epi8((char)lead_z);
-    __m128i final_indices = _mm_add_epi8(INDICES, shift_vec);
-    __m128i VEC_1_8x8 = _mm_shuffle_epi8(ascii_vec, final_indices);
+    // vtbl1_u8 table lookup mapped to SSSE3 _mm_shuffle_epi8
+    const __m128i indices = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0);
+    const __m128i mask = _mm_add_epi8(indices, _mm_set1_epi8(lead_z));
+    const __m128i out = _mm_shuffle_epi8(chars, mask);
 
-    // Line 260: Store (8 bytes for uint16 version)
-    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), VEC_1_8x8);
+    // vst1_s8 equivalent (writes exactly the lowest 64 bits / 8 chars to memory)
+    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), out);
 
     return len;
   }

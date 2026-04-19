@@ -12,21 +12,64 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Boost REQUIRED)
 
 # ------------------------------------------------------------
-# Build type
+# Build type & Architecture Detection
 # ------------------------------------------------------------
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE
       Debug
-      CACHE STRING "" FORCE)
+      CACHE STRING "Choose the type of build." FORCE)
 endif()
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" SYSTEM_ARCH)
+
 # ------------------------------------------------------------
-# Compiler warnings (portable)
+# Compiler warnings & Optimizations
 # ------------------------------------------------------------
+# Base warnings for all build types (GCC/Clang)
+set(COMMON_WARNINGS
+    -Wall
+    -Wextra
+    -Wshadow
+    -Wshadow=compatible-local
+    -Wshadow=local
+    -Werror=shadow
+    -Wnull-dereference
+    -Wduplicated-cond
+    -Wduplicated-branches
+    -Wlogical-op
+    -fno-omit-frame-pointer)
+
+# Strip out GCC-specific warnings if using Clang
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  list(REMOVE_ITEM COMMON_WARNINGS -Wduplicated-cond -Wduplicated-branches
+       -Wlogical-op)
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  # x86_64 Specific Optimizations (Intel/AMD)
+  if(SYSTEM_ARCH MATCHES "(x86_64|amd64|i386|i686)")
+    add_compile_options(
+      -mavx512f
+      -mavx512dq
+      -mavx512bw
+      -mavx512vl
+      -mavx512vnni # Explicit AVX-512
+      -mavx2
+      -mfma # Explicit AVX2/FMA fallback
+      -funroll-loops
+      -fstrict-aliasing)
+    # ARM64 Specific Optimizations (Apple Silicon M-series / Linux ARM)
+  elseif(SYSTEM_ARCH MATCHES "(arm64|aarch64)")
+    add_compile_options(-mcpu=native -funroll-loops -fstrict-aliasing)
+    # MSVC Specific Optimizations (Windows)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    if(SYSTEM_ARCH MATCHES "(x86_64|amd64)")
+      add_compile_options(/O2 /arch:AVX512 /DNDEBUG)
+    endif()
+  endif()
+  # GCC specific loop vectorization/prefetching
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
-      -ggdb
       -fno-omit-frame-pointer
       -O0
       -Wall
@@ -39,7 +82,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
       -Wduplicated-branches
       -Wlogical-op
       -fno-omit-frame-pointer)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(
       -g
       -O0
@@ -49,43 +92,51 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
       -Werror=shadow
       -Wnull-dereference
       -fno-omit-frame-pointer
-      -mcpu=apple-m4
-    )
+      -flto
+      -fvectorize
+      -fslp-vectorize
+      -ffp-contract=fast)
   endif()
+
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(
-      -Ofast
-      -ggdb
-      -fno-omit-frame-pointer
-      -fprefetch-loop-arrays
-      -funroll-loops
-      -march=native
-      -static-libstdc++
-      -Wall
-      -Wshadow
-      -Wshadow=compatible-local
-      -Wshadow=local
-      -Werror=shadow
-      -Wnull-dereference
-      -Wduplicated-cond
-      -Wduplicated-branches
-      -Wlogical-op
-      -fno-omit-frame-pointer)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Ofast -DNDEBUG ${COMMON_WARNINGS})
+
+    # x86_64 Specific Optimizations (Intel/AMD)
+    if(SYSTEM_ARCH MATCHES "(x86_64|amd64|i386|i686)")
       add_compile_options(
-        -O3
-        -DNDEBUG
-        -flto
-        -mcpu=apple-m4
-        -fvectorize
-        -fslp-vectorize
-        -ffp-contract=fast
-        -fstrict-aliasing
+        -march=native # Unlocks the host's maximum potential (Zen 5)
+        -mavx512f
+        -mavx512dq
+        -mavx512bw
+        -mavx512vl
+        -mavx512vnni # Explicit AVX-512
+        -mavx2
+        -mfma # Explicit AVX2/FMA fallback
         -funroll-loops
-        -Rpass=loop-vectorize
-        -Rpass=slp-vectorize
-      )
+        -fstrict-aliasing)
+      # GCC specific loop vectorization/prefetching
+      if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(-fprefetch-loop-arrays)
+        # Clang specific LTO and vectorization passes
+      elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-flto -fvectorize -fslp-vectorize
+                            -ffp-contract=fast)
+      endif()
+
+      # ARM64 Specific Optimizations (Apple Silicon M-series / Linux ARM)
+    elseif(SYSTEM_ARCH MATCHES "(arm64|aarch64)")
+      add_compile_options(-mcpu=native -funroll-loops -fstrict-aliasing)
+      if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-flto -fvectorize -fslp-vectorize)
+      endif()
+    endif()
+
+    # MSVC Specific Optimizations (Windows)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    if(SYSTEM_ARCH MATCHES "(x86_64|amd64)")
+      add_compile_options(/O2 /arch:AVX512 /DNDEBUG)
+    endif()
   endif()
 endif()
 
@@ -95,12 +146,10 @@ endif()
 add_library(OpenLogging INTERFACE)
 
 target_include_directories(
-  OpenLogging
-  INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
-            ${CMAKE_CURRENT_SOURCE_DIR}/../ryu # FIXED (relative path)
-)
+  OpenLogging INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/../ryu)
 
-# Optional: propagate Boost headers
+# Propagate Boost headers
 target_link_libraries(OpenLogging INTERFACE Boost::headers)
 
 # ------------------------------------------------------------

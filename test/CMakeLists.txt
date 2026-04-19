@@ -1,31 +1,17 @@
-# Remove find_package(ryu REQUIRED)
+# Set library path for the linker
+set(RYU_LIB /home/lucca/Work/ryu/build/libryu.a)
 
-# Set library manually
-set(RYU_INCLUDE_DIR /Users/luccalabattaglia/Work/ryu/include)
-set(RYU_LIB /Users/luccalabattaglia/Work/ryu/build/libryu.a)
+# Helper function to reduce "CMake shit"
+function(add_logging_test name src)
+  add_executable(${name} ${src})
+  # This inherits SIMD flags, Boost, and Ryu/OpenLogging includes automatically
+  target_link_libraries(${name} PRIVATE OpenLogging ${RYU_LIB})
+  add_test(NAME ${name} COMMAND ${name})
+endfunction()
 
-# Test: Logging
-add_executable(test_logging logging.cpp)
-target_include_directories(test_logging PRIVATE ${RYU_INCLUDE_DIR})
-target_link_libraries(test_logging PRIVATE OpenLogging ${RYU_LIB})
-add_test(NAME LoggingTest COMMAND test_logging)
+add_logging_test(test_logging logging.cpp)
+add_logging_test(test_constants constants.cpp)
+add_logging_test(test_magic_math magic_math.cpp)
+add_logging_test(test_asm rand_asm_test.cpp)
 
-# Test: Constants
-add_executable(test_constants constants.cpp)
-target_include_directories(test_constants PRIVATE ${RYU_INCLUDE_DIR})
-target_link_libraries(test_constants PRIVATE OpenLogging ${RYU_LIB})
-add_test(NAME ConstantsTest COMMAND test_constants)
-
-# Test: MagicMath
-add_executable(test_magic_math magic_math.cpp)
-target_include_directories(test_magic_math PRIVATE ${RYU_INCLUDE_DIR})
-target_link_libraries(test_magic_math PRIVATE OpenLogging ${RYU_LIB})
-add_test(NAME MagicMathTest COMMAND test_magic_math)
-
-# Test: Assembly
-add_executable(test_asm rand_asm_test.cpp)
-target_link_libraries(test_asm PRIVATE OpenLogging ${RYU_LIB})
-add_test(NAME TestAsm COMMAND test_asm)
-
-# Numeric subdirectory
 add_subdirectory(numeric)

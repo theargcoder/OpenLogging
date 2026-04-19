@@ -640,6 +640,101 @@ BOOST_AUTO_TEST_CASE(SimDVecorizationARM64)
     BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
   }
 }
+#else if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+BOOST_AUTO_TEST_CASE(SimDVecorizationx86_64)
+{
+
+  for(uint64_t i = 123'456'789'123'456'789'12ULL; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint64_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+
+  for(uint64_t i = 123'456'000'000'000'000'00ULL; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint64_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+
+  for(uint32_t i = 123'456'789'1U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+
+  for(uint32_t i = 123'000'000'0U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, 999'999U);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(999'999U));
+  }
+
+  for(uint16_t i = 123'45U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+
+  for(uint16_t i = 100'00U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+
+  for(uint16_t i = 589'69U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(16429));
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(16429));
+  }
+
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(57999));
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(57999));
+  }
+
+  for(uint8_t i = 255U; i > 0; i /= 10)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint8_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+
+  for(uint8_t i = 200U; i > 0; i--)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint8_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
+  }
+}
 #endif
 
 /*
