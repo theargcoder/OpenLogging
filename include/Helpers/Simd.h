@@ -204,9 +204,9 @@ namespace Helpers::Simd::ARM64
     len += (input > 999'999'999);
     const uint32_t lead_z = 10 - len;
 
-    const auto full_res = vsubq_u16(res_slided, res_times_10);
+    const auto full_res = vmovn_u16(vsubq_u16(res_slided, res_times_10));
 
-    const uint8x16_t combined = vaddq_u8(vcombine_u8(vmovn_u16(full_res), uint8x8_t{ static_cast<uint8_t>(remainder), static_cast<uint8_t>(remrem) }), vdupq_n_u8('0'));
+    const uint8x16_t combined = vaddq_u8(vcombine_u8(full_res, uint8x8_t{ static_cast<uint8_t>(remainder), static_cast<uint8_t>(remrem) }), vdupq_n_u8('0'));
 
     const uint8x16_t out = vqtbl1q_u8(combined, vaddq_u8(INDICES, vdupq_n_u8(lead_z)));
 

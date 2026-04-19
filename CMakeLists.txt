@@ -44,10 +44,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
       -g
       -O0
       -Wall
+      -Wextra
       -Wshadow
       -Werror=shadow
       -Wnull-dereference
-      -fno-omit-frame-pointer)
+      -fno-omit-frame-pointer
+      -mcpu=apple-m4
+    )
   endif()
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -70,22 +73,19 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
       -Wlogical-op
       -fno-omit-frame-pointer)
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(
-      -Ofast
-      -fprefetch-loop-arrays
-      -funroll-loops
-      -march=broadwell
-      -static-libstdc++
-      -Wall
-      -Wshadow
-      -Wshadow=compatible-local
-      -Wshadow=local
-      -Werror=shadow
-      -Wnull-dereference
-      -Wduplicated-cond
-      -Wduplicated-branches
-      -Wlogical-op
-      -fno-omit-frame-pointer)
+      add_compile_options(
+        -O3
+        -DNDEBUG
+        -flto
+        -mcpu=apple-m4
+        -fvectorize
+        -fslp-vectorize
+        -ffp-contract=fast
+        -fstrict-aliasing
+        -funroll-loops
+        -Rpass=loop-vectorize
+        -Rpass=slp-vectorize
+      )
   endif()
 endif()
 

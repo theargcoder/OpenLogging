@@ -92,7 +92,7 @@ namespace Helpers::Numeric::Integral
   }
 
   template <typename T>
-    requires std::is_integral_v<T>
+    requires std::is_integral_v<T> && std::is_signed_v<T>
   static std::string ToStrSIMD(const T &input)
   {
 
@@ -112,6 +112,21 @@ namespace Helpers::Numeric::Integral
     len += Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
     len += Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
+#endif
+
+    return std::string(&buff[0], len);
+  }
+
+  template <typename T>
+    requires std::is_integral_v<T> && std::is_unsigned_v<T>
+  static std::string ToStrSIMD(const T &input)
+  {
+    char buff[32];
+
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+    uint32_t len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+    uint32_t len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
 #endif
 
     return std::string(&buff[0], len);
