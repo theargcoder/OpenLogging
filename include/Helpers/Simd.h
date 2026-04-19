@@ -166,8 +166,8 @@ namespace Helpers::Simd::ARM64
       return 1U;
     }
 
-    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0x625U, 0x47AFU, 0x999AU, 0, 0x625U, 0x47AFU, 0x999AU };
-    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -9, -6, -3, 0, -9, -6, -3 };
+    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0, 0x8313U, 0xA3D8U, 0x199AU, 0, 0x8313U, 0xA3D8U, 0x199AU };
+    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ 0, -9, -6, 0, 0, -9, -6, 0 };
 
     static const constexpr auto INDICES = uint8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
     static const constexpr auto M_MAGIC_U32 = uint32x2_t{ 0x431BDE83ULL, 0x51EB851FULL };
@@ -188,12 +188,9 @@ namespace Helpers::Simd::ARM64
 
     const auto n = vcombine_u16(vdup_n_u16(lane_1), vdup_n_u16(lane_2));
     const auto t = umul_hi_u16x8(n, M_MAGIC_U16);
-    const auto n_sub_t = vsubq_u16(n, t);
-    const auto n_sub_t_shf = vshrq_n_u16(n_sub_t, 1);
-    const auto n_sub_t_shf_add_t = vaddq_u16(n_sub_t_shf, t);
-    const auto n_sub_t_shf_add_t_shf = vsetq_lane_u16(lane_1, vsetq_lane_u16(lane_2, vshlq_u16(n_sub_t_shf_add_t, M_SHIFTS_U16), 7), 3);
-    const auto res_times_10 = vmulq_n_u16(n_sub_t_shf_add_t_shf, 10U);
-    const auto res_slided = vsetq_lane_u16(0U, vextq_u16(vdupq_n_u16(0), res_times_10, 7), 4);
+    const auto n_div = vshlq_u16(t, M_SHIFTS_U16);
+    const auto res_times_10 = vmulq_n_u16(n_div, 10U);
+    const auto res_slided = vsetq_lane_u16(lane_1, vextq_u16(n_div, vdupq_n_u16(lane_2), 1), 3);
 
     uint32_t len = 1;
     len += (input > 9);
@@ -207,7 +204,7 @@ namespace Helpers::Simd::ARM64
     len += (input > 999'999'999);
     const uint32_t lead_z = 10 - len;
 
-    const auto full_res = vsubq_u16(n_sub_t_shf_add_t_shf, res_slided);
+    const auto full_res = vsubq_u16(res_slided, res_times_10);
 
     const uint8x16_t combined = vaddq_u8(vcombine_u8(vmovn_u16(full_res), uint8x8_t{ static_cast<uint8_t>(remainder), static_cast<uint8_t>(remrem) }), vdupq_n_u8('0'));
 
