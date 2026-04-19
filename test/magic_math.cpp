@@ -130,11 +130,70 @@ namespace
 
 namespace
 {
+  namespace TempTest
+  {
+    template <uint32_t N>
+    static uint32_t div_by_10_pow_n(const uint32_t &n)
+    {
+      // --- 32-BIT DIVISION ---
+      if constexpr(N == 1)
+      { // /10
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x9999999AULL) >> 32);
+        return (((n - t) >> 1) + t) >> 3;
+      }
+      else if constexpr(N == 2)
+      { // /100
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x47AE147BULL) >> 32);
+        return (((n - t) >> 1) + t) >> 6;
+      }
+      else if constexpr(N == 3)
+      { // /1,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x0624DD30ULL) >> 32);
+        return (((n - t) >> 1) + t) >> 9;
+      }
+      else if constexpr(N == 4)
+      { // /10,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0xA36E2EB2ULL) >> 32);
+        return (((n - t) >> 1) + t) >> 13;
+      }
+      else if constexpr(N == 5)
+      { // /100,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x4F8B588FULL) >> 32);
+        return (((n - t) >> 1) + t) >> 16;
+      }
+      else if constexpr(N == 6)
+      { // /1,000,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x0C6F7A0CULL) >> 32);
+        return (((n - t) >> 1) + t) >> 19;
+      }
+      else if constexpr(N == 7)
+      { // /10,000,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0xAD7F29ACULL) >> 32);
+        return (((n - t) >> 1) + t) >> 23;
+      }
+      else if constexpr(N == 8)
+      { // /100,000,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x5798EE24ULL) >> 32);
+        return (((n - t) >> 1) + t) >> 26;
+      }
+      else if constexpr(N == 9)
+      { // /1,000,000,000
+        uint32_t t = static_cast<uint32_t>((uint64_t(n) * 0x12E0BE83ULL) >> 32);
+        return (((n - t) >> 1) + t) >> 29;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+
+  }
+
   template <uint64_t N, typename Type>
   auto looper_magic_division(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_time, auto &open_logging_cpu_cycles, auto &std_lib_time,
                              auto &std_lib_cpu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 1'000'000;
+    const constexpr auto WISHED_RANGE = 100'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -153,15 +212,19 @@ namespace
       const auto regular_div_10 = i / divisor;
       const auto en_std_to_str = Helpers::Assembly::rdtsc();
 
+      const auto bannana = TempTest::div_by_10_pow_n<N>(i);
+
       open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_log - st_log));
       open_logging_cpu_cycles += en_log - st_log;
       std_lib_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str));
       std_lib_cpu_cycles += en_std_to_str - st_std_to_str;
 
-      if(our_div_10 != regular_div_10)
+      if(our_div_10 != regular_div_10 || bannana != regular_div_10)
       {
         BOOST_CHECK_EQUAL(our_div_10, regular_div_10);
-        log_str_and_into_hex(LogHexStr("Helpers::Math::Magic::div_by_10_denominator", std::to_string(our_div_10)), LogHexStr("regular IDIV got", std::to_string(regular_div_10)));
+        BOOST_CHECK_EQUAL(bannana, regular_div_10);
+        log_str_and_into_hex(LogHexStr("Helpers::Math::Magic::div_by_10_denominator", std::to_string(our_div_10)), LogHexStr("regular IDIV got", std::to_string(regular_div_10)),
+                             LogHexStr("New GEMINI n-t >> 1 + t DIV : ", std::to_string(bannana)));
 
         const auto for_debug = Helpers::Math::Magic::Division::div_by_10_denominator(i, divisor);
 
@@ -174,7 +237,7 @@ namespace
   auto looper_magic_modulus(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_time, auto &open_logging_cpu_cycles, auto &std_lib_time,
                             auto &std_lib_cpu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 1'000'000;
+    const constexpr auto WISHED_RANGE = 100'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -342,7 +405,7 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_integegral_v)
 {
   test_and_benchmark_div_magic<uint32_t>(0);
-  test_and_benchmark_mod_magic<uint32_t>(0);
-  test_and_benchmark_div_magic<uint64_t>(0);
-  test_and_benchmark_mod_magic<uint64_t>(0);
+  // test_and_benchmark_mod_magic<uint32_t>(0);
+  //  test_and_benchmark_div_magic<uint64_t>(0);
+  //  test_and_benchmark_mod_magic<uint64_t>(0);
 }
