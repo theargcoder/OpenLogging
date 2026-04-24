@@ -48,16 +48,7 @@ endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   # x86_64 Specific Optimizations (Intel/AMD)
   if(SYSTEM_ARCH MATCHES "(x86_64|amd64|i386|i686)")
-    add_compile_options(
-      -mavx512f
-      -mavx512dq
-      -mavx512bw
-      -mavx512vl
-      -mavx512vnni # Explicit AVX-512
-      -mavx2
-      -mfma # Explicit AVX2/FMA fallback
-      -funroll-loops
-      -fstrict-aliasing)
+    add_compile_options(-march=native -funroll-loops -fstrict-aliasing)
     # ARM64 Specific Optimizations (Apple Silicon M-series / Linux ARM)
   elseif(SYSTEM_ARCH MATCHES "(arm64|aarch64)")
     add_compile_options(-mcpu=native -funroll-loops -fstrict-aliasing)
@@ -104,17 +95,7 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
 
     # x86_64 Specific Optimizations (Intel/AMD)
     if(SYSTEM_ARCH MATCHES "(x86_64|amd64|i386|i686)")
-      add_compile_options(
-        -march=native # Unlocks the host's maximum potential (Zen 5)
-        -mavx512f
-        -mavx512dq
-        -mavx512bw
-        -mavx512vl
-        -mavx512vnni # Explicit AVX-512
-        -mavx2
-        -mfma # Explicit AVX2/FMA fallback
-        -funroll-loops
-        -fstrict-aliasing)
+      add_compile_options(-march=native -funroll-loops -fstrict-aliasing)
       # GCC specific loop vectorization/prefetching
       if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_compile_options(-fprefetch-loop-arrays)
