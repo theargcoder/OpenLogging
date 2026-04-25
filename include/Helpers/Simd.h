@@ -602,6 +602,17 @@ namespace Helpers::Simd::x86_64
     return res_to_ret;
   }
 
+  inline std::array<uint32_t, 4> extract_lanes_32(const __m128i &reg)
+  {
+    std::array<uint32_t, 4> result;
+
+    // Use an unaligned store to move the register contents into the array memory.
+    // This is generally the fastest way to "convert" a SIMD register to a standard container.
+    _mm_store_si128(reinterpret_cast<__m128i *>(result.data()), reg);
+
+    return result;
+  }
+
   inline std::array<uint16_t, 8> extract_lanes_16(const __m128i &reg)
   {
     std::array<uint16_t, 8> result;
@@ -648,6 +659,62 @@ namespace Helpers::Simd::x86_64
   }
 
   template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input)
+  {
+    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+
+    static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+    const uint64_t fir_8 = Helpers::Math::Magic::Division::div_by_10_pow_n<12>(input);
+    const uint64_t div_e8 = Helpers::Math::Magic::Division::div_by_10_pow_n<4>(input);
+
+    const uint64_t mid_8 = div_e8 - (fir_8 * 100'000'000ULL);
+    const uint64_t las_4 = input - (div_e8 * 10'000ULL);
+
+    const __m256i val_u32 = _mm256_set_epi64x(mid_8, mid_8, fir_8, fir_8);
+    const __m256i u_32_prod = _mm256_mul_epu32(val_u32, _mm256_set1_epi64x(0xD1B71759ULL));
+    const __m256i u_32_prod_shf = _mm256_srli_epi64(u_32_prod, 45);
+    const __m256i u_32_prod_shf_x10 = _mm256_mul_epu32(u_32_prod_shf, _mm256_set1_epi64x(10'000));
+
+    const __m256i u_32_blend = _mm256_blend_epi32(u_32_prod_shf_x10, _mm256_set1_epi64x(0), 0b00110011);
+    const __m256i u_32_to_sub = _mm256_blend_epi32(u_32_prod_shf, val_u32, 0b11001100);
+
+    const __m256i u_32_res = _mm256_sub_epi64(u_32_to_sub, u_32_blend);
+
+    const auto top_1 = static_cast<uint16_t>(_mm256_extract_epi64(u_32_res, 0));
+    const auto top_2 = static_cast<uint16_t>(_mm256_extract_epi64(u_32_res, 1));
+    const auto bot_1 = static_cast<uint16_t>(_mm256_extract_epi64(u_32_res, 2));
+    const auto bot_2 = static_cast<uint16_t>(_mm256_extract_epi64(u_32_res, 3));
+    const __m256i packed
+        = _mm256_set_m128i(_mm_blend_epi16(_mm_set1_epi16(bot_2), _mm_set1_epi16(bot_1), 0b00001111), _mm_blend_epi16(_mm_set1_epi16(top_2), _mm_set1_epi16(top_1), 0b00001111));
+    const auto packed_lanes = extract_lanes_16(packed);
+
+    const uint32_t bits = (sizeof(uint32_t) * 8) - __builtin_clz(input);
+    uint32_t len = (bits * 1233) >> 12;
+    len += (input >= table[len]);
+    const uint8_t lead_z = 10 - len;
+
+    /*
+    const __m256i res_shifted_x10 = _mm256_blend_epi16(_mm256_mullo_epi16(res_shifted, _mm256_set1_epi16(10U)), _mm256_set1_epi16(0), 0b0000'0000'0101'0101);
+    const __m256i res_blen = _mm256_blend_epi16(res_shifted, res_packed, 0b0000'0010'10'10'10);
+    const __m256i res_comb = _mm256_sub_epi16(res_blen, res_shifted_x10);
+
+    const __m128i res_top = _mm256_extracti128_si256(res_comb, 0);
+    const __m128i res_bot = _mm256_extracti128_si256(res_comb, 1);
+    const __m128i trunc_u8 = _mm_packus_epi16(res_top, res_bot);
+
+    const __m128i ascii_vec = _mm_add_epi8(trunc_u8, _mm_set1_epi8('0'));
+    const __m128i indices_vec = _mm_loadu_si128((const __m128i *)&INDICES[0]);
+    const __m128i final_indices = _mm_add_epi8(indices_vec, _mm_set1_epi8((char)lead_z));
+    const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars);
+    */
+
+    return len;
+  }
+
+  template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
     static const constexpr __m256i M_MAGIC_u64 = { 0x55E63B89ULL, 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL };
@@ -671,13 +738,10 @@ namespace Helpers::Simd::x86_64
 
     const __m128i top = _mm256_extracti128_si256(res_shuff, 0);
     const __m128i bot = _mm256_extracti128_si256(res_shuff, 1);
-
     const __m128i packed = _mm_packus_epi32(top, bot);
 
     const __m256i res_packed = _mm256_set_m128i(_mm_set1_epi16(last_dig), packed);
-
     const __m256i res_prod = _mm256_mullo_epi16(res_packed, _mm256_set1_epi16(205U));
-
     const __m256i res_shifted = _mm256_srli_epi16(res_prod, 11);
 
     const uint32_t bits = (sizeof(uint32_t) * 8) - __builtin_clz(input);
@@ -686,14 +750,11 @@ namespace Helpers::Simd::x86_64
     const uint8_t lead_z = 10 - len;
 
     const __m256i res_shifted_x10 = _mm256_blend_epi16(_mm256_mullo_epi16(res_shifted, _mm256_set1_epi16(10U)), _mm256_set1_epi16(0), 0b0000'0000'0101'0101);
-
     const __m256i res_blen = _mm256_blend_epi16(res_shifted, res_packed, 0b0000'0010'10'10'10);
-
     const __m256i res_comb = _mm256_sub_epi16(res_blen, res_shifted_x10);
 
     const __m128i res_top = _mm256_extracti128_si256(res_comb, 0);
     const __m128i res_bot = _mm256_extracti128_si256(res_comb, 1);
-
     const __m128i trunc_u8 = _mm_packus_epi16(res_top, res_bot);
 
     const __m128i ascii_vec = _mm_add_epi8(trunc_u8, _mm_set1_epi8('0'));
