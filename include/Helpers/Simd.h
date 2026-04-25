@@ -7,6 +7,7 @@
 #include <emmintrin.h>
 #include <limits>
 #include <smmintrin.h>
+#include <xmmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -572,9 +573,9 @@ namespace Helpers::Simd::x86_64
     return result;
   }
 
-  inline std::array<uint32_t, 16> extract_lanes_16(const __m256i &reg)
+  inline std::array<uint16_t, 16> extract_lanes_16(const __m256i &reg)
   {
-    std::array<uint32_t, 16> result;
+    std::array<uint16_t, 16> result;
 
     // Use an unaligned store to move the register contents into the array memory.
     // This is generally the fastest way to "convert" a SIMD register to a standard container.
@@ -649,53 +650,53 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
-    static const constexpr __m256i M_MAGIC_u64 = { 0x431BDE83ULL, 0x51EB851FULL, 0xCCCCCCCDULL, 0 };
-    static const constexpr __m256i M_SHIFTS_u64 = { 50, 37, 35, 0 };
+    static const constexpr __m256i M_MAGIC_u64 = { 0x55E63B89ULL, 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL };
+    static const constexpr __m256i M_SHIFTS_u64 = { 57, 50, 45, 37 };
+
     static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
-    static const constexpr uint32_t M_MAGIC_U16[] = { 0x8313, 0xA3D8, 0x199A, 0x0, 0x8313, 0xA3D8, 0x199A, 0x0 };
-    static const constexpr uint32_t M_SHIFTS_U16[] = { 16 + 9, 16 + 6, 16, 16, 16 + 9, 16 + 6, 16, 16 };
+
     static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
     const __m256i val = _mm256_set1_epi64x(input);
     const __m256i prod = _mm256_mul_epu32(val, M_MAGIC_u64);
-    const __m256i shifted_64 = _mm256_blend_epi32(_mm256_srlv_epi64(prod, M_SHIFTS_u64), val, 0b11000000);
+    const __m256i shifted_64 = _mm256_srlv_epi64(prod, M_SHIFTS_u64);
 
-    const __m256i shifted_64_x_10 = _mm256_mul_epu32(shifted_64, _mm256_set_epi64x(0ULL, 10ULL, 10ULL, 10'000ULL));
-    const __m256i permuted_u64 = _mm256_permutevar8x32_epi32(shifted_64_x_10, _mm256_setr_epi32(6, 7, 0, 1, 2, 3, 4, 5));
+    const __m256i shifted_64_x_10 = _mm256_mul_epu32(shifted_64, _mm256_set1_epi64x(100));
+    const __m256i permuted_u64 = _mm256_permutevar8x32_epi32(shifted_64_x_10, _mm256_setr_epi32(-1, -1, 0, 1, 2, 3, 4, 5));
     const __m256i res_u64 = _mm256_sub_epi64(shifted_64, permuted_u64);
 
-    // --- OPTIMIZATION 1: Eliminate extracts for top/bot ---
-    // Instead of extracting to scalar and blending back, we use a single permute
-    // to broadcast 'top' (dword 0) to the lower 128 bits and 'bot' (dword 2) to the upper 128 bits.
-    const __m256i comb_u32 = _mm256_permutevar8x32_epi32(res_u64, _mm256_setr_epi32(0, 0, 0, 0, 2, 2, 2, 2));
+    const uint16_t last_dig = input - _mm256_extract_epi64(shifted_64_x_10, 3);
 
-    const __m256i mul_comb_u16 = _mm256_mullo_epi32(comb_u32, _mm256_load_si256((const __m256i *)&M_MAGIC_U16[0]));
-    const __m256i mul_comb_u16_shf = _mm256_srlv_epi32(mul_comb_u16, _mm256_load_si256((const __m256i *)&M_SHIFTS_U16[0]));
-    const __m256i mul_comb_x10 = _mm256_mullo_epi32(mul_comb_u16_shf, _mm256_set1_epi32(10));
-    const __m256i comb_to_sub = _mm256_blend_epi32(mul_comb_u16_shf, comb_u32, 0b10001000);
-    const __m256i comb_permut = _mm256_permutevar8x32_epi32(mul_comb_x10, _mm256_setr_epi32(3, 0, 1, 2, 7, 4, 5, 6));
-    const __m256i comb_sub = _mm256_sub_epi32(comb_to_sub, comb_permut);
+    const __m256i res_shuff = _mm256_permutevar8x32_epi32(res_u64, _mm256_setr_epi32(0, 0, 2, 2, 4, 4, 6, 6));
+
+    const __m128i top = _mm256_extracti128_si256(res_shuff, 0);
+    const __m128i bot = _mm256_extracti128_si256(res_shuff, 1);
+
+    const __m128i packed = _mm_packus_epi32(top, bot);
+
+    const __m256i res_packed = _mm256_set_m128i(_mm_set1_epi16(last_dig), packed);
+
+    const __m256i res_prod = _mm256_mullo_epi16(res_packed, _mm256_set1_epi16(205U));
+
+    const __m256i res_shifted = _mm256_srli_epi16(res_prod, 11);
 
     const uint32_t bits = (sizeof(uint32_t) * 8) - __builtin_clz(input);
     uint32_t len = (bits * 1233) >> 12;
     len += (input >= table[len]);
     const uint8_t lead_z = 10 - len;
 
-    const __m256i shuffled_res = _mm256_permutevar8x32_epi32(
-        _mm256_shuffle_epi8(comb_sub, _mm256_setr_epi8(0, 4, 8, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 4, 8, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1)),
-        _mm256_setr_epi32(0, 4, 1, 2, 3, 5, 6, 7));
+    const __m256i res_shifted_x10 = _mm256_blend_epi16(_mm256_mullo_epi16(res_shifted, _mm256_set1_epi16(10U)), _mm256_set1_epi16(0), 0b0000'0000'0101'0101);
 
-    // --- OPTIMIZATION 2: Eliminate extracts for rem1/rem2 ---
-    // Extract the upper 128 bits of res_u64 directly into an XMM register.
-    const __m128i upper_res = _mm256_extracti128_si256(res_u64, 1);
+    const __m256i res_blen = _mm256_blend_epi16(res_shifted, res_packed, 0b0000'0010'10'10'10);
 
-    // VPSHUFB maps rem1 (byte 0) to byte 8, and rem2 (byte 8) to byte 9, zeroing the rest.
-    const __m128i rem_packed = _mm_shuffle_epi8(upper_res, _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 0, 8, -1, -1, -1, -1, -1, -1));
+    const __m256i res_comb = _mm256_sub_epi16(res_blen, res_shifted_x10);
 
-    // Use zero-cost cast to grab the lower 128 bits, then blend the packed remainders directly.
-    const __m128i packed_8 = _mm_blend_epi32(_mm256_castsi256_si128(shuffled_res), rem_packed, 0b0100);
+    const __m128i res_top = _mm256_extracti128_si256(res_comb, 0);
+    const __m128i res_bot = _mm256_extracti128_si256(res_comb, 1);
 
-    const __m128i ascii_vec = _mm_add_epi8(packed_8, _mm_set1_epi8('0'));
+    const __m128i trunc_u8 = _mm_packus_epi16(res_top, res_bot);
+
+    const __m128i ascii_vec = _mm_add_epi8(trunc_u8, _mm_set1_epi8('0'));
     const __m128i indices_vec = _mm_loadu_si128((const __m128i *)&INDICES[0]);
     const __m128i final_indices = _mm_add_epi8(indices_vec, _mm_set1_epi8((char)lead_z));
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
