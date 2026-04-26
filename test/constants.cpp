@@ -646,16 +646,16 @@ BOOST_AUTO_TEST_CASE(SimDVecorizationx86_64)
 {
   for(uint64_t i = 123'456'789'123'456'789'12ULL; i > 0; i /= 10)
   {
-    char buff[32];
-    buff[31] = '\0';
+    char buff[64];
+    buff[63] = '\0';
     const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint64_t>(buff, i);
     BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
   }
 
   for(uint64_t i = 123'456'000'000'000'000'00ULL; i > 0; i /= 10)
   {
-    char buff[32];
-    buff[31] = '\0';
+    char buff[64];
+    buff[63] = '\0';
     const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint64_t>(buff, i);
     BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
   }
