@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <emmintrin.h>
 #include <limits>
+#include <smmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -656,6 +657,92 @@ namespace Helpers::Simd::x86_64
     return _mm256_blend_epi32(_mm256_slli_epi64(hi_odd, 32), hi_even, 0b01010101);
   }
 
+  // Compute high 32 bits of (a[i] * b[i]) for 8x uint32_t
+  template <uint8_t MAGIC, uint8_t RIGHT_SHF>
+  static inline __m256i _mm256_mulmagsr_retpackedepu8(const __m256i &a, const __m256i &b) noexcept
+  {
+    // note that b is expected to be in [a, b, c ,d] aka 4x64bit
+    //    const auto a_lanes = extract_lanes_16(a);
+    //    const auto b_lanes = extract_lanes_16(b);
+
+    const __m256i prod_A = _mm256_mullo_epi16(a, _mm256_set1_epi16(MAGIC));
+    const __m256i prod_B = _mm256_mullo_epi16(b, _mm256_set1_epi16(MAGIC));
+
+    //    const auto prod_a_lanes = extract_lanes_16(prod_A);
+    //    const auto prod_b_lanes = extract_lanes_16(prod_B);
+
+    const __m256i blend_A = _mm256_blend_epi16(prod_A, _mm256_set1_epi16(0), 0b1010'1010);
+    const __m256i blend_B = _mm256_blend_epi16(prod_B, _mm256_set1_epi16(0), 0b1010'1010);
+
+    //    const auto blen_a_lanes = extract_lanes_16(blend_A);
+    //    const auto blen_b_lanes = extract_lanes_16(blend_B);
+
+    const __m256i shf_A = _mm256_srli_epi32(blend_A, RIGHT_SHF);
+    const __m256i shf_B = _mm256_srli_epi32(blend_B, RIGHT_SHF);
+
+    //    const auto shf_A_lanes = extract_lanes_16(shf_A);
+    //   const auto shf_B_lanes = extract_lanes_16(shf_B);
+
+    const __m256i packed_A = _mm256_packus_epi32(shf_A, shf_A);
+    const __m256i packed_B = _mm256_packus_epi32(shf_B, shf_B);
+
+    //   const auto packed_A_lanes = extract_lanes_16(packed_A);
+    //   const auto packed_B_lanes = extract_lanes_16(packed_B);
+
+    const __m256i packed_unpack_A = _mm256_unpacklo_epi16(packed_A, packed_A);
+    const __m256i packed_unpack_B = _mm256_unpacklo_epi16(packed_B, packed_B);
+
+    //    const auto packed_unpacked_A_lanes = extract_lanes_16(packed_unpack_A);
+    //    const auto packed_unpacked_B_lanes = extract_lanes_16(packed_unpack_B);
+
+    const __m128i div_A_top = _mm256_extracti128_si256(packed_unpack_A, 0);
+    const __m128i div_A_bot = _mm256_extracti128_si256(packed_unpack_A, 1);
+    const __m128i div_B_top = _mm256_extracti128_si256(packed_unpack_B, 0);
+
+    const __m128i packpacked_top_A = _mm_blend_epi16(div_A_top, _mm_set1_epi16(0), 0b0101'0101);
+    const __m128i packpacked_bot_A = _mm_blend_epi16(div_A_bot, _mm_set1_epi16(0), 0b0101'0101);
+    const __m128i trunc_u8_A = _mm_packus_epi16(packpacked_top_A, packpacked_bot_A);
+    const __m128i packpacked_top_B = _mm_blend_epi16(div_B_top, _mm_set1_epi16(0), 0b0101'0101);
+    const __m128i packpacked_bot_B = _mm_set1_epi32(0);
+    const __m128i trunc_u8_B = _mm_packus_epi16(packpacked_top_B, packpacked_bot_B);
+
+    const __m256i trunc_u8_full = _mm256_set_m128i(trunc_u8_B, trunc_u8_A);
+
+    //  const auto trunc_u8_A_lanes = extract_lanes_8(trunc_u8_A);
+    //  const auto trunc_u8_B_lanes = extract_lanes_8(trunc_u8_B);
+    //  const auto trunc_full_lanes = extract_lanes_8(trunc_u8_full);
+
+    const __m256i trunc_u8_full_x8 = _mm256_slli_epi64(trunc_u8_full, 3);
+    const __m256i trunc_u8_full_x2 = _mm256_slli_epi64(trunc_u8_full, 1);
+    const __m256i trunc_u8_full_x10 = _mm256_add_epi8(trunc_u8_full_x8, trunc_u8_full_x2);
+
+    //  const auto trunc_u8_full_x8_lanes = extract_lanes_8(trunc_u8_full_x8);
+    //  const auto trunc_u8_full_x2_lanes = extract_lanes_8(trunc_u8_full_x2);
+    //  const auto trunc_u8_full_x10_lanes = extract_lanes_8(trunc_u8_full_x10);
+
+    const __m128i packed_A_top = _mm_blend_epi16(_mm256_extracti128_si256(a, 0), div_A_top, 0b0101'0101);
+    const __m128i packed_A_bot = _mm_blend_epi16(_mm256_extracti128_si256(a, 1), div_A_bot, 0b0101'0101);
+    const __m128i trunc_A = _mm_packus_epi16(packed_A_top, packed_A_bot);
+    const __m128i packed_B_top = _mm_blend_epi16(_mm256_extracti128_si256(b, 0), div_B_top, 0b0101'0101);
+    const __m128i packed_B_bot = _mm_set1_epi32(0);
+    const __m128i trunc_B = _mm_packus_epi16(packed_B_top, packed_B_bot);
+
+    const __m256i trunc_full = _mm256_set_m128i(trunc_B, trunc_A);
+
+    const __m256i actual_res = _mm256_sub_epi8(trunc_full, trunc_u8_full_x10);
+
+    //  const auto packed_A_top_lanes = extract_lanes_8(packed_A_top);
+    //  const auto packed_A_bot_lanes = extract_lanes_8(packed_A_bot);
+    //  const auto packed_B_top_lanes = extract_lanes_8(packed_B_top);
+    //  const auto packed_B_bot_lanes = extract_lanes_8(packed_B_bot);
+    //  const auto trunc_A_lanes = extract_lanes_8(trunc_A);
+    //  const auto trunc_B_lanes = extract_lanes_8(trunc_B);
+    //  const auto trunc_full_to_sub_lanes = extract_lanes_8(trunc_full);
+    //  const auto actual_res_lanes = extract_lanes_8(actual_res);
+
+    return actual_res;
+  }
+
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input)
   {
@@ -710,8 +797,16 @@ namespace Helpers::Simd::x86_64
     const __m128i u_16_prod_2 = _mm_mullo_epi32(u_16_packed_2, _mm_set1_epi32(0xA3D8));
     const __m256i u_16_shf = _mm256_srli_epi32(u_16_prod, 22);
     const __m128i u_16_shf_2 = _mm_srli_epi32(u_16_prod_2, 22);
-    const __m256i u_16_shf_x100 = _mm256_mullo_epi32(u_16_shf, _mm256_set1_epi32(100));
-    const __m128i u_16_shf_2_x100 = _mm_mullo_epi32(u_16_shf_2, _mm_set1_epi32(100));
+    const __m256i u_16_shf_x64 = _mm256_slli_epi32(u_16_shf, 6);
+    const __m128i u_16_shf_2_x64 = _mm_slli_epi32(u_16_shf_2, 6);
+    const __m256i u_16_shf_x32 = _mm256_slli_epi32(u_16_shf, 5);
+    const __m128i u_16_shf_2_x32 = _mm_slli_epi32(u_16_shf_2, 5);
+    const __m256i u_16_shf_added = _mm256_add_epi16(u_16_shf_x64, u_16_shf_x32);
+    const __m128i u_16_shf_2_added = _mm_add_epi16(u_16_shf_2_x64, u_16_shf_2_x32);
+    const __m256i u_16_shf_x4 = _mm256_slli_epi32(u_16_shf, 2);
+    const __m128i u_16_shf_2_x4 = _mm_slli_epi32(u_16_shf_2, 2);
+    const __m256i u_16_shf_x100 = _mm256_add_epi16(u_16_shf_added, u_16_shf_x4);
+    const __m128i u_16_shf_2_x100 = _mm_add_epi16(u_16_shf_2_added, u_16_shf_2_x4);
     const __m256i u_16_blended = _mm256_blend_epi32(u_16_shf_x100, _mm256_set1_epi32(0), 0b0101'0101);
     const __m128i u_16_2_blended = _mm_blend_epi32(u_16_shf_2_x100, _mm_set1_epi32(0), 0b0101);
 
@@ -724,6 +819,9 @@ namespace Helpers::Simd::x86_64
     const __m256i u_16_res_packed = _mm256_packus_epi32(u_16_res, u_16_res);
     const __m128i u_16_res_packed_2 = _mm_packus_epi32(u_16_res_2, u_16_res_2);
 
+    const __m256i a = _mm256_unpacklo_epi16(u_16_res_packed, u_16_res_packed);
+    const __m256i b = _mm256_set_m128i(_mm_set1_epi32(0), _mm_unpacklo_epi16(u_16_res_packed_2, u_16_res_packed_2));
+
     const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
     uint32_t len = (bits * 1233) >> 12;
 
@@ -731,29 +829,50 @@ namespace Helpers::Simd::x86_64
 
     const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
-    const __m256i u_16_res_packed_unpacked = _mm256_unpacklo_epi16(u_16_res_packed, u_16_res_packed);
-    const __m128i u_16_res_packed_unpacked_2 = _mm_unpacklo_epi16(u_16_res_packed_2, u_16_res_packed_2);
+    const __m256i prod_A = _mm256_mullo_epi16(a, _mm256_set1_epi16(205));
+    const __m256i prod_B = _mm256_mullo_epi16(b, _mm256_set1_epi16(205));
 
-    const __m256i u_8_prod = _mm256_mullo_epi16(u_16_res_packed_unpacked, _mm256_set1_epi16(205));
-    const __m128i u_8_prod_2 = _mm_mullo_epi16(u_16_res_packed_unpacked_2, _mm_set1_epi16(205));
-    const __m256i u_8_shf = _mm256_srli_epi16(u_8_prod, 11);
-    const __m128i u_8_shf_2 = _mm_srli_epi16(u_8_prod_2, 11);
-    const __m256i u_8_x10 = _mm256_mullo_epi16(u_8_shf, _mm256_set1_epi16(10));
-    const __m128i u_8_x10_2 = _mm_mullo_epi16(u_8_shf_2, _mm_set1_epi16(10));
-    const __m256i u_8_to_sub = _mm256_blend_epi16(u_8_shf, u_16_res_packed_unpacked, 0b1010'1010);
-    const __m128i u_8_to_sub_2 = _mm_blend_epi16(u_8_shf_2, u_16_res_packed_unpacked_2, 0b1010);
-    const __m256i u_8_blend = _mm256_blend_epi16(u_8_x10, _mm256_set1_epi16(0), 0b0101'0101);
-    const __m128i u_8_blend_2 = _mm_blend_epi16(u_8_x10_2, _mm_set1_epi16(0), 0b0101);
-    const __m256i u_8_res = _mm256_sub_epi16(u_8_to_sub, u_8_blend);
-    const __m128i u_8_res_2 = _mm_sub_epi16(u_8_to_sub_2, u_8_blend_2);
+    const __m256i blend_A = _mm256_blend_epi16(prod_A, _mm256_set1_epi16(0), 0b1010'1010);
+    const __m256i blend_B = _mm256_blend_epi16(prod_B, _mm256_set1_epi16(0), 0b1010'1010);
 
-    const __m128i res_top = _mm256_extracti128_si256(u_8_res, 0);
-    const __m128i res_bot = _mm256_extracti128_si256(u_8_res, 1);
-    const __m128i trunc_u8 = _mm_packus_epi16(res_top, res_bot);
+    const __m256i shf_A = _mm256_srli_epi32(blend_A, 11);
+    const __m256i shf_B = _mm256_srli_epi32(blend_B, 11);
 
-    const auto full_res = _mm256_set_m128i(_mm_packus_epi16(u_8_res_2, _mm_set1_epi16(0)), trunc_u8);
+    const __m256i packed_A = _mm256_packus_epi32(shf_A, shf_A);
+    const __m256i packed_B = _mm256_packus_epi32(shf_B, shf_B);
 
-    const __m256i ascii_vec = _mm256_add_epi8(full_res, _mm256_set1_epi8('0'));
+    const __m256i packed_unpack_A = _mm256_unpacklo_epi16(packed_A, packed_A);
+    const __m256i packed_unpack_B = _mm256_unpacklo_epi16(packed_B, packed_B);
+
+    const __m128i div_A_top = _mm256_extracti128_si256(packed_unpack_A, 0);
+    const __m128i div_A_bot = _mm256_extracti128_si256(packed_unpack_A, 1);
+    const __m128i div_B_top = _mm256_extracti128_si256(packed_unpack_B, 0);
+
+    const __m128i packpacked_top_A = _mm_blend_epi16(div_A_top, _mm_set1_epi16(0), 0b0101'0101);
+    const __m128i packpacked_bot_A = _mm_blend_epi16(div_A_bot, _mm_set1_epi16(0), 0b0101'0101);
+    const __m128i trunc_u8_A = _mm_packus_epi16(packpacked_top_A, packpacked_bot_A);
+    const __m128i packpacked_top_B = _mm_blend_epi16(div_B_top, _mm_set1_epi16(0), 0b0101'0101);
+    const __m128i packpacked_bot_B = _mm_set1_epi32(0);
+    const __m128i trunc_u8_B = _mm_packus_epi16(packpacked_top_B, packpacked_bot_B);
+
+    const __m256i trunc_u8_full = _mm256_set_m128i(trunc_u8_B, trunc_u8_A);
+
+    const __m256i trunc_u8_full_x8 = _mm256_slli_epi64(trunc_u8_full, 3);
+    const __m256i trunc_u8_full_x2 = _mm256_slli_epi64(trunc_u8_full, 1);
+    const __m256i trunc_u8_full_x10 = _mm256_add_epi8(trunc_u8_full_x8, trunc_u8_full_x2);
+
+    const __m128i packed_A_top = _mm_blend_epi16(_mm256_extracti128_si256(a, 0), div_A_top, 0b0101'0101);
+    const __m128i packed_A_bot = _mm_blend_epi16(_mm256_extracti128_si256(a, 1), div_A_bot, 0b0101'0101);
+    const __m128i trunc_A = _mm_packus_epi16(packed_A_top, packed_A_bot);
+    const __m128i packed_B_top = _mm_blend_epi16(_mm256_extracti128_si256(b, 0), div_B_top, 0b0101'0101);
+    const __m128i packed_B_bot = _mm_set1_epi32(0);
+    const __m128i trunc_B = _mm_packus_epi16(packed_B_top, packed_B_bot);
+
+    const __m256i trunc_full = _mm256_set_m128i(trunc_B, trunc_A);
+
+    const __m256i actual_res = _mm256_sub_epi8(trunc_full, trunc_u8_full_x10);
+
+    const __m256i ascii_vec = _mm256_add_epi8(actual_res, _mm256_set1_epi8('0'));
 
     alignas(64) char temp[64];
     _mm256_store_si256(reinterpret_cast<__m256i *>(&temp[0]), ascii_vec);

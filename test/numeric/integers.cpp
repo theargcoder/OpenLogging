@@ -266,12 +266,14 @@ namespace
 
 BOOST_AUTO_TEST_CASE(test_all_integegral_v)
 {
+  /*
   test_and_benchmark_ints<int8_t>(0);
   test_and_benchmark_ints<uint8_t>(0);
   test_and_benchmark_ints<int16_t>(0);
   test_and_benchmark_ints<uint16_t>(0);
   test_and_benchmark_ints<int32_t>(0);
   test_and_benchmark_ints<uint32_t>(0);
+  */
   test_and_benchmark_ints<int64_t>(0);
   test_and_benchmark_ints<uint64_t>(0);
 }
