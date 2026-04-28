@@ -7,6 +7,7 @@
 #include <emmintrin.h>
 #include <limits>
 #include <smmintrin.h>
+#include <xmmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -884,6 +885,7 @@ namespace Helpers::Simd::x86_64
     return len;
   }
 
+  /*
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
@@ -916,6 +918,76 @@ namespace Helpers::Simd::x86_64
     const __m128i packed = _mm_packus_epi32(top, bot);
 
     const __m256i res_packed = _mm256_set_m128i(_mm_set1_epi16(last_dig), packed);
+
+    const __m256i res_packed_x128 = _mm256_slli_epi16(res_packed, 7);
+    const __m256i res_packed_x64 = _mm256_slli_epi16(res_packed, 6);
+    const __m256i res_packed_x8 = _mm256_slli_epi16(res_packed, 3);
+    const __m256i res_packed_x4 = _mm256_slli_epi16(res_packed, 2);
+
+    const __m256i res_packed_x196 = _mm256_add_epi16(res_packed_x128, res_packed_x64);
+    const __m256i res_packed_x12 = _mm256_add_epi16(res_packed_x8, res_packed_x4);
+
+    const __m256i res_prod = _mm256_add_epi16(_mm256_add_epi16(res_packed_x196, res_packed_x12), res_packed);
+
+    const __m256i res_shifted = _mm256_srli_epi16(res_prod, 11);
+
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - __builtin_clz(input);
+    uint32_t len = (bits * 1233) >> 12;
+    len += (input >= table[len]);
+    const uint8_t lead_z = 10 - len;
+
+    const __m256i res_shifted_x8 = _mm256_slli_epi16(res_shifted, 3);
+    const __m256i res_shifted_x2 = _mm256_slli_epi16(res_shifted, 1);
+
+    const __m256i res_shifted_x10 = _mm256_add_epi16(res_shifted_x8, res_shifted_x2);
+
+    const __m256i res_shifted_blended = _mm256_blend_epi16(res_shifted_x10, _mm256_set1_epi16(0), 0b0000'0000'0101'0101);
+    const __m256i res_to_sub = _mm256_blend_epi16(res_shifted, res_packed, 0b0000'0010'10'10'10);
+    const __m256i res_comb = _mm256_sub_epi16(res_to_sub, res_shifted_blended);
+
+    const __m128i res_top = _mm256_extracti128_si256(res_comb, 0);
+    const __m128i res_bot = _mm256_extracti128_si256(res_comb, 1);
+    const __m128i trunc_u8 = _mm_packus_epi16(res_top, res_bot);
+
+    const __m128i indeces = _mm_load_si128((const __m128i *)INDICES);
+
+    const __m128i ascii_vec = _mm_add_epi8(trunc_u8, _mm_set1_epi8('0'));
+    const __m128i final_indices = _mm_add_epi8(indeces, _mm_set1_epi8(lead_z));
+    const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars);
+
+    return len;
+  }
+  */
+
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
+  {
+    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+    static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+    static const constexpr __m256i M_MAGIC_u64 = { 0x55E63B89ULL, 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL };
+    static const constexpr __m256i M_SHIFTS_u64 = { 57, 50, 45, 37 };
+
+    const __m256i val = _mm256_set1_epi32(input);
+    const __m256i prod = _mm256_mul_epu32(val, M_MAGIC_u64);
+    const __m256i shifted = _mm256_srlv_epi64(prod, M_SHIFTS_u64);
+    const __m256i shifted_64 = _mm256_blend_epi32(_mm256_permutevar8x32_epi32(shifted, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)), val, 0b0011'0000);
+
+    const __m256i shifted_64_x_64 = _mm256_slli_epi64(shifted_64, 6);
+    const __m256i shifted_64_x_32 = _mm256_slli_epi64(shifted_64, 5);
+    const __m256i shifted_64_x_4 = _mm256_slli_epi64(shifted_64, 2);
+
+    const __m256i shifted_64_x_96 = _mm256_add_epi64(shifted_64_x_64, shifted_64_x_32);
+    const __m256i shifted_64_x_100 = _mm256_add_epi64(shifted_64_x_96, shifted_64_x_4);
+
+    const __m256i permuted_u64 = _mm256_permutevar8x32_epi32(shifted_64_x_100, _mm256_setr_epi32(7, 0, 1, 2, 3, 4, 5, 6));
+    const __m256i res_u64 = _mm256_sub_epi64(shifted_64, permuted_u64);
+
+    const __m256i shifted_16 = _mm256_slli_epi64(res_u64, 16);
+
+    const __m256i res_packed = _mm256_or_si256(shifted_16, res_u64);
 
     const __m256i res_packed_x128 = _mm256_slli_epi16(res_packed, 7);
     const __m256i res_packed_x64 = _mm256_slli_epi16(res_packed, 6);
