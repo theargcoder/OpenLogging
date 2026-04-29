@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <iostream>
 #if defined(__x86_64__)
 #include <chrono>
 #include <thread>
@@ -82,6 +83,37 @@ namespace Helpers::Assembly
 
     // avoid overflow with 128-bit math
     return (uint64_t)(static_cast<__uint128_t>(ticks) * 1'000'000'000ULL / freq);
+  }
+
+  inline void pin_thread_to_cpu(int cpu_id)
+  {
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+    cpu_set_t allowed;
+    CPU_ZERO(&allowed); // ✅ initialize
+
+    if(sched_getaffinity(0, sizeof(allowed), &allowed) != 0)
+    {
+      perror("sched_getaffinity");
+      std::terminate();
+    }
+
+    if(!CPU_ISSET(cpu_id, &allowed))
+    {
+      std::cerr << "CPU " << cpu_id << " not allowed in this cgroup\n";
+      std::terminate();
+    }
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+
+    if(sched_setaffinity(0, sizeof(cpuset), &cpuset) != 0)
+    {
+      perror("sched_setaffinity");
+      std::terminate();
+    }
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+#endif
   }
 
 } // namespace Helpers::Assembly
