@@ -91,7 +91,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Ofast -DNDEBUG ${COMMON_WARNINGS})
+    add_compile_options(-O3 -DNDEBUG ${COMMON_WARNINGS})
 
     # x86_64 Specific Optimizations (Intel/AMD)
     if(SYSTEM_ARCH MATCHES "(x86_64|amd64|i386|i686)")

@@ -120,9 +120,9 @@ namespace Helpers::Numeric::Integral
     char buff[32];
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
-    uint32_t len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
+    const uint32_t len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
-    uint32_t len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
+    const uint32_t len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
 #endif
 
     return std::string(&buff[0], len);

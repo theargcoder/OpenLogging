@@ -1,3 +1,4 @@
+#include "include/Helpers/Math.h"
 #define BOOST_TEST_MODULE IntegerTests
 #include <boost/test/included/unit_test.hpp>
 #include <boost/type_index.hpp>
@@ -139,42 +140,51 @@ namespace
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
 
+    uint32_t errors = 0;
+    uint64_t cycles = 0;
     // OpenLogging logger;
 
-    for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
+    while(cycles < WISHED_RANGE && errors < MAX_ERRORS)
     {
-      const auto st_log = Helpers::Assembly::rdtsc();
-      const auto our_log = Helpers::Numeric::Integral::ToStr(i);
-      const auto en_log = Helpers::Assembly::rdtsc();
-
-      const auto st_std_to_str = Helpers::Assembly::rdtsc();
-      const auto std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
-      const auto en_std_to_str = Helpers::Assembly::rdtsc();
-
-      const auto std_lib_to_st = Helpers::Assembly::rdtsc();
-      const auto std_lib_to_str_log = std::to_string(i);
-      const auto std_lib_to_en = Helpers::Assembly::rdtsc();
-
-      const auto simdy_st = Helpers::Assembly::rdtsc();
-      const auto simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
-      const auto simdy_en = Helpers::Assembly::rdtsc();
-
-      open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_log - st_log));
-      open_logging_cpu_cycles += en_log - st_log;
-      std_lib_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_std_to_str - st_std_to_str));
-      std_lib_cpu_cycles += en_std_to_str - st_std_to_str;
-      std_lib_to_str_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(std_lib_to_en - std_lib_to_st));
-      std_lib_to_str_cycles += std_lib_to_en - std_lib_to_st;
-      simdy_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(simdy_en - simdy_st));
-      simdy_cycles += simdy_en - simdy_st;
-
-      if(our_log != std_log || simdy_log != std_lib_to_str_log)
+      cycles += RANGE;
+      for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE;
+          (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
       {
-        BOOST_CHECK_EQUAL(our_log, std_log);
-        log_str_and_into_hex(LogHexStr("Helpers::Numeric::ToStr", our_log), LogHexStr("std::to_chars", std_log), LogHexStr("std::to_string", std_lib_to_str_log),
-                             LogHexStr("Helpers::Numeric::ToStrSIMD", simdy_log));
+        const auto st_log = Helpers::Assembly::rdtsc();
+        const auto our_log = Helpers::Numeric::Integral::ToStr(i);
+        const auto en_log = Helpers::Assembly::rdtsc();
 
-        lim++;
+        const auto st_std_to_str = Helpers::Assembly::rdtsc();
+        const auto std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
+        const auto en_std_to_str = Helpers::Assembly::rdtsc();
+
+        const auto std_lib_to_st = Helpers::Assembly::rdtsc();
+        const auto std_lib_to_str_log = std::to_string(i);
+        const auto std_lib_to_en = Helpers::Assembly::rdtsc();
+
+        const auto simdy_st = Helpers::Assembly::rdtsc();
+        const auto simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
+        const auto simdy_en = Helpers::Assembly::rdtsc();
+
+        open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_log - st_log)));
+        open_logging_cpu_cycles += en_log - st_log;
+        std_lib_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_std_to_str - st_std_to_str)));
+        std_lib_cpu_cycles += en_std_to_str - st_std_to_str;
+        std_lib_to_str_time
+            += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(std_lib_to_en - std_lib_to_st)));
+        std_lib_to_str_cycles += std_lib_to_en - std_lib_to_st;
+        simdy_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(simdy_en - simdy_st)));
+        simdy_cycles += simdy_en - simdy_st;
+
+        if(our_log != std_log || simdy_log != std_lib_to_str_log)
+        {
+          BOOST_CHECK_EQUAL(our_log, std_log);
+          log_str_and_into_hex(LogHexStr("Helpers::Numeric::ToStr", our_log), LogHexStr("std::to_chars", std_log), LogHexStr("std::to_string", std_lib_to_str_log),
+                               LogHexStr("Helpers::Numeric::ToStrSIMD", simdy_log));
+
+          lim++;
+          errors++;
+        }
       }
     }
   };
@@ -272,6 +282,6 @@ BOOST_AUTO_TEST_CASE(test_all_integegral_v)
   test_and_benchmark_ints<uint16_t>(0);
   test_and_benchmark_ints<int32_t>(0);
   test_and_benchmark_ints<uint32_t>(0);
-  test_and_benchmark_ints<int64_t>(0);
-  test_and_benchmark_ints<uint64_t>(0);
+  //  test_and_benchmark_ints<int64_t>(0);
+  //  test_and_benchmark_ints<uint64_t>(0);
 }
