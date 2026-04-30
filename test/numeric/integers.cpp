@@ -144,6 +144,7 @@ namespace
     uint64_t cycles = 0;
     // OpenLogging logger;
 
+    std::string our_log, std_log, std_lib_to_str_log, simdy_log;
     while(cycles < WISHED_RANGE && errors < MAX_ERRORS)
     {
       cycles += RANGE;
@@ -151,19 +152,19 @@ namespace
           (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
       {
         const auto st_log = Helpers::Assembly::timer_start();
-        const std::string our_log = Helpers::Numeric::Integral::ToStr(i);
+        our_log = Helpers::Numeric::Integral::ToStr(i);
         const auto en_log = Helpers::Assembly::timer_end();
 
         const auto st_std_to_str = Helpers::Assembly::timer_start();
-        const std::string std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
+        std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
         const auto en_std_to_str = Helpers::Assembly::timer_end();
 
         const auto std_lib_to_st = Helpers::Assembly::timer_start();
-        const std::string std_lib_to_str_log = std::to_string(i);
+        std_lib_to_str_log = std::to_string(i);
         const auto std_lib_to_en = Helpers::Assembly::timer_end();
 
         const auto simdy_st = Helpers::Assembly::timer_start();
-        const std::string simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
+        simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
         const auto simdy_en = Helpers::Assembly::timer_end();
 
         open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_log - st_log)));
