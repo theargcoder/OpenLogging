@@ -29,11 +29,31 @@ namespace Helpers::Assembly
 #endif
   }
 
-  inline uint64_t rdtsc()
+  // Forces the CPU to finish all previous instructions before taking the timestamp
+  inline uint64_t timer_start()
   {
 #if defined(__x86_64__)
-    unsigned aux;
-    return __rdtscp(&aux);
+    unsigned int unused;
+    _mm_lfence(); // Serialize
+    return __rdtscp(&unused);
+#elif defined(__aarch64__)
+    uint64_t val;
+    asm volatile("isb" ::: "memory");
+    asm volatile("mrs %0, cntvct_el0" : "=r"(val));
+    return val;
+#else
+#error "Unsupported architecture"
+#endif
+  }
+
+  // Ensures the code being measured finishes before taking the final timestamp
+  inline uint64_t timer_end()
+  {
+#if defined(__x86_64__)
+    unsigned int unused;
+    uint64_t t = __rdtscp(&unused);
+    _mm_lfence(); // Serialize
+    return t;
 #elif defined(__aarch64__)
     uint64_t val;
     asm volatile("isb" ::: "memory");
@@ -53,12 +73,12 @@ namespace Helpers::Assembly
     {
       using namespace std::chrono;
 
-      auto start_tsc = Helpers::Assembly::rdtsc();
+      auto start_tsc = Helpers::Assembly::timer_start();
       auto start = steady_clock::now();
 
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-      auto end_tsc = Helpers::Assembly::rdtsc();
+      auto end_tsc = Helpers::Assembly::timer_end();
       auto end = steady_clock::now();
 
       auto ns = duration_cast<nanoseconds>(end - start).count();

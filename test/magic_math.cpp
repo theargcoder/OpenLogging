@@ -204,13 +204,13 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      const auto st_log = Helpers::Assembly::rdtsc();
+      const auto st_log = Helpers::Assembly::timer_start();
       const auto our_div_10 = Helpers::Math::Magic::Division::div_by_10_pow_n<N>(i);
-      const auto en_log = Helpers::Assembly::rdtsc();
+      const auto en_log = Helpers::Assembly::timer_end();
 
-      const auto st_std_to_str = Helpers::Assembly::rdtsc();
+      const auto st_std_to_str = Helpers::Assembly::timer_start();
       const auto regular_div_10 = i / divisor;
-      const auto en_std_to_str = Helpers::Assembly::rdtsc();
+      const auto en_std_to_str = Helpers::Assembly::timer_end();
 
       const auto bannana = TempTest::div_by_10_pow_n<N>(i);
 
@@ -248,13 +248,13 @@ namespace
 
     for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE; (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
     {
-      const uint64_t st_log = Helpers::Assembly::rdtsc();
+      const uint64_t st_log = Helpers::Assembly::timer_start();
       const auto our_div_10 = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<N>(i);
-      const uint64_t en_log = Helpers::Assembly::rdtsc();
+      const uint64_t en_log = Helpers::Assembly::timer_end();
 
-      const uint64_t st_std_to_str = Helpers::Assembly::rdtsc();
+      const uint64_t st_std_to_str = Helpers::Assembly::timer_start();
       const auto regular_div_10 = i % divisor;
-      const uint64_t en_std_to_str = Helpers::Assembly::rdtsc();
+      const uint64_t en_std_to_str = Helpers::Assembly::timer_end();
 
       open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(en_log - st_log));
       open_logging_cpu_cycles += en_log - st_log;

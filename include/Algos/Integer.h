@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sys/cdefs.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -93,29 +94,28 @@ namespace Helpers::Numeric::Integral
 
   template <typename T>
     requires std::is_integral_v<T> && std::is_signed_v<T>
-  static std::string ToStrSIMD(const T &input)
+  static inline std::string ToStrSIMD(const T &input) noexcept
   {
     char buff[32];
 
+    const bool neg = input < 0;
     using UT = Helpers::Templating::Types::make_unsigned_t<T>;
-    UT val = std::abs(input);
+    UT val = (neg) ? ~static_cast<UT>(input) + 1U : input;
 
     buff[0] = '-';
-    uint32_t len = 0;
-    len += input < 0;
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
-    len += Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + static_cast<unsigned>(neg)), val);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
-    len += Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + len), val);
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + static_cast<unsigned>(len)), val);
 #endif
 
-    return std::string(&buff[0], len);
+    return { &buff[0], len };
   }
 
   template <typename T>
     requires std::is_integral_v<T> && std::is_unsigned_v<T>
-  static std::string ToStrSIMD(const T &input)
+  static inline std::string ToStrSIMD(const T &input) noexcept
   {
     char buff[32];
 
@@ -125,7 +125,7 @@ namespace Helpers::Numeric::Integral
     const uint32_t len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
 #endif
 
-    return std::string(&buff[0], len);
+    return std::string{ &buff[0], len };
   }
 
   template <int N, typename T>

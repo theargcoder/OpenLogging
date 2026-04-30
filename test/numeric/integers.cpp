@@ -139,7 +139,6 @@ namespace
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
-    const constexpr int INTERNAL_CYCLES = 10;
 
     uint32_t errors = 0;
     uint64_t cycles = 0;
@@ -151,37 +150,21 @@ namespace
       for(Type i = DELIM, lim = 0, max_iter = 0; ((PLUS) ? i < DELIM + RANGE : i > DELIM - RANGE) && lim < MAX_ERRORS && max_iter < RANGE;
           (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
       {
-        const auto st_log = Helpers::Assembly::rdtsc();
-        std::string our_log;
-        for(int o = 0; o < INTERNAL_CYCLES; o++)
-        {
-          our_log = Helpers::Numeric::Integral::ToStr(i);
-        }
-        const auto en_log = Helpers::Assembly::rdtsc();
+        const auto st_log = Helpers::Assembly::timer_start();
+        std::string our_log = Helpers::Numeric::Integral::ToStr(i);
+        const auto en_log = Helpers::Assembly::timer_end();
 
-        const auto st_std_to_str = Helpers::Assembly::rdtsc();
-        std::string std_log;
-        for(int o = 0; o < INTERNAL_CYCLES; o++)
-        {
-          std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
-        }
-        const auto en_std_to_str = Helpers::Assembly::rdtsc();
+        const auto st_std_to_str = Helpers::Assembly::timer_start();
+        std::string std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
+        const auto en_std_to_str = Helpers::Assembly::timer_end();
 
-        const auto std_lib_to_st = Helpers::Assembly::rdtsc();
-        std::string std_lib_to_str_log;
-        for(int o = 0; o < INTERNAL_CYCLES; o++)
-        {
-          std_lib_to_str_log = std::to_string(i);
-        }
-        const auto std_lib_to_en = Helpers::Assembly::rdtsc();
+        const auto std_lib_to_st = Helpers::Assembly::timer_start();
+        std::string std_lib_to_str_log = std::to_string(i);
+        const auto std_lib_to_en = Helpers::Assembly::timer_end();
 
-        const auto simdy_st = Helpers::Assembly::rdtsc();
-        std::string simdy_log;
-        for(int o = 0; o < INTERNAL_CYCLES; o++)
-        {
-          simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
-        }
-        const auto simdy_en = Helpers::Assembly::rdtsc();
+        const auto simdy_st = Helpers::Assembly::timer_start();
+        std::string simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
+        const auto simdy_en = Helpers::Assembly::timer_end();
 
         open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_log - st_log)));
         open_logging_cpu_cycles += en_log - st_log;

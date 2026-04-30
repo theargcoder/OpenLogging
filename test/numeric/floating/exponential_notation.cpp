@@ -152,17 +152,17 @@ namespace
 
       std::string open_logging, std_format, ryu;
 
-      const auto st_open_logging = Helpers::Assembly::rdtsc();
+      const auto st_open_logging = Helpers::Assembly::timer_start();
       open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
-      const auto en_open_logging = Helpers::Assembly::rdtsc();
+      const auto en_open_logging = Helpers::Assembly::timer_end();
 
-      const auto st_std_fmt = Helpers::Assembly::rdtsc();
+      const auto st_std_fmt = Helpers::Assembly::timer_start();
       std_format = Helpers::Numeric::Std::to_string<true>(val, PRECISION);
-      const auto en_std_fmt = Helpers::Assembly::rdtsc();
+      const auto en_std_fmt = Helpers::Assembly::timer_end();
 
-      const auto st_ryu = Helpers::Assembly::rdtsc();
+      const auto st_ryu = Helpers::Assembly::timer_start();
       ryu = Helpers::Numeric::Ryu::ToStr(val);
-      const auto en_ryu = Helpers::Assembly::rdtsc();
+      const auto en_ryu = Helpers::Assembly::timer_end();
 
       open_logging_took
           += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_open_logging - st_open_logging)));
@@ -210,15 +210,15 @@ namespace
       std::string open_logging, std_format, ryu;
 
       // if constexpr(std::is_same_v<Type, double>) { log = logger.format("{15}", i); } else { six in reality should be 5 log = logger.format("{6}", i); }
-      const auto st_open_logging = Helpers::Assembly::rdtsc();
+      const auto st_open_logging = Helpers::Assembly::timer_start();
       open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
-      const auto en_open_logging = Helpers::Assembly::rdtsc();
+      const auto en_open_logging = Helpers::Assembly::timer_end();
 
-      const auto st_std_fmt = Helpers::Assembly::rdtsc();
+      const auto st_std_fmt = Helpers::Assembly::timer_start();
       std_format = Helpers::Numeric::Std::to_string<true>(val, PRECISION);
-      const auto en_std_fmt = Helpers::Assembly::rdtsc();
+      const auto en_std_fmt = Helpers::Assembly::timer_end();
 
-      const auto st_ryu = Helpers::Assembly::rdtsc();
+      const auto st_ryu = Helpers::Assembly::timer_start();
 
       if constexpr(std::is_same_v<double, Type>)
       {
@@ -229,7 +229,7 @@ namespace
         ryu = Helpers::Numeric::Ryu::ToStr(val);
       }
 
-      const auto en_ryu = Helpers::Assembly::rdtsc();
+      const auto en_ryu = Helpers::Assembly::timer_end();
 
       open_logging_took
           += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_open_logging - st_open_logging)));

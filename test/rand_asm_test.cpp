@@ -1,84 +1,91 @@
-// #include "include/Algos/Floating/Exponential.h"
+#include "include/Algos/Integer.h"
 #include "include/Helpers/Math.h"
 #include "include/Helpers/Simd.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <numeric>
+#include <random>
 #include <stdio.h>
 #include <string>
+#include <vector>
+#include <x86intrin.h>
+
+// Evict a memory range from all levels of the cache
+inline void flush_cache(void *ptr, size_t size)
+{
+  char *cp = (char *)ptr;
+  for(size_t i = 0; i < size; i += 64)
+  {
+    _mm_clflush(cp + i);
+  }
+}
 
 int main(int argc, char **argv)
 {
-  /*
-  double dobl = 2.018572034E127;
-  float flot = 1.290372E5;
-  Helpers::Numeric::Floating::ExponentialNotation::ToStr(flot);
-  Helpers::Numeric::Floating::ExponentialNotation::ToStr(dobl);
-  */
-
+  // 1. Pin to a specific core to avoid cross-core TSC sync issues
   Helpers::Assembly::pin_thread_to_cpu(3);
+
+  static constexpr auto TRIALS = 100'000'000;
+  std::vector<uint32_t> random_inputs(TRIALS);
+  std::vector<uint64_t> simdy_times(TRIALS);
+  std::vector<uint64_t> std_times(TRIALS);
+
+  // 2. Pre-generate randoms to completely destroy std::to_string branch prediction
+  std::mt19937 rng(42);
+  std::uniform_int_distribution<uint32_t> dist(100, 4294967295); // Mix of digits
+  for(int i = 0; i < TRIALS; ++i)
   {
-    uint16_t rand_num = 12;
-    char buff[64];
-
-    const auto st_simdy = Helpers::Assembly::rdtsc();
-
-    uint32_t len;
-    for(int i = 0; i < 1000; i++)
-    {
-      len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(&buff[0], rand_num);
-    }
-
-    const auto en_simdy = Helpers::Assembly::rdtsc();
-
-    buff[len] = '\0';
-
-    printf("uint16_t our simdy = %s , it took = %ld cycles \n", &buff[0], en_simdy - st_simdy);
-
-    std::string tmp;
-
-    const auto st_std = Helpers::Assembly::rdtsc();
-
-    for(int i = 0; i < 1000; i++)
-    {
-      tmp = std::to_string(rand_num);
-    }
-
-    const auto en_std = Helpers::Assembly::rdtsc();
-
-    printf("uint16_ to_str = %s , it took = %ld cycles \n", tmp.c_str(), en_std - st_std);
+    random_inputs[i] = dist(rng);
   }
 
+  // 3. The Measurement Loop
+  for(int i = 0; i < TRIALS; ++i)
   {
-    uint32_t rand_num = 1234567891;
-    char buff[64];
+    uint32_t current_num = random_inputs[i];
 
-    const auto st_simdy = Helpers::Assembly::rdtsc();
+    _mm_mfence(); // Ensure flush is complete
 
-    uint32_t len;
-    for(int i = 0; i < 1000; i++)
-    {
-      len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(&buff[0], rand_num);
-    }
+    uint64_t st_simdy = Helpers::Assembly::timer_start();
 
-    const auto en_simdy = Helpers::Assembly::rdtsc();
+    const auto simdy = Helpers::Numeric::Integral::ToStrSIMD(current_num);
 
-    buff[len] = '\0';
+    uint64_t en_simdy = Helpers::Assembly::timer_end();
 
-    printf("uint32_t our simdy = %s , it took = %ld cycles \n", &buff[0], en_simdy - st_simdy);
+    const char *simdy_ptr = simdy.c_str();
 
-    std::string tmp;
+    // Force compiler to materialize the result
+    asm volatile("" : : "g"(simdy_ptr) : "memory");
+    simdy_times[i] = en_simdy - st_simdy;
 
-    const auto st_std = Helpers::Assembly::rdtsc();
+    // --- STD::TO_STRING MEASUREMENT ---
+    _mm_mfence();
 
-    for(int i = 0; i < 1000; i++)
-    {
-      tmp = std::to_string(rand_num);
-    }
+    uint64_t st_std = Helpers::Assembly::timer_start();
 
-    const auto en_std = Helpers::Assembly::rdtsc();
+    std::string tmp = std::to_string(current_num);
 
-    printf("uint32_ to_str = %s , it took = %ld cycles \n", tmp.c_str(), en_std - st_std);
+    uint64_t en_std = Helpers::Assembly::timer_end();
+
+    const char *tmp_ptr = tmp.c_str();
+    asm volatile("" : : "g"(tmp_ptr) : "memory");
+    std_times[i] = en_std - st_std;
   }
+
+  // 4. Statistical Analysis
+  std::sort(simdy_times.begin(), simdy_times.end());
+  std::sort(std_times.begin(), std_times.end());
+
+  const auto simdy_accum = std::accumulate(simdy_times.begin(), simdy_times.end(), 0ULL);
+  const auto std_accum = std::accumulate(std_times.begin(), std_times.end(), 0ULL);
+
+  // The Minimum is the "perfect" hardware run.
+  // The Median is the true realistic "Cold" run, ignoring OS interrupts.
+  printf("\n=== PERFECT STATS (Cold Data, Unpredictable Branches, %d runs) ===\n", TRIALS);
+  printf("SIMDY     | Min: %4lu | Median: %4lu | Mean: %.3f | 95th Percentile: %4lu\n", simdy_times[0], simdy_times[TRIALS / 2],
+         static_cast<double>(simdy_accum) / simdy_times.size(), simdy_times[TRIALS * 95 / 100]);
+  printf("TO_STRING | Min: %4lu | Median: %4lu | Mean: %.3f | 95th Percentile: %4lu\n", std_times[0], std_times[TRIALS / 2], static_cast<double>(std_accum) / std_times.size(),
+         std_times[TRIALS * 95 / 100]);
 
   return 0;
 }
