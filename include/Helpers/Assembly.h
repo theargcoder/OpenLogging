@@ -33,16 +33,19 @@ namespace Helpers::Assembly
   inline uint64_t timer_start()
   {
 #if defined(__x86_64__)
-    unsigned int unused;
-    _mm_lfence(); // Serialize
-    return __rdtscp(&unused);
+    // lfence ensures rdtsc doesn't execute too early.
+    // We use rdtsc here because we don't need the "wait for previous"
+    // behavior of rdtscp yet; lfence handles the barrier.
+    _mm_lfence();
+    uint64_t t = __rdtsc();
+    _mm_lfence(); // Optional: keeps code from starting before t is read
+    return t;
 #elif defined(__aarch64__)
     uint64_t val;
+    // isb (Instruction Synchronization Barrier) is the ARM equivalent of a fence
     asm volatile("isb" ::: "memory");
     asm volatile("mrs %0, cntvct_el0" : "=r"(val));
     return val;
-#else
-#error "Unsupported architecture"
 #endif
   }
 

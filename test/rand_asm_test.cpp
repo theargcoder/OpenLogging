@@ -48,8 +48,6 @@ int main(int argc, char **argv)
   {
     uint32_t current_num = random_inputs[i];
 
-    _mm_mfence(); // Ensure flush is complete
-
     uint64_t st_simdy = Helpers::Assembly::timer_start();
 
     const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(&buff[0], current_num);
@@ -60,9 +58,6 @@ int main(int argc, char **argv)
     asm volatile("" : : "m"(*(char (*)[32])buff), "r"(len) : "memory");
 
     simdy_times[i] = en_simdy - st_simdy;
-
-    // --- STD::TO_STRING MEASUREMENT ---
-    _mm_mfence();
 
     uint64_t st_std = Helpers::Assembly::timer_start();
 

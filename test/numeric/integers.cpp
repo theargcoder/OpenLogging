@@ -135,7 +135,7 @@ namespace
   auto looper_ints(const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_time, auto &open_logging_cpu_cycles, auto &std_lib_time, auto &std_lib_cpu_cycles,
                    auto &std_lib_to_str_time, auto &std_lib_to_str_cycles, auto &simdy_time, auto &simdy_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 100'000;
+    const constexpr auto WISHED_RANGE = 1'000'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? static_cast<Type>(WISHED_RANGE) : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -151,19 +151,19 @@ namespace
           (PLUS) ? i += JUMP : i -= JUMP, max_iter++)
       {
         const auto st_log = Helpers::Assembly::timer_start();
-        std::string our_log = Helpers::Numeric::Integral::ToStr(i);
+        const std::string our_log = Helpers::Numeric::Integral::ToStr(i);
         const auto en_log = Helpers::Assembly::timer_end();
 
         const auto st_std_to_str = Helpers::Assembly::timer_start();
-        std::string std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
+        const std::string std_log = Helpers::Numeric::Std::to_string<false>(i, 123);
         const auto en_std_to_str = Helpers::Assembly::timer_end();
 
         const auto std_lib_to_st = Helpers::Assembly::timer_start();
-        std::string std_lib_to_str_log = std::to_string(i);
+        const std::string std_lib_to_str_log = std::to_string(i);
         const auto std_lib_to_en = Helpers::Assembly::timer_end();
 
         const auto simdy_st = Helpers::Assembly::timer_start();
-        std::string simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
+        const std::string simdy_log = Helpers::Numeric::Integral::ToStrSIMD(i);
         const auto simdy_en = Helpers::Assembly::timer_end();
 
         open_logging_time += std::chrono::duration_cast<std::chrono::nanoseconds>(static_cast<std::chrono::nanoseconds>(Helpers::Assembly::rdtsc_to_ns(en_log - st_log)));
@@ -276,6 +276,8 @@ namespace
 
 BOOST_AUTO_TEST_CASE(test_all_integegral_v)
 {
+  Helpers::Assembly::pin_thread_to_cpu(3);
+
   test_and_benchmark_ints<int8_t>(0);
   test_and_benchmark_ints<uint8_t>(0);
   test_and_benchmark_ints<int16_t>(0);

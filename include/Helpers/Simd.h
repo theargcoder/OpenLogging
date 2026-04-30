@@ -471,9 +471,14 @@ namespace Helpers::Simd::x86_64
     const __m512i res_vec = _mm512_mask_blend_epi32(0x0200, shifted_32, val);
 
     // Digit Extraction logic
-    const __m512i res_times_10 = _mm512_mullo_epi32(res_vec, _mm512_set1_epi32(10));
+    const __m512i res_times_2 = _mm512_slli_epi32(res_vec, 1);
+    const __m512i res_times_8 = _mm512_slli_epi32(res_vec, 3);
 
-    const __m512i_u res_slided = _mm512_permutexvar_epi32(slide_indices, res_times_10); // Zero out lane 0
+    const __m512i res_times_10 = _mm512_add_epi32(res_times_8, res_times_2);
+
+    const __m512i permuted = _mm512_permutexvar_epi32(slide_indices, res_times_10);
+
+    const __m512i res_slided = _mm512_maskz_mov_epi32(0xFFFE, permuted);
 
     const __m512i full_res = _mm512_sub_epi32(res_vec, res_slided);
 
