@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <emmintrin.h>
 #include <limits>
+#include <tmmintrin.h>
+#include <xmmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -498,30 +500,6 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    // Constants
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0xFFFF, 0, 0, 0);
-    const __m128i MASK_REG_SHIFT = _mm_setr_epi16(0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000);
-    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-
-    // Line 240-244: Math setup
-    const __m128i n = _mm_set1_epi16(input);
-    const __m128i t = _mm_mulhi_epu16(n, M_MAGIC_U16);
-    const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(n, t), 1), t);
-
-    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip
-    // We upcast to 32-bit to use _mm_srlv_epi32
-    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
-    const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
-    const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
-
-    // Pack back to 16-bit and insert the original input into lane 4
-    const __m128i res_vec = _mm_insert_epi16(_mm_packus_epi32(shifted_32, _mm_setzero_si128()), input, 4);
-
-    // Digit Extraction logic
-    const __m128i res_times_10 = _mm_mullo_epi16(res_vec, _mm_set1_epi16(10));
-    const __m128i res_slided = _mm_and_si128(_mm_alignr_epi8(res_times_10, _mm_setzero_si128(), 14), MASK_REG_SHIFT);
-    const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
-
     // Branchless Length Calculation (Optimized for modern CPUs)
     static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000 };
 
@@ -529,13 +507,36 @@ namespace Helpers::Simd::x86_64
     uint32_t len = (bits * 1233) >> 12;
 
     len += (input >= table[len]);
+    const __m128i val = _mm_set1_epi16(input);
 
-    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const unsigned lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+
+    const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
+    const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
+
+    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip we upcast to 32-bit to use _mm_srlv_epi32
+    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
+    const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
+    const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+
+    // Pack back to 16-bit and insert the original input into lane 4
+    const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
+
+    const __m128i res_times_x8 = _mm_slli_epi16(res_vec, 3);
+    const __m128i res_times_x2 = _mm_slli_epi16(res_vec, 1);
+
+    // Digit Extraction logic
+    const __m128i res_times_10 = _mm_add_epi16(res_times_x8, res_times_x2);
+
+    const __m128i res_slided = _mm_slli_si128(res_times_10, 2);
+    const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
 
     // Table Lookup conversion to ASCII
-    __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
-    __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8((char)lead_z));
-    __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+    const __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
+    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(static_cast<char>(lead_z)));
+    const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
     // Final Store (8 bytes)
     _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), output_chars);
@@ -887,12 +888,17 @@ namespace Helpers::Simd::x86_64
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
     static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
-    static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
-    static const constexpr __m256i M_MAGIC_u64 = { 0x55E63B89ULL, 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL };
-    static const constexpr __m256i M_SHIFTS_u64 = { 57, 50, 45, 37 };
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - __builtin_clz(input);
+    uint32_t len = (bits * 1233) >> 12;
+    len += (input >= table[len]);
+    const unsigned lead_z = 10 - len;
 
     const __m256i val = _mm256_set1_epi32(input);
+
+    const __m256i M_MAGIC_u64 = { 0x55E63B89ULL, 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL };
+    const __m256i M_SHIFTS_u64 = { 57, 50, 45, 37 };
+
     const __m256i prod = _mm256_mul_epu32(val, M_MAGIC_u64);
     const __m256i shifted = _mm256_srlv_epi64(prod, M_SHIFTS_u64);
     const __m256i shifted_64 = _mm256_blend_epi32(_mm256_permutevar8x32_epi32(shifted, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)), val, 0b0011'0000);
@@ -923,11 +929,6 @@ namespace Helpers::Simd::x86_64
 
     const __m256i res_shifted = _mm256_srli_epi16(res_prod, 11);
 
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - __builtin_clz(input);
-    uint32_t len = (bits * 1233) >> 12;
-    len += (input >= table[len]);
-    const uint8_t lead_z = 10 - len;
-
     const __m256i res_shifted_x8 = _mm256_slli_epi16(res_shifted, 3);
     const __m256i res_shifted_x2 = _mm256_slli_epi16(res_shifted, 1);
 
@@ -941,10 +942,10 @@ namespace Helpers::Simd::x86_64
     const __m128i res_bot = _mm256_extracti128_si256(res_comb, 1);
     const __m128i trunc_u8 = _mm_packus_epi16(res_top, res_bot);
 
-    const __m128i indeces = _mm_load_si128((const __m128i *)INDICES);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
     const __m128i ascii_vec = _mm_add_epi8(trunc_u8, _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(indeces, _mm_set1_epi8(lead_z));
+    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(lead_z));
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
     _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars);
@@ -955,73 +956,46 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    // Constants
-    static const constexpr __m128i M_MAGIC_U16 = { 0x10624DD3ULL, 0xCCCCCCCDULL };
-    static const constexpr __m128i M_SHIFT_U16 = { 38U, 35U };
-    static const constexpr uint8_t INDICES[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    // Branchless Length Calculation (Optimized for modern CPUs)
     static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000 };
 
     const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
     uint32_t len = (bits * 1233) >> 12;
+
     len += (input >= table[len]);
+    const __m128i val = _mm_set1_epi16(input);
 
-    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const unsigned lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-    // Line 240-244: Math setup
-    const __m128i u32_val = _mm_set1_epi32(input);
-    const __m128i u32_prod = _mm_mul_epu32(u32_val, M_MAGIC_U16);
-    const __m128i u32_shifted = _mm_srlv_epi64(u32_prod, M_SHIFT_U16);
+    const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
+    const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
 
-    const __m128i u32_shuffled = _mm_shuffle_epi32(u32_shifted, _MM_SHUFFLE(1, 3, 2, 0));
+    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip we upcast to 32-bit to use _mm_srlv_epi32
+    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
+    const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
+    const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
 
-    const __m128i u32_shuffled_x64 = _mm_slli_epi32(u32_shuffled, 6);
-    const __m128i u32_shuffled_x32 = _mm_slli_epi32(u32_shuffled, 5);
+    // Pack back to 16-bit and insert the original input into lane 4
+    const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
 
-    const __m128i u32_shuffled_x4 = _mm_slli_epi32(u32_shuffled, 2);
-    const __m128i u32_shuffled_x96 = _mm_add_epi32(u32_shuffled_x64, u32_shuffled_x32);
+    const __m128i res_times_x8 = _mm_slli_epi16(res_vec, 3);
+    const __m128i res_times_x2 = _mm_slli_epi16(res_vec, 1);
 
-    const __m128i u32_shuffled_x100 = _mm_add_epi32(u32_shuffled_x96, u32_shuffled_x4);
+    // Digit Extraction logic
+    const __m128i res_times_10 = _mm_add_epi16(res_times_x8, res_times_x2);
 
-    const __m128i u32_val_x2 = _mm_slli_epi32(u32_val, 1);
-    const __m128i u32_val_x8 = _mm_slli_epi32(u32_val, 3);
+    const __m128i res_slided = _mm_slli_si128(res_times_10, 2);
+    const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
 
-    const __m128i u32_permuted = _mm_shuffle_epi32(u32_shuffled_x100, _MM_SHUFFLE(2, 1, 0, 3));
-    const __m128i u32_val_x10 = _mm_add_epi32(u32_val_x8, u32_val_x2);
-
-    const __m128i u32_to_sub = _mm_blend_epi32(u32_shuffled, u32_val_x10, 0b0100);
-
-    const __m128i u32_result = _mm_sub_epi32(u32_to_sub, u32_permuted);
-
-    const __m128i u32_slided_16_bit = _mm_slli_si128(u32_result, 2);
-
-    const __m128i u16_combined = _mm_or_si128(u32_result, u32_slided_16_bit);
-
-    const __m128i res_packed_x128 = _mm_slli_epi16(u16_combined, 7);
-    const __m128i res_packed_x64 = _mm_slli_epi16(u16_combined, 6);
-    const __m128i res_packed_x8 = _mm_slli_epi16(u16_combined, 3);
-    const __m128i res_packed_x4 = _mm_slli_epi16(u16_combined, 2);
-
-    const __m128i res_packed_x196 = _mm_add_epi16(res_packed_x128, res_packed_x64);
-    const __m128i res_packed_x12 = _mm_add_epi16(res_packed_x8, res_packed_x4);
-
-    const __m128i res_prod = _mm_add_epi16(_mm_add_epi16(res_packed_x196, res_packed_x12), u16_combined);
-
-    const __m128i res_shifted = _mm_srli_epi16(res_prod, 11);
-
-    const __m128i res_shifted_x8 = _mm_slli_epi16(res_shifted, 3);
-    const __m128i res_shifted_x2 = _mm_slli_epi16(res_shifted, 1);
-    const __m128i res_shifted_x10 = _mm_add_epi16(res_shifted_x8, res_shifted_x2);
-    const __m128i res_shifted_blended = _mm_blend_epi16(res_shifted_x10, _mm_set1_epi16(0), 0b0101'0101);
-    const __m128i res_to_sub = _mm_blend_epi16(res_shifted, u16_combined, 0b1010'1010);
-    const __m128i res_comb = _mm_sub_epi16(res_to_sub, res_shifted_blended);
-
-    const __m128i res_packed = _mm_packus_epi16(res_comb, _mm_setzero_si128());
-
-    const __m128i ascii_vec = _mm_add_epi8(res_packed, _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(_mm_load_si128((const __m128i *)INDICES), _mm_set1_epi8(lead_z));
+    // Table Lookup conversion to ASCII
+    const __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
+    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(static_cast<char>(lead_z)));
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
-    _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars);
+    // Final Store (8 bytes)
+    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), output_chars);
 
     return len;
   }

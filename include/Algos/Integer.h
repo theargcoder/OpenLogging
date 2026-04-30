@@ -100,14 +100,14 @@ namespace Helpers::Numeric::Integral
 
     const bool neg = input < 0;
     using UT = Helpers::Templating::Types::make_unsigned_t<T>;
-    UT val = (neg) ? ~static_cast<UT>(input) + 1U : input;
+    UT val = (neg) ? ~(static_cast<UT>(input)) + 1U : input;
 
     buff[0] = '-';
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
-    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + static_cast<unsigned>(neg)), val);
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + static_cast<unsigned>(neg)), val) + static_cast<unsigned>(neg);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
-    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + static_cast<unsigned>(len)), val);
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>((&buff[0] + static_cast<unsigned>(len)), val) + static_cast<unsigned>(neg);
 #endif
 
     return { &buff[0], len };

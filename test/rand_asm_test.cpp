@@ -2,6 +2,8 @@
 #include "include/Helpers/Math.h"
 #include "include/Helpers/Simd.h"
 
+#include <charconv>
+
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
@@ -39,6 +41,8 @@ int main(int argc, char **argv)
     random_inputs[i] = dist(rng);
   }
 
+  char buff[32];
+
   // 3. The Measurement Loop
   for(int i = 0; i < TRIALS; ++i)
   {
@@ -48,14 +52,13 @@ int main(int argc, char **argv)
 
     uint64_t st_simdy = Helpers::Assembly::timer_start();
 
-    const auto simdy = Helpers::Numeric::Integral::ToStrSIMD(current_num);
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(&buff[0], current_num);
 
     uint64_t en_simdy = Helpers::Assembly::timer_end();
 
-    const char *simdy_ptr = simdy.c_str();
-
     // Force compiler to materialize the result
-    asm volatile("" : : "g"(simdy_ptr) : "memory");
+    asm volatile("" : : "m"(*(char (*)[32])buff), "r"(len) : "memory");
+
     simdy_times[i] = en_simdy - st_simdy;
 
     // --- STD::TO_STRING MEASUREMENT ---
@@ -63,12 +66,12 @@ int main(int argc, char **argv)
 
     uint64_t st_std = Helpers::Assembly::timer_start();
 
-    std::string tmp = std::to_string(current_num);
+    const auto pp = std::to_chars(&buff[0], &buff[32], current_num);
 
     uint64_t en_std = Helpers::Assembly::timer_end();
 
-    const char *tmp_ptr = tmp.c_str();
-    asm volatile("" : : "g"(tmp_ptr) : "memory");
+    // Force compiler to materialize the result
+    asm volatile("" : : "m"(*(char (*)[32])buff), "r"(pp) : "memory");
     std_times[i] = en_std - st_std;
   }
 
