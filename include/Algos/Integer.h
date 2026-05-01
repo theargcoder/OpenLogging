@@ -96,10 +96,11 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T> && std::is_signed_v<T>
   static inline std::string ToStrSIMD(const T &input) noexcept
   {
+    constexpr size_t size = (sizeof(T) <= 2) ? 8 : (sizeof(T) <= 4) ? 10 : 32;
     std::string buff;
 
-    buff.resize_and_overwrite(32,
-                              [&input](char *ptr, size_t /*unused*/)
+    buff.resize_and_overwrite(size,
+                              [&input](char *__restrict__ ptr, size_t /*unused*/)
                               {
                                 const bool neg = input < 0;
                                 using UT = Helpers::Templating::Types::make_unsigned_t<T>;
@@ -122,12 +123,12 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T> && std::is_unsigned_v<T>
   static inline std::string ToStrSIMD(const T &input) noexcept
   {
+    constexpr size_t size = (sizeof(T) <= 2) ? 8 : (sizeof(T) <= 4) ? 10 : 32;
     std::string buff;
 
-    buff.resize_and_overwrite(32,
-                              [&input](char *ptr, size_t /*unused*/)
+    buff.resize_and_overwrite(size,
+                              [&input](char *__restrict__ ptr, size_t /*unused*/)
                               {
-
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
                                 const uint32_t len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<T>(ptr, input);
 #elif defined(__ARM_NEON) || defined(__aarch64__)

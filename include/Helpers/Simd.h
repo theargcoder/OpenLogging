@@ -511,28 +511,22 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input)
   {
-
     // Branchless Length Calculation
-    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
-
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
-
-    len += (input >= table[len]);
-
-    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    alignas(64) const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
 
     const __m512i val = _mm512_set1_epi32(input);
 
-    // AVX-512 shifts must be positive. Padded to 16 elements. Padded to 16 elements for full 512-bit registers
     const __m512i M_MAGIC_10_0
         = _mm512_setr_epi32(0x12E0BE83U, 0x5798EE24U, 0xAD7F29ACU, 0x0C6F7A0CU, 0x4F8B588FU, 0xA36E2EB2U, 0x0624DD30U, 0x47AE147BU, 0x9999999AU, 0, 0, 0, 0, 0, 0, 0);
     const __m512i M_SHIFTS_10_0 = _mm512_setr_epi32(29, 26, 23, 19, 16, 13, 9, 6, 3, 0, 0, 0, 0, 0, 0, 0);
     const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-    const __m512i slide_indices = _mm512_setr_epi32(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
 
     // Emulate umul_hi_32x16 by calculating even and odd lane 64-bit products and blending the high 32-bits
     const __m512i prod = umul_hi_32x16(val, M_MAGIC_10_0);
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+    len += (input >= table[len]);
+    const int8_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
     // Math setup
     const __m512i n_sub_t = _mm512_sub_epi32(val, prod);
@@ -549,19 +543,21 @@ namespace Helpers::Simd::x86_64
 
     const __m512i res_times_10 = _mm512_add_epi32(res_times_8, res_times_2);
 
-    const __m512i permuted = _mm512_permutexvar_epi32(slide_indices, res_times_10);
+    // res_times_10: [A, B, C, D, ..., P]
+    // Goal:         [0, A, B, C, ..., O]
+    // Use 0xFFFE mask (bits 1-15 set, bit 0 is zeroed)
+    // Use imm 15 to bring the bottom of 'a' into the top of 'b'
+    const __m512i permuted = _mm512_maskz_alignr_epi32(0xFFFE, res_times_10, res_times_10, 15);
 
-    const __m512i res_slided = _mm512_maskz_mov_epi32(0xFFFE, permuted);
-
-    const __m512i full_res = _mm512_sub_epi32(res_vec, res_slided);
+    const __m512i full_res = _mm512_sub_epi32(res_vec, permuted);
 
     // Table Lookup conversion to ASCII _mm512_cvtepi32_epi8 seamlessly truncates 16x32-bit into 16x8-bit in a 128-bit vector
     const __m128i ascii_vec = _mm_add_epi8(_mm512_cvtepi32_epi8(full_res), _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(static_cast<char>(lead_z)));
+    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(lead_z));
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
     // Final Store (16 bytes accommodates up to 10 digits comfortably)
-    _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars);
+    _mm_mask_storeu_epi8(reinterpret_cast<__m128i *>(buff), 0b0011'1111'1111, output_chars);
 
     return len;
   }
@@ -569,18 +565,9 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    // Branchless Length Calculation (Optimized for modern CPUs)
-    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000 };
-
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
-
-    len += (input >= table[len]);
     const __m128i val = _mm_set1_epi16(input);
 
-    const unsigned lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
     const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
-    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
     const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
     const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
@@ -589,6 +576,16 @@ namespace Helpers::Simd::x86_64
     const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
     const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
     const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+
+    // Branchless Length Calculation (Optimized for modern CPUs)
+    const constexpr uint16_t table[] = { 0, 10, 100, 1'000, 10'000 };
+
+    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
+    uint32_t len = (bits * 1233) >> 12;
+
+    len += (input >= table[len]);
+
+    const int lead_z = (std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
     const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
@@ -602,13 +599,14 @@ namespace Helpers::Simd::x86_64
     const __m128i res_slided = _mm_slli_si128(res_times_10, 2);
     const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
 
+    const __m128i full_packed = _mm_packus_epi16(full_res, full_res);
+
     // Table Lookup conversion to ASCII
-    const __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(static_cast<char>(lead_z)));
-    const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+    const uint64_t u64_shf = _mm_cvtsi128_si64(full_packed) >> lead_z;
+    const uint64_t output = u64_shf + 0x000000'3030303030;
 
     // Final Store (8 bytes)
-    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), output_chars);
+    *reinterpret_cast<uint64_t *>(buff) = output;
 
     return len;
   }

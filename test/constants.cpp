@@ -1,5 +1,3 @@
-#include "include/Algos/Integer.h"
-#include <string>
 #define BOOST_TEST_MODULE ConstantsTests
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
@@ -16,8 +14,10 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <string>
 #include <type_traits>
 
+#include "include/Algos/Integer.h"
 #include "include/Constants/Constants.h"
 #include "include/Helpers/Math.h"
 
@@ -680,6 +680,14 @@ BOOST_AUTO_TEST_CASE(SimDVecorizationx86_64)
     buff[31] = '\0';
     const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint32_t>(buff, 999'999U);
     BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(999'999U));
+  }
+
+  for(uint16_t i = 0; i >= 0; i--)
+  {
+    char buff[32];
+    buff[31] = '\0';
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(buff, i);
+    BOOST_CHECK_EQUAL(std::string(&buff[0], len), std::to_string(i));
   }
 
   for(uint16_t i = 123'45U; i > 0; i /= 10)
