@@ -100,7 +100,7 @@ namespace Helpers::Numeric::Integral
     std::string buff;
 
     buff.resize_and_overwrite(size,
-                              [&input](char *__restrict__ ptr, size_t /*unused*/)
+                              [&input](char *__restrict__ ptr, size_t /*unused*/) noexcept
                               {
                                 const bool neg = input < 0;
                                 using UT = Helpers::Templating::Types::make_unsigned_t<T>;
@@ -127,7 +127,7 @@ namespace Helpers::Numeric::Integral
     std::string buff;
 
     buff.resize_and_overwrite(size,
-                              [&input](char *__restrict__ ptr, size_t /*unused*/)
+                              [&input](char *__restrict__ ptr, size_t /*unused*/) noexcept
                               {
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
                                 const uint32_t len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<T>(ptr, input);

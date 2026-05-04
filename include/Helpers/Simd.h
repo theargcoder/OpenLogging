@@ -566,26 +566,26 @@ namespace Helpers::Simd::x86_64
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
     const __m128i val = _mm_set1_epi16(input);
-
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
+    const __m128i ascii_zeros = _mm_set1_epi8('0');
+    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
+    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
 
     const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
     const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
 
     // FIX: Use AVX2 Variable Shifts to avoid memory round-trip we upcast to 32-bit to use _mm_srlv_epi32
-    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
     const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
-    const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+    const __m128i shifted_32 = _mm_srlv_epi32(low_32, M_SHIFTS_U16);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
     const constexpr uint16_t table[] = { 0, 10, 100, 1'000, 10'000 };
 
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
+    const uint32_t bits = 32U - __builtin_clz(input | 1U);
+    uint32_t len = (bits * 1233) >> 12U;
 
     len += (input >= table[len]);
 
-    const int lead_z = (std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len) << 3U;
+    const unsigned lead_z = (5 - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
     const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
@@ -602,11 +602,11 @@ namespace Helpers::Simd::x86_64
     const __m128i full_packed = _mm_packus_epi16(full_res, full_res);
 
     // Table Lookup conversion to ASCII
-    const uint64_t u64_shf = _mm_cvtsi128_si64(full_packed) >> lead_z;
-    const uint64_t output = u64_shf + 0x000000'3030303030;
+    const __m128i res_shifted = _mm_srli_epi64(full_packed, lead_z);
+    const __m128i output = _mm_add_epi8(res_shifted, ascii_zeros);
 
     // Final Store (8 bytes)
-    *reinterpret_cast<uint64_t *>(buff) = output;
+    _mm_storeu_si64(static_cast<void *>(buff), output);
 
     return len;
   }
@@ -1023,26 +1023,27 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input)
   {
-    // Branchless Length Calculation (Optimized for modern CPUs)
-    static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000 };
-
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
-
-    len += (input >= table[len]);
     const __m128i val = _mm_set1_epi16(input);
-
-    const unsigned lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
-    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    const __m128i ascii_zeros = _mm_set1_epi8('0');
+    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
+    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
 
     const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
     const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
 
     // FIX: Use AVX2 Variable Shifts to avoid memory round-trip we upcast to 32-bit to use _mm_srlv_epi32
-    const __m128i shift_counts = _mm_setr_epi32(13, 9, 6, 3);
     const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
-    const __m128i shifted_32 = _mm_srlv_epi32(low_32, shift_counts);
+    const __m128i shifted_32 = _mm_srlv_epi32(low_32, M_SHIFTS_U16);
+
+    // Branchless Length Calculation (Optimized for modern CPUs)
+    const constexpr uint16_t table[] = { 0, 10, 100, 1'000, 10'000 };
+
+    const uint32_t bits = 32U - __builtin_clz(input | 1U);
+    uint32_t len = (bits * 1233) >> 12U;
+
+    len += (input >= table[len]);
+
+    const unsigned lead_z = (5 - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
     const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
@@ -1056,13 +1057,14 @@ namespace Helpers::Simd::x86_64
     const __m128i res_slided = _mm_slli_si128(res_times_10, 2);
     const __m128i full_res = _mm_sub_epi16(res_vec, res_slided);
 
+    const __m128i full_packed = _mm_packus_epi16(full_res, full_res);
+
     // Table Lookup conversion to ASCII
-    const __m128i ascii_vec = _mm_add_epi8(_mm_packus_epi16(full_res, _mm_setzero_si128()), _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(static_cast<char>(lead_z)));
-    const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
+    const __m128i res_shifted = _mm_srli_epi64(full_packed, lead_z);
+    const __m128i output = _mm_add_epi8(res_shifted, ascii_zeros);
 
     // Final Store (8 bytes)
-    _mm_storel_epi64(reinterpret_cast<__m128i *>(buff), output_chars);
+    _mm_storeu_si64(static_cast<void *>(buff), output);
 
     return len;
   }
