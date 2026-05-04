@@ -567,15 +567,13 @@ namespace Helpers::Simd::x86_64
   {
     const __m128i val = _mm_set1_epi16(input);
     const __m128i ascii_zeros = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
+    const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
 
     const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
     const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
 
-    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip we upcast to 32-bit to use _mm_srlv_epi32
-    const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
-    const __m128i shifted_32 = _mm_srlv_epi32(low_32, M_SHIFTS_U16);
+    const __m128i shifted_16 = _mm_srlv_epi16(n_sub_t_shf_add_t, M_SHIFTS_U16);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
     const constexpr uint16_t table[] = { 0, 10, 100, 1'000, 10'000 };
@@ -588,7 +586,7 @@ namespace Helpers::Simd::x86_64
     const unsigned lead_z = (5 - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
-    const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
+    const __m128i res_vec = _mm_blend_epi32(shifted_16, val, 0b1100);
 
     const __m128i res_times_x8 = _mm_slli_epi16(res_vec, 3);
     const __m128i res_times_x2 = _mm_slli_epi16(res_vec, 1);
@@ -1025,15 +1023,13 @@ namespace Helpers::Simd::x86_64
   {
     const __m128i val = _mm_set1_epi16(input);
     const __m128i ascii_zeros = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
+    const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
 
     const __m128i prod = _mm_mulhi_epu16(val, M_MAGIC_U16);
     const __m128i n_sub_t_shf_add_t = _mm_add_epi16(_mm_srli_epi16(_mm_sub_epi16(val, prod), 1), prod);
 
-    // FIX: Use AVX2 Variable Shifts to avoid memory round-trip we upcast to 32-bit to use _mm_srlv_epi32
-    const __m128i low_32 = _mm_cvtepu16_epi32(n_sub_t_shf_add_t);
-    const __m128i shifted_32 = _mm_srlv_epi32(low_32, M_SHIFTS_U16);
+    const __m128i shifted_16 = _mm_srlv_epi16(n_sub_t_shf_add_t, M_SHIFTS_U16);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
     const constexpr uint16_t table[] = { 0, 10, 100, 1'000, 10'000 };
@@ -1046,7 +1042,7 @@ namespace Helpers::Simd::x86_64
     const unsigned lead_z = (5 - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
-    const __m128i res_vec = _mm_blend_epi32(_mm_packus_epi32(shifted_32, shifted_32), val, 0b1100);
+    const __m128i res_vec = _mm_blend_epi32(shifted_16, val, 0b1100);
 
     const __m128i res_times_x8 = _mm_slli_epi16(res_vec, 3);
     const __m128i res_times_x2 = _mm_slli_epi16(res_vec, 1);
