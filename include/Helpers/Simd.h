@@ -512,7 +512,7 @@ namespace Helpers::Simd::x86_64
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input) noexcept
   {
     // Branchless Length Calculation
-    alignas(64) const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+    const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
 
     const __m512i val = _mm512_set1_epi32(input);
 
@@ -609,6 +609,11 @@ namespace Helpers::Simd::x86_64
     _mm_storeu_si64(static_cast<void *>(buff), u8_chars);
 
     return len;
+  }
+
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
+  {
   }
 
 #elif defined(__AVX2__)
@@ -1069,6 +1074,12 @@ namespace Helpers::Simd::x86_64
     return len;
   }
 
+  template <>
+  uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
+  {
+    return WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(input));
+  }
+
 #else
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
@@ -1119,11 +1130,12 @@ namespace Helpers::Simd::x86_64
     return len;
   }
 
-#endif
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
     return WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(input));
   }
+
+#endif
 } // namespace Helpers::Simd::x86_64
 #endif
