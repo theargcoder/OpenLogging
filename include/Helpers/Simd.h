@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <emmintrin.h>
 #include <limits>
-#include <smmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -352,7 +351,11 @@ namespace Helpers::Simd::x86_64
       // Intermediary buffer to avoid debugger ASCII char issues
       alignas(RegType) uint8_t buffer[total_bytes];
 
-      if constexpr(std::is_same_v<RegType, __m128i>)
+      if constexpr(std::is_same_v<RegType, __m64>)
+      {
+        _mm_stream_pi(reinterpret_cast<__m64 *>(buffer), reg);
+      }
+      else if constexpr(std::is_same_v<RegType, __m128i>)
       {
         _mm_storeu_si128(reinterpret_cast<__m128i *>(buffer), reg);
       }
@@ -373,7 +376,11 @@ namespace Helpers::Simd::x86_64
     else
     {
       // Direct store for 16, 32, and 64-bit lanes
-      if constexpr(std::is_same_v<RegType, __m128i>)
+      if constexpr(std::is_same_v<RegType, __m64>)
+      {
+        _mm_stream_pi(reinterpret_cast<__m64 *>(result.data()), reg);
+      }
+      else if constexpr(std::is_same_v<RegType, __m128i>)
       {
         _mm_storeu_si128(reinterpret_cast<__m128i *>(result.data()), reg);
       }
@@ -613,12 +620,12 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    const __m128i u16_val = _mm_set1_epi16(input);
-    const __m128i u8_acii_zero = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA3D8, 0x199A, 0, 0, 0, 0, 0, 0);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi16(6, 0, 0, 0, 0, 0, 0, 0);
+    const unsigned input_shf16 = static_cast<uint16_t>(input << 6U);
+    const __m64 u16_val = _mm_setr_pi16(input, input_shf16, input_shf16 + 1, 0);
+    const __m64 u8_acii_zero = _mm_set1_pi8('0');
+    const __m64 M_MAGIC_U16 = _mm_setr_pi16(0xA3D8, 0x199A, 0xFFFF, 0);
 
-    const __m128i u16_prod = _mm_mulhi_epu16(u16_val, M_MAGIC_U16);
+    const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
 
     uint32_t len = 1U;
     len += (input >= 10);
@@ -626,26 +633,21 @@ namespace Helpers::Simd::x86_64
 
     const unsigned lead_z = (3U - len) << 3U;
 
-    const __m128i u16_shf = _mm_srlv_epi16(u16_prod, M_SHIFTS_U16);
+    const __m64 u16_shf = _mm_srli_pi16(u16_prod, 6);
+    const __m64 u16_slided = _mm_slli_si64(u16_shf, 16);
 
-    const __m128i u16_slided = _mm_slli_si128(u16_shf, 2U);
+    const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
+    const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
 
-    const __m128i u16_slided_x8 = _mm_slli_epi16(u16_slided, 3);
-    const __m128i u16_slided_x2 = _mm_slli_epi16(u16_slided, 1);
+    const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
 
-    const __m128i u16_slided_x10 = _mm_add_epi16(u16_slided_x8, u16_slided_x2);
+    const __m64 u16_res = _mm_sub_pi16(u16_shf, u16_slided_x10);
 
-    const __m128i u16_to_sub = _mm_blend_epi16(u16_shf, u16_val, 0b0100);
+    const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
+    const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
+    const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
 
-    const __m128i u16_res = _mm_sub_epi16(u16_to_sub, u16_slided_x10);
-
-    const __m128i u8_packed = _mm_packus_epi16(u16_res, u16_res);
-
-    const __m128i u8_res_shf = _mm_srli_epi64(u8_packed, lead_z);
-
-    const __m128i u8_chars = _mm_add_epi8(u8_res_shf, u8_acii_zero);
-
-    _mm_storeu_si32(static_cast<void *>(buff), u8_chars);
+    _mm_storeu_si32(static_cast<void *>(buff), _mm_movpi64_epi64(u8_chars));
 
     return len;
   }
@@ -1111,7 +1113,36 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    return WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(input));
+    const unsigned input_shf16 = static_cast<uint16_t>(input << 6U);
+    const __m64 u16_val = _mm_setr_pi16(input, input_shf16, input_shf16 + 1, 0);
+    const __m64 u8_acii_zero = _mm_set1_pi8('0');
+    const __m64 M_MAGIC_U16 = _mm_setr_pi16(0xA3D8, 0x199A, 0xFFFF, 0);
+
+    const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
+
+    uint32_t len = 1U;
+    len += (input >= 10);
+    len += (input >= 100);
+
+    const unsigned lead_z = (3U - len) << 3U;
+
+    const __m64 u16_shf = _mm_srli_pi16(u16_prod, 6);
+    const __m64 u16_slided = _mm_slli_si64(u16_shf, 16);
+
+    const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
+    const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
+
+    const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
+
+    const __m64 u16_res = _mm_sub_pi16(u16_shf, u16_slided_x10);
+
+    const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
+    const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
+    const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
+
+    _mm_storeu_si32(static_cast<void *>(buff), _mm_movpi64_epi64(u8_chars));
+
+    return len;
   }
 
 #else
@@ -1167,7 +1198,36 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    return WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(input));
+    const unsigned input_shf16 = static_cast<uint16_t>(input << 6U);
+    const __m64 u16_val = _mm_setr_pi16(input, input_shf16, input_shf16 + 1, 0);
+    const __m64 u8_acii_zero = _mm_set1_pi8('0');
+    const __m64 M_MAGIC_U16 = _mm_setr_pi16(0xA3D8, 0x199A, 0xFFFF, 0);
+
+    const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
+
+    uint32_t len = 1U;
+    len += (input >= 10);
+    len += (input >= 100);
+
+    const unsigned lead_z = (3U - len) << 3U;
+
+    const __m64 u16_shf = _mm_srli_pi16(u16_prod, 6);
+    const __m64 u16_slided = _mm_slli_si64(u16_shf, 16);
+
+    const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
+    const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
+
+    const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
+
+    const __m64 u16_res = _mm_sub_pi16(u16_shf, u16_slided_x10);
+
+    const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
+    const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
+    const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
+
+    _mm_storeu_si32(static_cast<void *>(buff), _mm_movpi64_epi64(u8_chars));
+
+    return len;
   }
 
 #endif
