@@ -96,7 +96,12 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T> && std::is_signed_v<T>
   static inline std::string ToStrSIMD(const T &input) noexcept
   {
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
     constexpr size_t size = (sizeof(T) <= 2) ? 8 : (sizeof(T) <= 4) ? 10 : 32;
+#else
+    constexpr size_t size = (sizeof(T) <= 2) ? 8 : (sizeof(T) <= 4) ? 16 : 32;
+#endif
+
     std::string buff;
 
     buff.resize_and_overwrite(size,
@@ -123,7 +128,12 @@ namespace Helpers::Numeric::Integral
     requires std::is_integral_v<T> && std::is_unsigned_v<T>
   static inline std::string ToStrSIMD(const T &input) noexcept
   {
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
     constexpr size_t size = (sizeof(T) <= 2) ? 8 : (sizeof(T) <= 4) ? 10 : 32;
+#else
+    constexpr size_t size = (sizeof(T) <= 2) ? 8 : (sizeof(T) <= 4) ? 16 : 32;
+#endif
+
     std::string buff;
 
     buff.resize_and_overwrite(size,

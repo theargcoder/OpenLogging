@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <emmintrin.h>
 #include <limits>
+#include <smmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -654,99 +655,70 @@ namespace Helpers::Simd::x86_64
 
 #elif defined(__AVX2__)
   /**
-   * @brief Extracts all eight 32-bit lanes from an __m256i register.
-   * @param reg The AVX2 register to extract from.
-   * @return A std::array containing the 8 uint32_t values.
+   * @brief Maps a bit-width to the appropriate unsigned integer type.
+   * Special case: 8-bit lanes are mapped to uint16_t to prevent debugger ASCII rendering.
    */
-  inline std::array<uint64_t, 4> extract_lanes_64(const __m256i &reg)
+  template <size_t BitWidth>
+  struct LaneType
   {
-    std::array<uint64_t, 4> result;
-
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(result.data()), reg);
-
-    return result;
-  }
-
-  inline std::array<uint32_t, 8> extract_lanes_32(const __m256i &reg)
+    using type = std::conditional_t<BitWidth == 8, uint16_t,
+                                    std::conditional_t<BitWidth == 16, uint16_t, std::conditional_t<BitWidth == 32, uint32_t, std::conditional_t<BitWidth == 64, uint64_t, void>>>>;
+  };
+  /**
+   * @brief Extracts lanes from __m128i, __m256i, or __m512i registers into a std::array.
+   * @tparam BitWidth The size of the lane in bits (8, 16, 32, 64).
+   * @param reg The SIMD register to extract from.
+   */
+  template <size_t BitWidth, typename RegType>
+  inline auto extract_lanes(const RegType &reg)
   {
-    std::array<uint32_t, 8> result;
+    constexpr size_t total_bytes = sizeof(RegType);
+    constexpr size_t num_lanes = (total_bytes * 8) / BitWidth;
+    using T = typename LaneType<BitWidth>::type;
 
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(result.data()), reg);
+    std::array<T, num_lanes> result;
 
-    return result;
-  }
-
-  inline std::array<uint16_t, 16> extract_lanes_16(const __m256i &reg)
-  {
-    std::array<uint16_t, 16> result;
-
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(result.data()), reg);
-
-    return result;
-  }
-
-  inline std::array<uint16_t, 32> extract_lanes_8(const __m256i &reg)
-  {
-    std::array<uint8_t, 32> result;
-
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(result.data()), reg);
-
-    std::array<uint16_t, 32> res_to_ret;
-
-    for(int i = 0; i < 32; i++)
+    if constexpr(BitWidth == 8)
     {
-      res_to_ret[i] = result[i];
+      // Intermediary buffer to avoid debugger ASCII char issues
+      alignas(RegType) uint8_t buffer[total_bytes];
+
+      if constexpr(std::is_same_v<RegType, __m64>)
+      {
+        _mm_stream_pi(reinterpret_cast<__m64 *>(buffer), reg);
+      }
+      else if constexpr(std::is_same_v<RegType, __m128i>)
+      {
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(buffer), reg);
+      }
+      else if constexpr(std::is_same_v<RegType, __m256i>)
+      {
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), reg);
+      }
+
+      for(size_t i = 0; i < num_lanes; ++i)
+      {
+        result[i] = static_cast<uint16_t>(buffer[i]);
+      }
+    }
+    else
+    {
+      // Direct store for 16, 32, and 64-bit lanes
+      if constexpr(std::is_same_v<RegType, __m64>)
+      {
+        _mm_stream_pi(reinterpret_cast<__m64 *>(result.data()), reg);
+      }
+      else if constexpr(std::is_same_v<RegType, __m128i>)
+      {
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(result.data()), reg);
+      }
+      else if constexpr(std::is_same_v<RegType, __m256i>)
+      {
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(result.data()), reg);
+      }
     }
 
-    return res_to_ret;
-  }
-
-  inline std::array<uint32_t, 4> extract_lanes_32(const __m128i &reg)
-  {
-    std::array<uint32_t, 4> result;
-
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm_store_si128(reinterpret_cast<__m128i *>(result.data()), reg);
-
     return result;
-  }
-
-  inline std::array<uint16_t, 8> extract_lanes_16(const __m128i &reg)
-  {
-    std::array<uint16_t, 8> result;
-
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm_store_si128(reinterpret_cast<__m128i *>(result.data()), reg);
-
-    return result;
-  }
-
-  inline std::array<uint16_t, 16> extract_lanes_8(const __m128i &reg)
-  {
-    std::array<uint8_t, 16> result;
-
-    // Use an unaligned store to move the register contents into the array memory.
-    // This is generally the fastest way to "convert" a SIMD register to a standard container.
-    _mm_store_si128(reinterpret_cast<__m128i *>(result.data()), reg);
-
-    std::array<uint16_t, 16> res_to_ret;
-
-    for(int i = 0; i < 16; i++)
-    {
-      res_to_ret[i] = result[i];
-    }
-
-    return res_to_ret;
   }
 
   // Compute high 32 bits of (a[i] * b[i]) for 8x uint32_t
@@ -997,17 +969,18 @@ namespace Helpers::Simd::x86_64
   {
     static const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
 
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - __builtin_clz(input);
-    uint32_t len = (bits * 1233) >> 12;
-    len += (input >= table[len]);
-    const unsigned lead_z = 10 - len;
-
     const __m256i val = _mm256_set1_epi32(input);
 
     const __m256i M_MAGIC_u64 = { 0x55E63B89ULL, 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL };
     const __m256i M_SHIFTS_u64 = { 57, 50, 45, 37 };
 
     const __m256i prod = _mm256_mul_epu32(val, M_MAGIC_u64);
+
+    const uint32_t bits = 32U - __builtin_clz(input | 1U);
+    uint32_t len = (bits * 1233) >> 12;
+    len += (input >= table[len]);
+    const unsigned lead_z = 10 - len;
+
     const __m256i shifted = _mm256_srlv_epi64(prod, M_SHIFTS_u64);
     const __m256i shifted_64 = _mm256_blend_epi32(_mm256_permutevar8x32_epi32(shifted, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)), val, 0b0011'0000);
 
@@ -1064,17 +1037,19 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
   {
-    const __m128i C_VAL = _mm_set1_epi16(input);
+    const __m128i C_VAL = _mm_set1_epi32(input);
+
     const __m128i C_ZEROS = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
+    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
+    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
 
     const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
-    const __m128i u16_sub = _mm_sub_epi16(C_VAL, u16_prod);
+    const __m128i u16_sub = _mm_sub_epi32(C_VAL, u16_prod);
     const __m128i u16_shf = _mm_srli_epi16(u16_sub, 1);
     const __m128i u16_add = _mm_add_epi16(u16_shf, u16_prod);
 
-    const __m128i u16_div = _mm_srlv_epi16(u16_add, M_SHIFTS_U16);
+    const __m128i u16_32_div = _mm_srlv_epi32(u16_add, M_SHIFTS_U16);
+    const __m128i u16_div = _mm_packus_epi32(u16_32_div, u16_32_div);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
     const constexpr uint16_t C_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
@@ -1149,17 +1124,19 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
   {
-    const __m128i C_VAL = _mm_set1_epi16(input);
+    const __m128i C_VAL = _mm_set1_epi32(input);
+
     const __m128i C_ZEROS = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
+    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
+    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
 
     const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
-    const __m128i u16_sub = _mm_sub_epi16(C_VAL, u16_prod);
+    const __m128i u16_sub = _mm_sub_epi32(C_VAL, u16_prod);
     const __m128i u16_shf = _mm_srli_epi16(u16_sub, 1);
     const __m128i u16_add = _mm_add_epi16(u16_shf, u16_prod);
 
-    const __m128i u16_div = _mm_srlv_epi16(u16_add, M_SHIFTS_U16);
+    const __m128i u16_32_div = _mm_srlv_epi32(u16_add, M_SHIFTS_U16);
+    const __m128i u16_div = _mm_packus_epi32(u16_32_div, u16_32_div);
 
     // Branchless Length Calculation (Optimized for modern CPUs)
     const constexpr uint16_t C_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
