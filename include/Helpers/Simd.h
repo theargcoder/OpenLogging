@@ -1018,10 +1018,12 @@ namespace Helpers::Simd::x86_64
     const __m128i res_shifted_top_x10 = _mm_add_epi16(res_shifted_top_x8, res_shifted_top_x2);
     const __m128i res_shifted_bot_x10 = _mm_add_epi16(res_shifted_bot_x8, res_shifted_bot_x2);
 
-    const __m128i ZERO = _mm_setzero_si128();
+    const __m128i ZERO_NUMS = _mm_setzero_si128();
+    const __m128i ZERO_CHAR = _mm_set1_epi8('0');
+    const __m128i LEAD_Z_LANES = _mm_set1_epi8(lead_z);
 
-    const __m128i res_shf_blen_top = _mm_blend_epi16(res_shifted_top_x10, ZERO, 0b0101'0101);
-    const __m128i res_shf_blen_bot = _mm_blend_epi16(res_shifted_bot_x10, ZERO, 0b0101'0101);
+    const __m128i res_shf_blen_top = _mm_blend_epi16(res_shifted_top_x10, ZERO_NUMS, 0b0101'0101);
+    const __m128i res_shf_blen_bot = _mm_blend_epi16(res_shifted_bot_x10, ZERO_NUMS, 0b0101'0101);
     const __m128i res_to_sub_top = _mm_blend_epi16(res_prod_top, res_packed_top, 0b1010'1010);
     const __m128i res_to_sub_bot = _mm_blend_epi16(res_prod_bot, res_packed_bot, 0b1010'1010);
     const __m128i res_com_top = _mm_sub_epi16(res_to_sub_top, res_shf_blen_top);
@@ -1029,8 +1031,8 @@ namespace Helpers::Simd::x86_64
 
     const __m128i trunc_u8 = _mm_packus_epi16(res_com_top, res_com_bot);
 
-    const __m128i ascii_vec = _mm_add_epi8(trunc_u8, _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(lead_z));
+    const __m128i ascii_vec = _mm_add_epi8(trunc_u8, ZERO_CHAR);
+    const __m128i final_indices = _mm_add_epi8(INDICES, LEAD_Z_LANES);
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
     _mm_storeu_si64(reinterpret_cast<void *>(buff), output_chars);
