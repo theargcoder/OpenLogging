@@ -7,6 +7,7 @@
 #include <emmintrin.h>
 #include <limits>
 #include <smmintrin.h>
+#include <xmmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -621,28 +622,27 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    const unsigned input_shf16 = static_cast<uint16_t>(input << 6U);
-    const __m64 u16_val = _mm_setr_pi16(input, input_shf16, input_shf16 + 1, 0);
+    const __m64 u16_val = _mm_set1_pi16(input);
     const __m64 u8_acii_zero = _mm_set1_pi8('0');
-    const __m64 M_MAGIC_U16 = _mm_setr_pi16(0xA3D8, 0x199A, 0xFFFF, 0);
+    const __m64 M_MAGIC_U16 = _mm_setr_pi16(656, 6554, 0, 0);
 
     const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
 
-    uint32_t len = 1U;
+    unsigned len = 1U;
     len += (input >= 10);
     len += (input >= 100);
 
     const unsigned lead_z = (3U - len) << 3U;
 
-    const __m64 u16_shf = _mm_srli_pi16(u16_prod, 6);
-    const __m64 u16_slided = _mm_slli_si64(u16_shf, 16);
+    const __m64 u16_blend = _mm_insert_pi16(u16_prod, input, 2);
+    const __m64 u16_slided = _mm_slli_si64(u16_blend, 16);
 
     const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
     const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
 
     const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
 
-    const __m64 u16_res = _mm_sub_pi16(u16_shf, u16_slided_x10);
+    const __m64 u16_res = _mm_sub_pi16(u16_blend, u16_slided_x10);
 
     const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
     const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
@@ -1098,28 +1098,27 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    const unsigned input_shf16 = static_cast<uint16_t>(input << 6U);
-    const __m64 u16_val = _mm_setr_pi16(input, input_shf16, input_shf16 + 1, 0);
+    const __m64 u16_val = _mm_set1_pi16(input);
     const __m64 u8_acii_zero = _mm_set1_pi8('0');
-    const __m64 M_MAGIC_U16 = _mm_setr_pi16(0xA3D8, 0x199A, 0xFFFF, 0);
+    const __m64 M_MAGIC_U16 = _mm_setr_pi16(656, 6554, 0, 0);
 
     const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
 
-    uint32_t len = 1U;
+    unsigned len = 1U;
     len += (input >= 10);
     len += (input >= 100);
 
     const unsigned lead_z = (3U - len) << 3U;
 
-    const __m64 u16_shf = _mm_srli_pi16(u16_prod, 6);
-    const __m64 u16_slided = _mm_slli_si64(u16_shf, 16);
+    const __m64 u16_blend = _mm_insert_pi16(u16_prod, input, 2);
+    const __m64 u16_slided = _mm_slli_si64(u16_blend, 16);
 
     const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
     const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
 
     const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
 
-    const __m64 u16_res = _mm_sub_pi16(u16_shf, u16_slided_x10);
+    const __m64 u16_res = _mm_sub_pi16(u16_blend, u16_slided_x10);
 
     const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
     const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
