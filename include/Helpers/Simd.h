@@ -742,9 +742,9 @@ namespace Helpers::Simd::x86_64
     static const constexpr uint64_t LEN_TABLE[] = { 0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000ULL, 100000000000ULL, 1000000000000ULL, 10000000000000ULL, 100000000000000ULL, 1000000000000000ULL, 10000000000000000ULL, 100000000000000000ULL, 1000000000000000000ULL, 10000000000000000000ULL };
     // clang-format on
     const __m256i PERMUTE_SHF_64 = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
-    const __m256i M_MAGIC_u64 = { 0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL, 0 };
+    const __m256i M_MAGIC_u64 = _mm256_setr_epi64x(0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL, 0);
     const __m128i M_MAGIC_u16 = _mm_setr_epi32(33555, 41944, 6554, 0);
-    const __m256i M_SHIFTS_u64 = { 50, 45, 37, 0 };
+    const __m256i M_SHIFTS_u64 = _mm256_setr_epi64x(50, 45, 37, 0);
     const __m128i M_SHIFTS_u16 = _mm_setr_epi32(9, 6, 0, 0);
     const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
@@ -824,6 +824,7 @@ namespace Helpers::Simd::x86_64
 
     const __m128i res_u16_prod_top_x10 = _mm_add_epi16(res_u16_prod_top_x8, res_u16_prod_top_x2);
     const __m128i res_u16_prod_mid_x10 = _mm_add_epi16(res_u16_prod_mid_x8, res_u16_prod_mid_x2);
+    const __m128i res_u16_bot = _mm_packus_epi16(res_u32_packed_bot, res_u32_packed_bot);
 
     const __m128i ZERO_NUMS = _mm_setzero_si128();
     const __m128i ZERO_CHAR = _mm_set1_epi8('0');
@@ -838,7 +839,6 @@ namespace Helpers::Simd::x86_64
 
     const __m128i res_u16_top = _mm_sub_epi16(res_u16_tosub_top, res_u16_blend_top);
     const __m128i res_u16_mid = _mm_sub_epi16(res_u16_tosub_mid, res_u16_blend_mid);
-    const __m128i res_u16_bot = _mm_packus_epi16(res_u32_packed_bot, res_u32_packed_bot);
 
     const __m128i final_indices_top_mid = _mm_add_epi8(INDICES, LEAZ_Z_TOP_MID_LANES);
     const __m128i final_indices_bot = _mm_add_epi8(INDICES, LEAZ_Z_BOT_LANES);
