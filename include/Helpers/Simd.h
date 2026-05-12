@@ -527,42 +527,32 @@ namespace Helpers::Simd::x86_64
     const __m512i M_SHIFTS_10_0 = _mm512_setr_epi32(29, 26, 23, 19, 16, 13, 9, 6, 3, 0, 0, 0, 0, 0, 0, 0);
     const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-    // Emulate umul_hi_32x16 by calculating even and odd lane 64-bit products and blending the high 32-bits
     const __m512i prod = umul_hi_32x16(val, M_MAGIC_10_0);
     const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
     uint32_t len = (bits * 1233) >> 12;
     len += (input >= table[len]);
     const int8_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
 
-    // Math setup
     const __m512i n_sub_t = _mm512_sub_epi32(val, prod);
     const __m512i n_sub_t_shf = _mm512_srli_epi32(n_sub_t, 1);
     const __m512i n_sub_t_shf_add_t = _mm512_add_epi32(n_sub_t_shf, prod);
     const __m512i shifted_32 = _mm512_srlv_epi32(n_sub_t_shf_add_t, M_SHIFTS_10_0);
 
-    // Override lane 9 (the 10^0 digit) with the original val to preserve precision 1 << 9 = 512 = 0x0200
     const __m512i res_vec = _mm512_mask_blend_epi32(0x0200, shifted_32, val);
 
-    // Digit Extraction logic
     const __m512i res_times_2 = _mm512_slli_epi32(res_vec, 1);
     const __m512i res_times_8 = _mm512_slli_epi32(res_vec, 3);
 
     const __m512i res_times_10 = _mm512_add_epi32(res_times_8, res_times_2);
 
-    // res_times_10: [A, B, C, D, ..., P]
-    // Goal:         [0, A, B, C, ..., O]
-    // Use 0xFFFE mask (bits 1-15 set, bit 0 is zeroed)
-    // Use imm 15 to bring the bottom of 'a' into the top of 'b'
     const __m512i permuted = _mm512_maskz_alignr_epi32(0xFFFE, res_times_10, res_times_10, 15);
 
     const __m512i full_res = _mm512_sub_epi32(res_vec, permuted);
 
-    // Table Lookup conversion to ASCII _mm512_cvtepi32_epi8 seamlessly truncates 16x32-bit into 16x8-bit in a 128-bit vector
     const __m128i ascii_vec = _mm_add_epi8(_mm512_cvtepi32_epi8(full_res), _mm_set1_epi8('0'));
     const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(lead_z));
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
-    // Final Store (16 bytes accommodates up to 10 digits comfortably)
     _mm_mask_storeu_epi8(reinterpret_cast<__m128i *>(buff), 0b0011'1111'1111, output_chars);
 
     return len;
@@ -623,6 +613,7 @@ namespace Helpers::Simd::x86_64
     const __m64 u16_val = _mm_set1_pi16(input);
     const __m64 u8_acii_zero = _mm_set1_pi8('0');
     const __m64 M_MAGIC_U16 = _mm_setr_pi16(656, 6554, 0, 0);
+    const __m64 M_PACK_U8_U16 = _mm_setr_pi8(0, 2, 4, 6, 1, 3, 5, 7);
 
     const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
 
@@ -642,7 +633,7 @@ namespace Helpers::Simd::x86_64
 
     const __m64 u16_res = _mm_sub_pi16(u16_blend, u16_slided_x10);
 
-    const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
+    const __m64 u8_packed = _mm_shuffle_pi8(u16_res, M_PACK_U8_U16);
     const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
     const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
 
