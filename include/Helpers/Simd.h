@@ -521,9 +521,9 @@ namespace Helpers::Simd::x86_64
     const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
 
     const __m512i val = _mm512_set1_epi32(input);
-
-    const __m512i M_MAGIC_10_0
-        = _mm512_setr_epi32(0x12E0BE83U, 0x5798EE24U, 0xAD7F29ACU, 0x0C6F7A0CU, 0x4F8B588FU, 0xA36E2EB2U, 0x0624DD30U, 0x47AE147BU, 0x9999999AU, 0, 0, 0, 0, 0, 0, 0);
+    // clang-format off
+    const __m512i M_MAGIC_10_0 = _mm512_setr_epi32(0x12E0BE83U, 0x5798EE24U, 0xAD7F29ACU, 0x0C6F7A0CU, 0x4F8B588FU, 0xA36E2EB2U, 0x0624DD30U, 0x47AE147BU, 0x9999999AU, 0, 0, 0, 0, 0, 0, 0);
+    // clang-format on
     const __m512i M_SHIFTS_10_0 = _mm512_setr_epi32(29, 26, 23, 19, 16, 13, 9, 6, 3, 0, 0, 0, 0, 0, 0, 0);
     const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
@@ -562,9 +562,10 @@ namespace Helpers::Simd::x86_64
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
   {
     const __m128i C_VAL = _mm_set1_epi16(input);
-    const __m128i C_ZEROS = _mm_set1_epi8('0');
     const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
     const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
+    const __m128i M_PACK_U8_U16 = _mm_setr_epi8(0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 10, 11, 12, 13, 14, 15);
+    const __m128i C_ZEROS = _mm_set1_epi8('0');
 
     const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
     const __m128i u16_sub = _mm_sub_epi16(C_VAL, u16_prod);
@@ -573,7 +574,6 @@ namespace Helpers::Simd::x86_64
 
     const __m128i u16_div = _mm_srlv_epi16(u16_add, M_SHIFTS_U16);
 
-    // Branchless Length Calculation (Optimized for modern CPUs)
     const constexpr uint16_t C_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
 
     const uint32_t bits = 32U - __builtin_clz(input | 1U);
@@ -583,21 +583,18 @@ namespace Helpers::Simd::x86_64
 
     const unsigned lead_z = (5 - len) << 3U;
 
-    // Pack back to 16-bit and insert the original input into lane 4
     const __m128i u16_blend = _mm_blend_epi32(u16_div, C_VAL, 0b1100);
 
     const __m128i u16_div_x8 = _mm_slli_epi16(u16_blend, 3);
     const __m128i u16_div_x2 = _mm_slli_epi16(u16_blend, 1);
 
-    // Digit Extraction logic
     const __m128i u16_div_x10 = _mm_add_epi16(u16_div_x8, u16_div_x2);
 
     const __m128i u16_div_x10_slided = _mm_slli_si128(u16_div_x10, 2);
     const __m128i u16_res = _mm_sub_epi16(u16_blend, u16_div_x10_slided);
 
-    const __m128i u8_res = _mm_packus_epi16(u16_res, u16_res);
+    const __m128i u8_res = _mm_shuffle_epi8(u16_res, M_PACK_U8_U16);
 
-    // Table Lookup conversion to ASCII
     const __m128i u8_res_shf = _mm_srli_epi64(u8_res, lead_z);
     const __m128i u8_chars = _mm_add_epi8(u8_res_shf, C_ZEROS);
 
@@ -610,12 +607,12 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    const __m64 u16_val = _mm_set1_pi16(input);
-    const __m64 u8_acii_zero = _mm_set1_pi8('0');
-    const __m64 M_MAGIC_U16 = _mm_setr_pi16(656, 6554, 0, 0);
-    const __m64 M_PACK_U8_U16 = _mm_setr_pi8(0, 2, 4, 6, 1, 3, 5, 7);
+    const __m128i u16_val = _mm_set1_epi16(input);
+    const __m128i M_MAGIC_U16 = _mm_setr_epi16(656, 6554, 0, 0, 0, 0, 0, 0);
+    const __m128i u8_acii_zero = _mm_set1_epi8('0');
+    const __m128i M_PACK_U8_U16 = _mm_setr_epi8(0, 2, 4, 6, 1, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-    const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
+    const __m128i u16_prod = _mm_mulhi_epu16(u16_val, M_MAGIC_U16);
 
     unsigned len = 1U;
     len += (input >= 10);
@@ -623,21 +620,22 @@ namespace Helpers::Simd::x86_64
 
     const unsigned lead_z = (3U - len) << 3U;
 
-    const __m64 u16_blend = _mm_insert_pi16(u16_prod, input, 2);
-    const __m64 u16_slided = _mm_slli_si64(u16_blend, 16);
+    const __m128i u16_blend = _mm_blend_epi16(u16_prod, u16_val, 0b01'00);
 
-    const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
-    const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
+    const __m128i u16_slided = _mm_slli_epi64(u16_blend, 16);
 
-    const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
+    const __m128i u16_slided_x8 = _mm_slli_epi16(u16_slided, 3);
+    const __m128i u16_slided_x2 = _mm_slli_epi16(u16_slided, 1);
 
-    const __m64 u16_res = _mm_sub_pi16(u16_blend, u16_slided_x10);
+    const __m128i u16_slided_x10 = _mm_add_epi16(u16_slided_x8, u16_slided_x2);
 
-    const __m64 u8_packed = _mm_shuffle_pi8(u16_res, M_PACK_U8_U16);
-    const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
-    const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
+    const __m128i u16_res = _mm_sub_epi16(u16_blend, u16_slided_x10);
 
-    _mm_storeu_si32(static_cast<void *>(buff), _mm_movpi64_epi64(u8_chars));
+    const __m128i u8_packed = _mm_shuffle_epi8(u16_res, M_PACK_U8_U16);
+    const __m128i u8_res_shf = _mm_srli_epi64(u8_packed, lead_z);
+    const __m128i u8_chars = _mm_add_epi8(u8_res_shf, u8_acii_zero);
+
+    _mm_storeu_si32(static_cast<void *>(buff), u8_chars);
 
     return len;
   }
