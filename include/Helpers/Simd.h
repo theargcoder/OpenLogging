@@ -404,27 +404,9 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input) noexcept
   {
-
-    static const constexpr uint64_t LEN_TABLE[] = { 0,
-                                                    10,
-                                                    100,
-                                                    1000,
-                                                    10000,
-                                                    100000,
-                                                    1000000,
-                                                    10000000,
-                                                    100000000,
-                                                    1000000000,
-                                                    10000000000ULL,
-                                                    100000000000ULL,
-                                                    1000000000000ULL,
-                                                    10000000000000ULL,
-                                                    100000000000000ULL,
-                                                    1000000000000000ULL,
-                                                    10000000000000000ULL,
-                                                    100000000000000000ULL,
-                                                    1000000000000000000ULL,
-                                                    10000000000000000000ULL };
+    // clang-format off
+    static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
+    // clang-format on
 
     // div by [10^18, 10^16, 10^14, 10^12, 10^10, 10^8, 10^6, 10^4]
     const __m512i M_MAGICS_u64 = _mm512_setr_epi64(0x2725DD1D243ABA0FULL, 0xCD2B297D889BC2B7ULL, 0x6849B86A12B9B01FULL, 0x19799812DEA11198ULL, 0xB7CDFD9D7BDBAB7EULL,
@@ -432,18 +414,15 @@ namespace Helpers::Simd::x86_64
 
     const __m512i M_SHIFT_u64 = _mm512_setr_epi64(59, 53, 46, 39, 33, 26, 19, 13);
 
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
-    len += (input >= LEN_TABLE[len]);
+    const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
+    const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
-    const unsigned lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const unsigned lead_z = 20U - len;
 
     const __m512i u64val = _mm512_set1_epi64(input);
     const __m512i u64prod = _mm512_mulhi_epu64(u64val, M_MAGICS_u64);
     const uint64_t u64_lastd_prod = Helpers::Assembly::umulh64(input, 0x47AE147AE147AE15ULL);
-    //); return (((n - t) >> 1) + t) >> 6; }
 
-    // Math setup
     const __m512i u64_sub_prod = _mm512_sub_epi64(u64val, u64prod);
     const uint64_t u64_las_sub_prod = input - u64_lastd_prod;
     const __m512i u64_sub_prod_shf = _mm512_srli_epi64(u64_sub_prod, 1);
@@ -521,8 +500,10 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input) noexcept
   {
-    // Branchless Length Calculation
-    const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+    static const uint64_t table[] = { 4294967296ULL,  8589934582ULL,  8589934582ULL,  8589934582ULL,  12884901788ULL, 12884901788ULL, 12884901788ULL, 17179868184ULL,
+                                      17179868184ULL, 17179868184ULL, 21474826480ULL, 21474826480ULL, 21474826480ULL, 21474826480ULL, 25769703776ULL, 25769703776ULL,
+                                      25769703776ULL, 30063771072ULL, 30063771072ULL, 30063771072ULL, 34349738368ULL, 34349738368ULL, 34349738368ULL, 34349738368ULL,
+                                      38554705664ULL, 38554705664ULL, 38554705664ULL, 41949672960ULL, 41949672960ULL, 41949672960ULL, 42949672960ULL, 42949672960ULL };
 
     const __m512i val = _mm512_set1_epi32(input);
     // clang-format off
@@ -532,10 +513,10 @@ namespace Helpers::Simd::x86_64
     const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
     const __m512i prod = umul_hi_32x16(val, M_MAGIC_10_0);
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
-    len += (input >= table[len]);
-    const int8_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+
+    const unsigned comp = 31U - __builtin_clz(input | 1U);
+    const unsigned len = (input + table[comp]) >> 32U;
+    const unsigned lead_z = 10U - len;
 
     const __m512i n_sub_t = _mm512_sub_epi32(val, prod);
     const __m512i n_sub_t_shf = _mm512_srli_epi32(n_sub_t, 1);
@@ -565,6 +546,8 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
   {
+    static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
+
     const __m128i C_VAL = _mm_set1_epi16(input);
     const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
     const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
@@ -572,20 +555,16 @@ namespace Helpers::Simd::x86_64
     const __m128i C_ZEROS = _mm_set1_epi8('0');
 
     const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
+
+    const unsigned comp = 31U - __builtin_clz(input | 1U);
+    const unsigned len = (input + table[comp]) >> 16U;
+    const unsigned lead_z = (5U - len) << 3U;
+
     const __m128i u16_sub = _mm_sub_epi16(C_VAL, u16_prod);
     const __m128i u16_shf = _mm_srli_epi16(u16_sub, 1);
     const __m128i u16_add = _mm_add_epi16(u16_shf, u16_prod);
 
     const __m128i u16_div = _mm_srlv_epi16(u16_add, M_SHIFTS_U16);
-
-    const constexpr uint16_t C_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
-
-    const uint32_t bits = 32U - __builtin_clz(input | 1U);
-    uint32_t len = (bits * 1233) >> 12U;
-
-    len += (input >= C_TABLE[len]);
-
-    const unsigned lead_z = (5 - len) << 3U;
 
     const __m128i u16_blend = _mm_blend_epi32(u16_div, C_VAL, 0b1100);
 
@@ -618,10 +597,7 @@ namespace Helpers::Simd::x86_64
 
     const __m128i u16_prod = _mm_mulhi_epu16(u16_val, M_MAGIC_U16);
 
-    unsigned len = 1U;
-    len += (input >= 10);
-    len += (input >= 100);
-
+    const unsigned len = (input < 10) ? 1U : (input < 100) ? 2U : 3U;
     const unsigned lead_z = (3U - len) << 3U;
 
     const __m128i u16_blend = _mm_blend_epi16(u16_prod, u16_val, 0b01'00);
@@ -753,7 +729,7 @@ namespace Helpers::Simd::x86_64
     const __m256i prod_u32_mid = _mm256_mul_epu32(VAL_U32_MID, M_MAGIC_u64);
     const __m128i prod_u32_bot = _mm_mulhi_epu16(VAL_U32_BOT, M_MAGIC_u16);
 
-    const uint32_t comp = 63U - __builtin_clzll(input | 1ULL);
+    const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
     const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
     const unsigned lead_z_top = 20U - len;
@@ -867,7 +843,7 @@ namespace Helpers::Simd::x86_64
 
     const __m256i prod = _mm256_mul_epu32(VAL, M_MAGIC_u64);
 
-    const uint32_t comp = 31U - __builtin_clz(input | 1U);
+    const unsigned comp = 31U - __builtin_clz(input | 1U);
     const unsigned len = (input + table[comp]) >> 32U;
     const unsigned lead_z = 10U - len;
 
@@ -954,7 +930,6 @@ namespace Helpers::Simd::x86_64
 
     const unsigned comp = 31U - __builtin_clz(input | 1U);
     const unsigned len = (input + table[comp]) >> 16U;
-
     const unsigned lead_z = (5U - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
