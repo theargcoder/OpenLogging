@@ -259,6 +259,10 @@ namespace Helpers::Simd::x86_64
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
   static uint32_t WriteCharsToPtrFowardReturnLength(char *__restrict__ buff, const auto &input) noexcept;
 
+  using uint128_t = unsigned __int128;
+
+#define ENTRY(digits, offset) ((((uint128_t)(digits)) << 64) - (offset))
+
 #if defined(__AVX512BW__) && defined(__AVX512VL__)
 
   __attribute__((always_inline)) static inline __m512i umul_hi_32x16(const __m512i a, const __m512i b) noexcept
@@ -728,7 +732,7 @@ namespace Helpers::Simd::x86_64
   uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input) noexcept
   {
     // clang-format off
-    static const constexpr uint64_t LEN_TABLE[] = { 0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000ULL, 100000000000ULL, 1000000000000ULL, 10000000000000ULL, 100000000000000ULL, 1000000000000000ULL, 10000000000000000ULL, 100000000000000000ULL, 1000000000000000000ULL, 10000000000000000000ULL };
+    static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
     // clang-format on
     const __m256i PERMUTE_SHF_64 = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
     const __m256i M_MAGIC_u64 = _mm256_setr_epi64x(0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL, 0);
@@ -749,10 +753,8 @@ namespace Helpers::Simd::x86_64
     const __m256i prod_u32_mid = _mm256_mul_epu32(VAL_U32_MID, M_MAGIC_u64);
     const __m128i prod_u32_bot = _mm_mulhi_epu16(VAL_U32_BOT, M_MAGIC_u16);
 
-    const uint32_t bits = 64U - std::countl_zero(input | 1ULL);
-    unsigned len = (bits * 1233U) >> 12U;
-
-    len += (input >= LEN_TABLE[len]);
+    const uint32_t comp = 63U - __builtin_clzll(input | 1ULL);
+    const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
     const unsigned lead_z_top = 20U - len;
     const unsigned lead_z_bot = (lead_z_top < 16U) ? 0U : lead_z_top;
@@ -850,7 +852,10 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input) noexcept
   {
-    const constexpr uint32_t table[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+    static const uint64_t table[] = { 4294967296ULL,  8589934582ULL,  8589934582ULL,  8589934582ULL,  12884901788ULL, 12884901788ULL, 12884901788ULL, 17179868184ULL,
+                                      17179868184ULL, 17179868184ULL, 21474826480ULL, 21474826480ULL, 21474826480ULL, 21474826480ULL, 25769703776ULL, 25769703776ULL,
+                                      25769703776ULL, 30063771072ULL, 30063771072ULL, 30063771072ULL, 34349738368ULL, 34349738368ULL, 34349738368ULL, 34349738368ULL,
+                                      38554705664ULL, 38554705664ULL, 38554705664ULL, 41949672960ULL, 41949672960ULL, 41949672960ULL, 42949672960ULL, 42949672960ULL };
 
     const __m256i VAL = _mm256_set1_epi32(input);
     const __m256i PERMUTE_SHF_64 = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
@@ -861,10 +866,9 @@ namespace Helpers::Simd::x86_64
 
     const __m256i prod = _mm256_mul_epu32(VAL, M_MAGIC_u64);
 
-    const uint32_t bits = 32U - __builtin_clz(input | 1U);
-    uint32_t len = (bits * 1233U) >> 12U;
-    len += (input >= table[len]);
-    const unsigned lead_z = 10 - len;
+    const uint32_t comp = 31U - __builtin_clz(input | 1U);
+    const unsigned len = (input + table[comp]) >> 32U;
+    const unsigned lead_z = 10U - len;
 
     const __m256i shifted = _mm256_srlv_epi64(prod, M_SHIFTS_u64);
     const __m128i shifted_64 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(shifted, PERMUTE_SHF_64));
@@ -945,15 +949,12 @@ namespace Helpers::Simd::x86_64
     const __m128i u16_32_div = _mm_srlv_epi32(u16_add, M_SHIFTS_U16);
     const __m128i u16_div = _mm_packus_epi32(u16_32_div, u16_32_div);
 
-    // Branchless Length Calculation (Optimized for modern CPUs)
-    const constexpr uint16_t C_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
+    static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
 
-    const uint32_t bits = 32U - __builtin_clz(input | 1U);
-    uint32_t len = (bits * 1233) >> 12U;
+    const unsigned comp = 31U - __builtin_clz(input | 1U);
+    const unsigned len = (input + table[comp]) >> 16U;
 
-    len += (input >= C_TABLE[len]);
-
-    const unsigned lead_z = (5 - len) << 3U;
+    const unsigned lead_z = (5U - len) << 3U;
 
     // Pack back to 16-bit and insert the original input into lane 4
     const __m128i u16_blend = _mm_blend_epi32(u16_div, C_VAL, 0b1100);
