@@ -556,9 +556,9 @@ namespace Helpers::Simd::x86_64
     static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
 
     const __m128i C_VAL = _mm_set1_epi16(input);
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(0xA36F, 0x625, 0x47AF, 0x999A, 0, 0, 0, 0);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi16(13, 9, 6, 3, 0, 0, 0, 0);
-    const __m128i M_PACK_U8_U16 = _mm_setr_epi8(0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 10, 11, 12, 13, 14, 15);
+    const __m128i M_MAGIC_U16 = _mm_set1_epi64x(0x999A'47AF'0625'A36FULL);
+    const __m128i M_SHIFTS_U16 = _mm_set1_epi64x(0x0003'0006'0009'000DULL);
+    const __m128i M_PACK_U8_U16 = _mm_set1_epi64x(0x05'03'01'08'06'04'02'00ULL);
     const __m128i C_ZEROS = _mm_set1_epi8('0');
 
     const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
