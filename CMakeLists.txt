@@ -122,6 +122,18 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 # ------------------------------------------------------------
+# Static Linking of Standard Libraries
+# ------------------------------------------------------------
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Ensure we are on Linux/Unix; macOS generally doesn't support static libc++
+    if(NOT APPLE)
+        add_link_options(-static-libgcc -static-libstdc++)
+    endif()
+endif()
+
+# ------------------------------------------------------------
 # Header-only library
 # ------------------------------------------------------------
 add_library(OpenLogging INTERFACE)
