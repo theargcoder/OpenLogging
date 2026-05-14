@@ -598,9 +598,8 @@ namespace Helpers::Simd::x86_64
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
     const __m128i u16_val = _mm_set1_epi16(input);
-    const __m128i M_MAGIC_U16 = _mm_setr_epi16(656, 6554, 0, 0, 0, 0, 0, 0);
-    const __m128i u8_acii_zero = _mm_set1_epi8('0');
-    const __m128i M_PACK_U8_U16 = _mm_setr_epi8(0, 2, 4, 6, 1, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    const __m128i M_MAGIC_U16 = _mm_set1_epi64x(0x0000'0000'199A'0290);
+    const __m128i u8_acii_zero = _mm_set1_epi64x(0x3030'3030'3030'3030);
 
     const __m128i u16_prod = _mm_mulhi_epu16(u16_val, M_MAGIC_U16);
 
@@ -609,7 +608,7 @@ namespace Helpers::Simd::x86_64
 
     const __m128i u16_blend = _mm_blend_epi16(u16_prod, u16_val, 0b01'00);
 
-    const __m128i u16_slided = _mm_slli_epi64(u16_blend, 16);
+    const __m128i u16_slided = _mm_slli_si128(u16_blend, 2);
 
     const __m128i u16_slided_x8 = _mm_slli_epi16(u16_slided, 3);
     const __m128i u16_slided_x2 = _mm_slli_epi16(u16_slided, 1);
@@ -618,7 +617,7 @@ namespace Helpers::Simd::x86_64
 
     const __m128i u16_res = _mm_sub_epi16(u16_blend, u16_slided_x10);
 
-    const __m128i u8_packed = _mm_shuffle_epi8(u16_res, M_PACK_U8_U16);
+    const __m128i u8_packed = _mm_packus_epi16(u16_res, u16_res);
     const __m128i u8_res_shf = _mm_srli_epi64(u8_packed, lead_z);
     const __m128i u8_chars = _mm_add_epi8(u8_res_shf, u8_acii_zero);
 
