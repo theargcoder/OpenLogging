@@ -414,14 +414,14 @@ namespace Helpers::Simd::x86_64
 
     const __m512i M_SHIFT_u64 = _mm512_setr_epi64(59, 53, 46, 39, 33, 26, 19, 13);
 
+    const __m512i u64val = _mm512_set1_epi64(input);
+    const __m512i u64prod = _mm512_mulhi_epu64(u64val, M_MAGICS_u64);
+    const uint64_t u64_lastd_prod = Helpers::Assembly::umulh64(input, 0x47AE147AE147AE15ULL);
+
     const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
     const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
     const unsigned lead_z = 20U - len;
-
-    const __m512i u64val = _mm512_set1_epi64(input);
-    const __m512i u64prod = _mm512_mulhi_epu64(u64val, M_MAGICS_u64);
-    const uint64_t u64_lastd_prod = Helpers::Assembly::umulh64(input, 0x47AE147AE147AE15ULL);
 
     const __m512i u64_sub_prod = _mm512_sub_epi64(u64val, u64prod);
     const uint64_t u64_las_sub_prod = input - u64_lastd_prod;
@@ -525,6 +525,9 @@ namespace Helpers::Simd::x86_64
 
     const __m512i res_vec = _mm512_mask_blend_epi32(0x0200, shifted_32, val);
 
+    const __m128i LEAD_Z_LANES = _mm_set1_epi8(lead_z);
+    const __m128i ASCII_ZERO = _mm_set1_epi8('0');
+
     const __m512i res_times_2 = _mm512_slli_epi32(res_vec, 1);
     const __m512i res_times_8 = _mm512_slli_epi32(res_vec, 3);
 
@@ -534,11 +537,15 @@ namespace Helpers::Simd::x86_64
 
     const __m512i full_res = _mm512_sub_epi32(res_vec, permuted);
 
-    const __m128i ascii_vec = _mm_add_epi8(_mm512_cvtepi32_epi8(full_res), _mm_set1_epi8('0'));
-    const __m128i final_indices = _mm_add_epi8(INDICES, _mm_set1_epi8(lead_z));
+    const __m128i ascii_vec = _mm_add_epi8(_mm512_cvtepi32_epi8(full_res), ASCII_ZERO);
+    const __m128i final_indices = _mm_add_epi8(INDICES, LEAD_Z_LANES);
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
-    _mm_mask_storeu_epi8(reinterpret_cast<__m128i *>(buff), 0b0011'1111'1111, output_chars);
+    _mm_storeu_si64(reinterpret_cast<void *>(buff), output_chars);
+
+    const __m128i top_top = _mm_srli_si128(output_chars, 8);
+
+    _mm_storeu_si16(reinterpret_cast<void *>(buff + 8), top_top);
 
     return len;
   }
