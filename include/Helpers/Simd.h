@@ -408,91 +408,81 @@ namespace Helpers::Simd::x86_64
     static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
     // clang-format on
 
-    // div by [10^18, 10^16, 10^14, 10^12, 10^10, 10^8, 10^6, 10^4]
-    const __m512i M_MAGICS_u64 = _mm512_setr_epi64(0x2725DD1D243ABA0FULL, 0xCD2B297D889BC2B7ULL, 0x6849B86A12B9B01FULL, 0x19799812DEA11198ULL, 0xB7CDFD9D7BDBAB7EULL,
-                                                   0x5798EE2308C39DFAULL, 0xC6F7A0B5ED8D36CULL, 0xA36E2EB1C432CA58ULL);
+    // div by [10^16, 10^12, 10^8, 10^4]
+    const __m256i M_MAGICS_u64 = _mm256_setr_epi64x(0x39A5652FB1137857ULL, 0x232F33025BD42233ULL, 0xABCC77118461CEFDULL, 0x346DC5D63886594BULL);
+    const __m256i M_SHIFT_u64 = _mm256_setr_epi64x(51, 37, 26, 11);
 
-    const __m512i M_SHIFT_u64 = _mm512_setr_epi64(59, 53, 46, 39, 33, 26, 19, 13);
+    const __m512i M_MAGICS_u16 = _mm512_set1_epi64(0x0000'199A'A3D8'8313);
+    const __m512i M_SHIFTS_u16 = _mm512_set1_epi64(0x0000'0000'0006'0009);
+
+    const __m512i M_PERMUTE_u8 = _mm512_set_epi8(61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29,
+                                                 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 63, 62);
+
+    const __m256i M_LEAD_Z_u8 = _mm256_set_epi8(31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
 
     const __m512i u64val = _mm512_set1_epi64(input);
-    const __m512i u64prod = _mm512_mulhi_epu64(u64val, M_MAGICS_u64);
-    const uint64_t u64_lastd_prod = Helpers::Assembly::umulh64(input, 0x47AE147AE147AE15ULL);
+    const __m256i u64prod = _mm256_mulhi_epu64(_mm512_castsi512_si256(u64val), M_MAGICS_u64);
 
     const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
     const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
     const unsigned lead_z = 20U - len;
 
-    const __m512i u64_sub_prod = _mm512_sub_epi64(u64val, u64prod);
-    const uint64_t u64_las_sub_prod = input - u64_lastd_prod;
-    const __m512i u64_sub_prod_shf = _mm512_srli_epi64(u64_sub_prod, 1);
-    const uint64_t u64_sub_las_sub_prod = u64_las_sub_prod >> 1;
-    const __m512i u64_sub_prod_shf_add_t = _mm512_add_epi64(u64_sub_prod_shf, u64prod);
-    const uint64_t u64_las_sub_prod_shf_add_t = u64_sub_las_sub_prod + u64_lastd_prod;
-    const __m512i u64_dived = _mm512_srlv_epi64(u64_sub_prod_shf_add_t, M_SHIFT_u64);
-    const uint64_t u64_last_divided = u64_las_sub_prod_shf_add_t >> 6U;
+    const __m256i u64_dived = _mm256_srlv_epi64(u64prod, M_SHIFT_u64);
 
-    const uint64_t u64_last_divided_x64 = u64_last_divided << 6U;
-    const __m512i u64_dived_x64 = _mm512_slli_epi64(u64_dived, 6);
-    const uint64_t u64_last_divided_x32 = u64_last_divided << 5U;
-    const __m512i u64_dived_x32 = _mm512_slli_epi64(u64_dived, 5);
+    const __m256i u64_dived_x8192 = _mm256_slli_epi64(u64_dived, 13);
+    const __m256i u64_dived_x1024 = _mm256_slli_epi64(u64_dived, 10);
 
-    const uint64_t u64_last_divided_x96 = u64_last_divided_x64 + u64_last_divided_x32;
-    const __m512i u64_dived_x96 = _mm512_add_epi64(u64_dived_x64, u64_dived_x32);
-    const __m512i u64_dived_x4 = _mm512_slli_epi64(u64_dived, 2);
-    const uint64_t u64_last_divided_x4 = u64_last_divided << 2;
+    const __m256i u64_dived_x9216 = _mm256_add_epi64(u64_dived_x8192, u64_dived_x1024);
+    const __m256i u64_dived_x512 = _mm256_slli_epi64(u64_dived, 9);
+    const __m256i u64_dived_x256 = _mm256_slli_epi64(u64_dived, 8);
 
-    const __m512i u64_dived_x100 = _mm512_add_epi64(u64_dived_x96, u64_dived_x4);
-    const uint64_t u64_last_dived_x100 = u64_last_divided_x96 + u64_last_divided_x4;
+    const __m256i u64_dived_x768 = _mm256_add_epi64(u64_dived_x512, u64_dived_x256);
+    const __m256i u64_dived_x16 = _mm256_slli_epi64(u64_dived, 4);
 
-    const __m128i upper_lane = _mm512_extracti64x2_epi64(u64_dived_x100, 3);
-    const uint64_t top_last_dig = u64_last_divided - _mm_extract_epi64(upper_lane, 1);
-    const uint64_t bot_last_dig = input - u64_last_dived_x100;
-    const uint64_t last_dived = (bot_last_dig << 48U) | (bot_last_dig << 32U) | (top_last_dig << 16U) | top_last_dig;
+    const __m256i u64_dived_x9988 = _mm256_add_epi64(u64_dived_x9216, u64_dived_x768);
+    const __m256i u64_dived_x10000 = _mm256_add_epi64(u64_dived_x9988, u64_dived_x16);
 
-    const __m512i u64_last_div = _mm512_set1_epi64(last_dived);
-    const __m512i u64_perm_idx = _mm512_setr_epi64(0, 0, 1, 2, 3, 4, 5, 6);
+    const __m512i u64_dived_to_res = _mm512_mask_blend_epi64(0b0001'0000, _mm512_castsi256_si512(u64_dived), u64val);
+    const __m512i u64_permuted = _mm512_maskz_alignr_epi64(0xFE, _mm512_castsi256_si512(u64_dived_x10000), _mm512_castsi256_si512(u64_dived_x10000), 7);
 
-    const __m512i u64_permuted = _mm512_maskz_permutexvar_epi64(0b11111110, u64_perm_idx, u64_dived_x100);
+    const __m512i u64_res = _mm512_sub_epi64(u64_dived_to_res, u64_permuted);
 
-    const __m512i u64_res = _mm512_sub_epi64(u64_dived, u64_permuted);
+    const __m512i u64_res_u32lo = _mm512_slli_epi64(u64_res, 16U);
 
-    const __m256i u32_shrinked = _mm512_cvtepi64_epi32(u64_res);
+    const __m512i u16_packed_u32lo = _mm512_or_si512(u64_res, u64_res_u32lo);
 
-    const __m256i u16_packed = _mm256_add_epi16(u32_shrinked, _mm256_slli_epi64(u32_shrinked, 16));
+    const __m512i u64_res_u32hi = _mm512_slli_epi64(u16_packed_u32lo, 32U);
 
-    const __m512i u16_packed_all = _mm512_mask_blend_epi64(0b1111'0000, _mm512_castsi256_si512(u16_packed), u64_last_div);
+    const __m512i u16_packed_all = _mm512_or_si512(u64_res_u32hi, u16_packed_u32lo);
 
-    const __m512i u16_packed_all_x128 = _mm512_slli_epi16(u16_packed_all, 7);
-    const __m512i u16_packed_all_x64 = _mm512_slli_epi16(u16_packed_all, 6);
+    const __m512i u16_prod = _mm512_mulhi_epu16(u16_packed_all, M_MAGICS_u16);
 
-    const __m512i u16_packed_all_x8 = _mm512_slli_epi16(u16_packed_all, 3);
-    const __m512i u16_packed_all_x4 = _mm512_slli_epi16(u16_packed_all, 2);
-
-    const __m512i u16_packed_all_x192 = _mm512_add_epi16(u16_packed_all_x128, u16_packed_all_x64);
-    const __m512i u16_packed_all_x12 = _mm512_add_epi16(u16_packed_all_x8, u16_packed_all_x4);
-
-    const __m512i u16_packed_all_x204 = _mm512_add_epi16(u16_packed_all_x192, u16_packed_all_x12);
-    const __m512i u16_packed_all_x205 = _mm512_add_epi16(u16_packed_all_x204, u16_packed_all);
-
-    const __m512i u16_shfted = _mm512_srli_epi16(u16_packed_all_x205, 11);
+    const __m512i u16_shfted = _mm512_srlv_epi16(u16_prod, M_SHIFTS_u16);
 
     const __m512i u16_shfted_x8 = _mm512_slli_epi16(u16_shfted, 3);
     const __m512i u16_shfted_x2 = _mm512_slli_epi16(u16_shfted, 1);
 
-    const __m512i u16_shfted_x10 = _mm512_maskz_add_epi16(0b1010'1010'1010'1010'1010, u16_shfted_x8, u16_shfted_x2);
-    const __m512i u16_to_sub = _mm512_mask_blend_epi16(0b0101'0101'0101'0101'0101, u16_packed_all, u16_shfted);
+    const __m512i u16_shfted_x10 = _mm512_add_epi16(u16_shfted_x8, u16_shfted_x2);
 
-    const __m512i u16_res = _mm512_sub_epi16(u16_to_sub, u16_shfted_x10);
+    const __m256i ASCII_ZERO = _mm256_set1_epi8('0');
+    const __m256i LEAD_Z_LANES = _mm256_set1_epi8(lead_z);
+
+    const __m512i u16_slided = _mm512_maskz_permutexvar_epi8(0b11111100'11111100'11111100'11111100'11111100, M_PERMUTE_u8, u16_shfted_x10);
+    const __m512i u16_to_sub = _mm512_mask_blend_epi16(0b1000'1000'1000'1000'1000, u16_shfted, u16_packed_all);
+
+    const __m512i u16_res = _mm512_sub_epi16(u16_to_sub, u16_slided);
+
+    const __m256i u8_packed = _mm512_cvtepi16_epi8(u16_res);
 
     // conversion to ASCII
-    const __m256i ascii_vec = _mm256_add_epi8(_mm512_cvtepi16_epi8(u16_res), _mm256_set1_epi8('0'));
-    alignas(64) char temp[64];
-    _mm256_store_si256(reinterpret_cast<__m256i *>(&temp[0]), ascii_vec);
+    const __m256i ascii_vec = _mm256_add_epi8(u8_packed, ASCII_ZERO);
 
-    const __m256i output_chars = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(&temp[0] + lead_z));
+    const __m256i lead_z_perm = _mm256_add_epi8(LEAD_Z_LANES, M_LEAD_Z_u8);
 
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(buff), output_chars);
+    const __m256i output_chars = _mm256_permutexvar_epi8(lead_z_perm, ascii_vec);
+
+    _mm256_mask_storeu_epi64(reinterpret_cast<void *>(buff), 0b0001'1111, output_chars);
 
     return len;
   }
