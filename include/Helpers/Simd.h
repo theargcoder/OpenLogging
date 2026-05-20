@@ -408,13 +408,10 @@ namespace Helpers::Simd::x86_64
     static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
     // clang-format on
 
-    const __m512i M_MAGICS_u16 = _mm512_set1_epi64(0x0000'199A'A3D8'8313);
-    const __m512i M_SHIFTS_u16 = _mm512_set1_epi64(0x0000'0000'0006'0009);
+    const __m128i M_MAGICS_u16 = _mm_set1_epi64x(0x0000'199A'A3D8'8313);
+    const __m128i M_SHIFTS_u16 = _mm_set1_epi64x(0x0000'0000'0006'0009);
 
-    const __m512i M_PERMUTE_u8 = _mm512_set_epi8(61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29,
-                                                 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 63, 62);
-
-    const __m256i M_LEAD_Z_u8 = _mm256_set_epi8(31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
     const uint64_t res_1 = ((uint128_t)input * 0x39A5652FB1137857ULL) >> 115U;
     const uint64_t prod_2 = ((uint128_t)input * 0x232F33025BD42233ULL) >> 101U;
@@ -426,48 +423,71 @@ namespace Helpers::Simd::x86_64
     const uint64_t res_4 = prod_4 - (prod_3 * 10'000);
     const uint64_t res_5 = input - (prod_4 * 10'000);
 
-    const __m512i u64_res = _mm512_setr_epi64(res_1, res_2, res_3, res_4, res_5, 0, 0, 0);
+    const __m128i u64_res_1 = _mm_set1_epi16(static_cast<uint16_t>(res_1));
+    const __m128i u64_res_2 = _mm_set1_epi16(static_cast<uint16_t>(res_2));
+    const __m128i u64_res_3 = _mm_set1_epi16(static_cast<uint16_t>(res_3));
+    const __m128i u64_res_4 = _mm_set1_epi16(static_cast<uint16_t>(res_4));
+    const __m128i u64_res_5 = _mm_set1_epi16(static_cast<uint16_t>(res_5));
 
     const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
     const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
-    const unsigned lead_z = 20U - len;
+    const unsigned lead_z_top = 20U - len;
+    const unsigned lead_z_bot = (lead_z_top < 16U) ? 0U : lead_z_top;
+    const unsigned bot_offset = (len < 4U) ? 0U : 16U - lead_z_top;
 
-    const __m512i u64_res_u32lo = _mm512_slli_epi64(u64_res, 16U);
+    const __m128i u16_orig_12 = _mm_blend_epi32(u64_res_1, u64_res_2, 0b1100);
+    const __m128i u16_orig_34 = _mm_blend_epi32(u64_res_3, u64_res_4, 0b1100);
 
-    const __m512i u16_packed_u32lo = _mm512_or_si512(u64_res, u64_res_u32lo);
+    const __m128i u16_prod_12 = _mm_mulhi_epu16(u16_orig_12, M_MAGICS_u16);
+    const __m128i u16_prod_34 = _mm_mulhi_epu16(u16_orig_34, M_MAGICS_u16);
+    const __m128i u16_prod_5 = _mm_mulhi_epu16(u64_res_5, M_MAGICS_u16);
 
-    const __m512i u64_res_u32hi = _mm512_slli_epi64(u16_packed_u32lo, 32U);
+    const __m128i u16_shifted_12 = _mm_srlv_epi16(u16_prod_12, M_SHIFTS_u16);
+    const __m128i u16_shifted_34 = _mm_srlv_epi16(u16_prod_34, M_SHIFTS_u16);
+    const __m128i u16_shifted_5 = _mm_srlv_epi16(u16_prod_5, M_SHIFTS_u16);
 
-    const __m512i u16_packed_all = _mm512_or_si512(u64_res_u32hi, u16_packed_u32lo);
+    const __m128i u16_shifted_12_x8 = _mm_slli_epi16(u16_shifted_12, 3);
+    const __m128i u16_shifted_34_x8 = _mm_slli_epi16(u16_shifted_34, 3);
+    const __m128i u16_shifted_5_x8 = _mm_slli_epi16(u16_shifted_5, 3);
+    const __m128i u16_shifted_12_x2 = _mm_slli_epi16(u16_shifted_12, 1);
+    const __m128i u16_shifted_34_x2 = _mm_slli_epi16(u16_shifted_34, 1);
+    const __m128i u16_shifted_5_x2 = _mm_slli_epi16(u16_shifted_5, 1);
 
-    const __m512i u16_prod = _mm512_mulhi_epu16(u16_packed_all, M_MAGICS_u16);
+    const __m128i u16_shf_x10_12 = _mm_add_epi16(u16_shifted_12_x8, u16_shifted_12_x2);
+    const __m128i u16_shf_x10_34 = _mm_add_epi16(u16_shifted_34_x8, u16_shifted_34_x2);
+    const __m128i u16_shf_x10_5 = _mm_add_epi16(u16_shifted_5_x8, u16_shifted_5_x2);
 
-    const __m512i u16_shfted = _mm512_srlv_epi16(u16_prod, M_SHIFTS_u16);
+    const __m128i ZERO_CHAR = _mm_set1_epi8('0');
+    const __m128i LEAZ_Z_TOP_MID_LANES = _mm_set1_epi8(lead_z_top);
+    const __m128i LEAZ_Z_BOT_LANES = _mm_set1_epi8(lead_z_bot);
 
-    const __m512i u16_shfted_x8 = _mm512_slli_epi16(u16_shfted, 3);
-    const __m512i u16_shfted_x2 = _mm512_slli_epi16(u16_shfted, 1);
+    const __m128i u16_slided_12 = _mm_slli_si128(u16_shf_x10_12, 2);
+    const __m128i u16_slided_34 = _mm_slli_si128(u16_shf_x10_34, 2);
+    const __m128i u16_slided_5 = _mm_slli_si128(u16_shf_x10_5, 2);
+    const __m128i u16_to_sub_12 = _mm_mask_blend_epi16(0b1000'1000, u16_shifted_12, u16_orig_12);
+    const __m128i u16_to_sub_34 = _mm_mask_blend_epi16(0b1000'1000, u16_shifted_34, u16_orig_34);
+    const __m128i u16_to_sub_5 = _mm_mask_blend_epi16(0b1000'1000, u16_shifted_5, u64_res_5);
 
-    const __m512i u16_shfted_x10 = _mm512_add_epi16(u16_shfted_x8, u16_shfted_x2);
+    const __m128i u16_res_12 = _mm_sub_epi16(u16_to_sub_12, u16_slided_12);
+    const __m128i u16_res_34 = _mm_sub_epi16(u16_to_sub_34, u16_slided_34);
+    const __m128i u16_res_5 = _mm_sub_epi16(u16_to_sub_5, u16_slided_5);
 
-    const __m256i ASCII_ZERO = _mm256_set1_epi8('0');
-    const __m256i LEAD_Z_LANES = _mm256_set1_epi8(lead_z);
+    const __m128i u8_res_packed_top = _mm_packus_epi16(u16_res_12, u16_res_34);
+    const __m128i u8_res_packed_bot = _mm_packus_epi16(u16_res_5, u16_res_5);
 
-    const __m512i u16_slided = _mm512_maskz_permutexvar_epi8(0b11111100'11111100'11111100'11111100'11111100, M_PERMUTE_u8, u16_shfted_x10);
-    const __m512i u16_to_sub = _mm512_mask_blend_epi16(0b1000'1000'1000'1000'1000, u16_shfted, u16_packed_all);
+    const __m128i final_indices_top_mid = _mm_add_epi8(INDICES, LEAZ_Z_TOP_MID_LANES);
+    const __m128i final_indices_bot = _mm_add_epi8(INDICES, LEAZ_Z_BOT_LANES);
 
-    const __m512i u16_res = _mm512_sub_epi16(u16_to_sub, u16_slided);
+    const __m128i ascii_vec_top = _mm_add_epi8(u8_res_packed_top, ZERO_CHAR);
+    const __m128i ascii_vec_bot = _mm_add_epi8(u8_res_packed_bot, ZERO_CHAR);
 
-    const __m256i u8_packed = _mm512_cvtepi16_epi8(u16_res);
+    const __m128i output_chars_top = _mm_shuffle_epi8(ascii_vec_top, final_indices_top_mid);
+    const __m128i output_chars_bot = _mm_shuffle_epi8(ascii_vec_bot, final_indices_bot);
 
-    // conversion to ASCII
-    const __m256i ascii_vec = _mm256_add_epi8(u8_packed, ASCII_ZERO);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(buff), output_chars_top);
 
-    const __m256i lead_z_perm = _mm256_add_epi8(LEAD_Z_LANES, M_LEAD_Z_u8);
-
-    const __m256i output_chars = _mm256_permutexvar_epi8(lead_z_perm, ascii_vec);
-
-    _mm256_mask_storeu_epi32(reinterpret_cast<void *>(buff), 0b0001'1111, output_chars);
+    _mm_storeu_si32(reinterpret_cast<void *>(buff + bot_offset), output_chars_bot);
 
     return len;
   }
