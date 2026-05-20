@@ -407,17 +407,17 @@ namespace Helpers::Simd::x86_64
     // clang-format off
     static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
     // clang-format on
-    const __m256i M_MAGIC_u64 = _mm256_setr_epi64x(0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL, 0);
-    const __m128i M_MAGIC_u16 = _mm_setr_epi32(33555, 41944, 6554, 0);
-    const __m256i M_SHIFTS_u64 = _mm256_setr_epi64x(50, 45, 37, 0);
-    const __m128i M_SHIFTS_u16 = _mm_setr_epi32(9, 6, 0, 0);
-    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-
     const uint64_t fir_8 = ((__uint128_t)input * 0x232F33025BD42233ULL) >> 101U;
     const uint64_t mid_prod_8 = ((__uint128_t)input * 0x346DC5D63886594BULL) >> 75U;
 
     const uint64_t mid_8 = mid_prod_8 - (fir_8 * 100'000'000);
     const uint64_t las_4 = input - (mid_prod_8 * 10'000);
+
+    const __m256i M_MAGIC_u64 = _mm256_setr_epi64x(0x431BDE83, 0xD1B71759, 0x51EB851F, 0);
+    const __m128i M_MAGIC_u16 = _mm_setr_epi32(33555, 41944, 6554, 0);
+    const __m256i M_SHIFTS_u64 = _mm256_setr_epi64x(50, 45, 37, 0);
+    const __m128i M_SHIFTS_u16 = _mm_setr_epi32(9, 6, 0, 0);
+    const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
     const __m256i VAL_U32_TOP = _mm256_set1_epi32(static_cast<uint32_t>(fir_8));
     const __m256i VAL_U32_MID = _mm256_set1_epi32(static_cast<uint32_t>(mid_8));
@@ -474,13 +474,13 @@ namespace Helpers::Simd::x86_64
 
     const __m128i res_u32_top_shf_16 = _mm_slli_epi64(res_u32_top, 16);
     const __m128i res_u32_mid_shf_16 = _mm_slli_epi64(res_u32_mid, 16);
-    const __m128i res_u32_packed_bot = _mm_packus_epi32(res_u32_bot, res_u32_bot);
 
     const __m128i res_u16_packed_top = _mm_or_si128(res_u32_top_shf_16, res_u32_top);
     const __m128i res_u16_packed_mid = _mm_or_si128(res_u32_mid_shf_16, res_u32_mid);
 
     const __m128i res_u16_prod_top = _mm_mulhi_epu16(res_u16_packed_top, F_6554);
     const __m128i res_u16_prod_mid = _mm_mulhi_epu16(res_u16_packed_mid, F_6554);
+    const __m128i res_u16_bot = _mm_cvtepi32_epi8(res_u32_bot);
 
     const __m128i res_u16_prod_top_x8 = _mm_slli_epi16(res_u16_prod_top, 3);
     const __m128i res_u16_prod_mid_x8 = _mm_slli_epi16(res_u16_prod_mid, 3);
@@ -489,7 +489,6 @@ namespace Helpers::Simd::x86_64
 
     const __m128i res_u16_prod_top_x10 = _mm_add_epi16(res_u16_prod_top_x8, res_u16_prod_top_x2);
     const __m128i res_u16_prod_mid_x10 = _mm_add_epi16(res_u16_prod_mid_x8, res_u16_prod_mid_x2);
-    const __m128i res_u16_bot = _mm_packus_epi16(res_u32_packed_bot, res_u32_packed_bot);
 
     const __m128i ZERO_NUMS = _mm_setzero_si128();
     const __m128i ZERO_CHAR = _mm_set1_epi8('0');
