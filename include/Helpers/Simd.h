@@ -465,9 +465,9 @@ namespace Helpers::Simd::x86_64
     const __m128i u16_slided_12 = _mm_slli_si128(u16_shf_x10_12, 2);
     const __m128i u16_slided_34 = _mm_slli_si128(u16_shf_x10_34, 2);
     const __m128i u16_slided_5 = _mm_slli_si128(u16_shf_x10_5, 2);
-    const __m128i u16_to_sub_12 = _mm_mask_blend_epi16(0b1000'1000, u16_shifted_12, u16_orig_12);
-    const __m128i u16_to_sub_34 = _mm_mask_blend_epi16(0b1000'1000, u16_shifted_34, u16_orig_34);
-    const __m128i u16_to_sub_5 = _mm_mask_blend_epi16(0b1000'1000, u16_shifted_5, u64_res_5);
+    const __m128i u16_to_sub_12 = _mm_blend_epi16(u16_shifted_12, u16_orig_12, 0b1000'1000);
+    const __m128i u16_to_sub_34 = _mm_blend_epi16(u16_shifted_34, u16_orig_34, 0b1000'1000);
+    const __m128i u16_to_sub_5 = _mm_blend_epi16(u16_shifted_5, u64_res_5, 0b1000'1000);
 
     const __m128i u16_res_12 = _mm_sub_epi16(u16_to_sub_12, u16_slided_12);
     const __m128i u16_res_34 = _mm_sub_epi16(u16_to_sub_34, u16_slided_34);
@@ -532,7 +532,9 @@ namespace Helpers::Simd::x86_64
 
     const __m512i full_res = _mm512_sub_epi32(res_vec, permuted);
 
-    const __m128i ascii_vec = _mm_add_epi8(_mm512_cvtepi32_epi8(full_res), ASCII_ZERO);
+    const __m128i u8_packed = _mm512_cvtepi32_epi8(full_res);
+
+    const __m128i ascii_vec = _mm_add_epi8(u8_packed, ASCII_ZERO);
     const __m128i final_indices = _mm_add_epi8(INDICES, LEAD_Z_LANES);
     const __m128i output_chars = _mm_shuffle_epi8(ascii_vec, final_indices);
 
