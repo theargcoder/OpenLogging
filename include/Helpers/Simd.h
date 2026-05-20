@@ -552,41 +552,29 @@ namespace Helpers::Simd::x86_64
   {
     static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
 
-    const __m128i C_VAL = _mm_set1_epi16(input);
-    const __m128i M_MAGIC_U16 = _mm_set1_epi64x(0x999A'47AF'0625'A36FULL);
-    const __m128i M_SHIFTS_U16 = _mm_set1_epi64x(0x0003'0006'0009'000DULL);
-    const __m128i M_PACK_U8_U16 = _mm_set1_epi64x(0x05'03'01'08'06'04'02'00ULL);
-    const __m128i C_ZEROS = _mm_set1_epi8('0');
+    const uint64_t u8_acii_zero = 0x3030'3030'3030'3030ULL;
 
-    const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
+    const uint64_t dig_1 = (uint64_t)input * 0xD1B71759U >> 45U;
+    const unsigned prod_2 = (uint64_t)input * 0x10624DD3U >> 38U;
+    const unsigned prod_3 = (uint64_t)input * 0x51EB851FU >> 37U;
+    const unsigned prod_4 = (uint64_t)input * 0xCCCCCCCDU >> 35U;
 
     const unsigned comp = 31U - __builtin_clz(input | 1U);
     const unsigned len = (input + table[comp]) >> 16U;
     const unsigned lead_z = (5U - len) << 3U;
 
-    const __m128i u16_sub = _mm_sub_epi16(C_VAL, u16_prod);
-    const __m128i u16_shf = _mm_srli_epi16(u16_sub, 1);
-    const __m128i u16_add = _mm_add_epi16(u16_shf, u16_prod);
+    const uint64_t dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
+    const uint64_t dig_3 = prod_3 - ((prod_2 << 3U) + (prod_2 << 1U));
+    const uint64_t dig_4 = prod_4 - ((prod_3 << 3U) + (prod_3 << 1U));
+    const uint64_t dig_5 = input - ((prod_4 << 3U) + (prod_4 << 1U));
 
-    const __m128i u16_div = _mm_srlv_epi16(u16_add, M_SHIFTS_U16);
+    const uint64_t u8_res = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U;
 
-    const __m128i u16_blend = _mm_blend_epi32(u16_div, C_VAL, 0b1100);
-
-    const __m128i u16_div_x8 = _mm_slli_epi16(u16_blend, 3);
-    const __m128i u16_div_x2 = _mm_slli_epi16(u16_blend, 1);
-
-    const __m128i u16_div_x10 = _mm_add_epi16(u16_div_x8, u16_div_x2);
-
-    const __m128i u16_div_x10_slided = _mm_slli_si128(u16_div_x10, 2);
-    const __m128i u16_res = _mm_sub_epi16(u16_blend, u16_div_x10_slided);
-
-    const __m128i u8_res = _mm_shuffle_epi8(u16_res, M_PACK_U8_U16);
-
-    const __m128i u8_res_shf = _mm_srli_epi64(u8_res, lead_z);
-    const __m128i u8_chars = _mm_add_epi8(u8_res_shf, C_ZEROS);
+    const uint64_t u8_res_shf = u8_res >> lead_z;
+    const uint64_t u8_chars = u8_res_shf + u8_acii_zero;
 
     // Final Store (8 bytes)
-    _mm_storeu_si64(static_cast<void *>(buff), u8_chars);
+    *reinterpret_cast<uint64_t *>(buff) = u8_chars;
 
     return len;
   }
