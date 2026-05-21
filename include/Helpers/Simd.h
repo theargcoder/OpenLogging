@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <emmintrin.h>
 #include <limits>
+#include <smmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -547,62 +548,6 @@ namespace Helpers::Simd::x86_64
     return len;
   }
 
-  template <>
-  uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
-  {
-    static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
-
-    const uint64_t u8_acii_zero = 0x3030'3030'3030'3030ULL;
-
-    const uint64_t dig_1 = (uint64_t)input * 0xD1B71759U >> 45U;
-    const unsigned prod_2 = (uint64_t)input * 0x10624DD3U >> 38U;
-    const unsigned prod_3 = (uint64_t)input * 0x51EB851FU >> 37U;
-    const unsigned prod_4 = (uint64_t)input * 0xCCCCCCCDU >> 35U;
-
-    const unsigned comp = 31U - __builtin_clz(input | 1U);
-    const unsigned len = (input + table[comp]) >> 16U;
-    const unsigned lead_z = (5U - len) << 3U;
-
-    const uint64_t dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
-    const uint64_t dig_3 = prod_3 - ((prod_2 << 3U) + (prod_2 << 1U));
-    const uint64_t dig_4 = prod_4 - ((prod_3 << 3U) + (prod_3 << 1U));
-    const uint64_t dig_5 = input - ((prod_4 << 3U) + (prod_4 << 1U));
-
-    const uint64_t u8_res = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U;
-
-    const uint64_t u8_res_shf = u8_res >> lead_z;
-    const uint64_t u8_chars = u8_res_shf + u8_acii_zero;
-
-    // Final Store (8 bytes)
-    *reinterpret_cast<uint64_t *>(buff) = u8_chars;
-
-    return len;
-  }
-
-  template <>
-  uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
-  {
-    const unsigned u8_acii_zero = 0x3030'3030U;
-
-    const unsigned dig_1 = (unsigned)input * 0x0290U >> 16U;
-    const unsigned prod_2 = (unsigned)input * 0x199A >> 16U;
-
-    const unsigned len = (input < 10) ? 1U : (input < 100) ? 2U : 3U;
-    const unsigned lead_z = (3U - len) << 3U;
-
-    const unsigned dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
-    const unsigned dig_3 = input - ((prod_2 << 3U) + (prod_2 << 1U));
-
-    const unsigned u8_packed = dig_1 | dig_2 << 8U | dig_3 << 16U;
-
-    const unsigned u8_res_shf = u8_packed >> lead_z;
-    const unsigned u8_chars = u8_res_shf + u8_acii_zero;
-
-    *reinterpret_cast<unsigned *>(buff) = u8_chars;
-
-    return len;
-  }
-
 #elif defined(__AVX2__)
   /**
    * @brief Maps a bit-width to the appropriate unsigned integer type.
@@ -671,46 +616,33 @@ namespace Helpers::Simd::x86_64
     return result;
   }
 
-  // Compute high 32 bits of (a[i] * b[i]) for 8x uint32_t
-  static inline __m256i _mm256_mulhi_epu32(const __m256i &a, const __m256i &b) noexcept
-  {
-    // Even lanes: 0,2,4,6
-    const __m256i prod_even = _mm256_mul_epu32(a, b); // 64-bit results
-    const __m256i hi_even = _mm256_srli_epi64(prod_even, 32);
-
-    // Odd lanes: shift inputs right by 32 bits
-    const __m256i a_odd = _mm256_srli_epi64(a, 32);
-    const __m256i b_odd = _mm256_srli_epi64(b, 32);
-    const __m256i prod_odd = _mm256_mul_epu32(a_odd, b_odd);
-    const __m256i hi_odd = _mm256_srli_epi64(prod_odd, 32);
-
-    return _mm256_blend_epi32(_mm256_slli_epi64(hi_odd, 32), hi_even, 0b01010101);
-  }
-
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input) noexcept
   {
     // clang-format off
     static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
     // clang-format on
-    const __m256i M_MAGIC_u64 = _mm256_setr_epi64x(0x431BDE83ULL, 0xD1B71759ULL, 0x51EB851FULL, 0);
-    const __m128i M_MAGIC_u16 = _mm_setr_epi32(33555, 41944, 6554, 0);
-    const __m256i M_SHIFTS_u64 = _mm256_setr_epi64x(50, 45, 37, 0);
-    const __m128i M_SHIFTS_u16 = _mm_setr_epi32(9, 6, 0, 0);
-    const __m256i PERMUTE_SHF_64 = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
+
+    const __m128i M_MAGICS_u16 = _mm_set_epi32(0x0000, 0x199A, 0xA3D8, 0x8313);
+    const __m128i M_SHIFTS_u16 = _mm_set_epi32(0x0000, 0000, 0x0006, 0x0009);
+
     const __m128i INDICES = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-    uint64_t fir_8 = input, mid_8, las_4;
-    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<12>(fir_8, mid_8);
-    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<4>(mid_8, las_4);
+    const uint64_t res_1 = ((uint128_t)input * 0x39A5652FB1137857ULL) >> 115U;
+    const uint64_t prod_2 = ((uint128_t)input * 0x232F33025BD42233ULL) >> 101U;
+    const uint64_t prod_3 = ((uint128_t)input * 0xABCC77118461CEFDULL) >> 90U;
+    const uint64_t prod_4 = ((uint128_t)input * 0x346DC5D63886594BULL) >> 75U;
 
-    const __m256i VAL_U32_TOP = _mm256_set1_epi32(static_cast<uint32_t>(fir_8));
-    const __m256i VAL_U32_MID = _mm256_set1_epi32(static_cast<uint32_t>(mid_8));
-    const __m128i VAL_U32_BOT = _mm_set1_epi32(static_cast<uint32_t>(las_4));
+    const uint64_t res_2 = prod_2 - (res_1 * 10'000);
+    const uint64_t res_3 = prod_3 - (prod_2 * 10'000);
+    const uint64_t res_4 = prod_4 - (prod_3 * 10'000);
+    const uint64_t res_5 = input - (prod_4 * 10'000);
 
-    const __m256i prod_u32_top = _mm256_mul_epu32(VAL_U32_TOP, M_MAGIC_u64);
-    const __m256i prod_u32_mid = _mm256_mul_epu32(VAL_U32_MID, M_MAGIC_u64);
-    const __m128i prod_u32_bot = _mm_mulhi_epu16(VAL_U32_BOT, M_MAGIC_u16);
+    const __m128i u64_res_1 = _mm_set1_epi32(static_cast<uint32_t>(res_1));
+    const __m128i u64_res_2 = _mm_set1_epi32(static_cast<uint32_t>(res_2));
+    const __m128i u64_res_3 = _mm_set1_epi32(static_cast<uint32_t>(res_3));
+    const __m128i u64_res_4 = _mm_set1_epi32(static_cast<uint32_t>(res_4));
+    const __m128i u64_res_5 = _mm_set1_epi32(static_cast<uint32_t>(res_5));
 
     const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
     const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
@@ -719,84 +651,60 @@ namespace Helpers::Simd::x86_64
     const unsigned lead_z_bot = (lead_z_top < 16U) ? 0U : lead_z_top;
     const unsigned bot_offset = (len < 4U) ? 0U : 16U - lead_z_top;
 
-    const __m256i shifted_u32_top = _mm256_srlv_epi64(prod_u32_top, M_SHIFTS_u64);
-    const __m256i shifted_u32_mid = _mm256_srlv_epi64(prod_u32_mid, M_SHIFTS_u64);
-    const __m128i shifted_u32_bot = _mm_srlv_epi32(prod_u32_bot, M_SHIFTS_u16);
+    const __m128i u16_orig_12 = _mm_packus_epi32(u64_res_1, u64_res_2);
+    const __m128i u16_orig_34 = _mm_packus_epi32(u64_res_3, u64_res_4);
+    const __m128i u16_orig_5 = _mm_packus_epi32(u64_res_5, u64_res_5);
 
-    const __m128i permuted_u32_top = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(shifted_u32_top, PERMUTE_SHF_64));
-    const __m128i permuted_u32_mid = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(shifted_u32_mid, PERMUTE_SHF_64));
+    const __m128i u16_prod_1 = _mm_mulhi_epu16(u64_res_1, M_MAGICS_u16);
+    const __m128i u16_prod_2 = _mm_mulhi_epu16(u64_res_2, M_MAGICS_u16);
+    const __m128i u16_prod_3 = _mm_mulhi_epu16(u64_res_3, M_MAGICS_u16);
+    const __m128i u16_prod_4 = _mm_mulhi_epu16(u64_res_4, M_MAGICS_u16);
+    const __m128i u16_prod_5 = _mm_mulhi_epu16(u64_res_5, M_MAGICS_u16);
 
-    const __m128i permuted_u32_tosub_top = _mm_blend_epi32(permuted_u32_top, _mm256_castsi256_si128(VAL_U32_TOP), 0b10'00);
-    const __m128i permuted_u32_tosub_mid = _mm_blend_epi32(permuted_u32_mid, _mm256_castsi256_si128(VAL_U32_MID), 0b10'00);
-    const __m128i permuted_u32_tosub_bot = _mm_blend_epi32(shifted_u32_bot, VAL_U32_BOT, 0b10'00);
+    const __m128i u16_shifted_1 = _mm_srlv_epi32(u16_prod_1, M_SHIFTS_u16);
+    const __m128i u16_shifted_2 = _mm_srlv_epi32(u16_prod_2, M_SHIFTS_u16);
+    const __m128i u16_shifted_3 = _mm_srlv_epi32(u16_prod_3, M_SHIFTS_u16);
+    const __m128i u16_shifted_4 = _mm_srlv_epi32(u16_prod_4, M_SHIFTS_u16);
+    const __m128i u16_shif_5 = _mm_srlv_epi32(u16_prod_5, M_SHIFTS_u16);
 
-    const __m128i permuted_u32_top_x64 = _mm_slli_epi64(permuted_u32_top, 6);
-    const __m128i permuted_u32_top_x32 = _mm_slli_epi64(permuted_u32_top, 5);
-    const __m128i permuted_u32_mid_x64 = _mm_slli_epi64(permuted_u32_mid, 6);
-    const __m128i permuted_u32_mid_x32 = _mm_slli_epi64(permuted_u32_mid, 5);
+    const __m128i u16_shifted_12 = _mm_packus_epi32(u16_shifted_1, u16_shifted_2);
+    const __m128i u16_shifted_34 = _mm_packus_epi32(u16_shifted_3, u16_shifted_4);
+    const __m128i u16_shifted_5 = _mm_packus_epi32(u16_shif_5, u16_shif_5);
 
-    const __m128i permuted_u32_bot_x8 = _mm_slli_epi32(shifted_u32_bot, 3);
-    const __m128i permuted_u32_bot_x2 = _mm_slli_epi32(shifted_u32_bot, 1);
+    const __m128i u16_shifted_12_x8 = _mm_slli_epi16(u16_shifted_12, 3);
+    const __m128i u16_shifted_34_x8 = _mm_slli_epi16(u16_shifted_34, 3);
+    const __m128i u16_shifted_5_x8 = _mm_slli_epi16(u16_shifted_5, 3);
+    const __m128i u16_shifted_12_x2 = _mm_slli_epi16(u16_shifted_12, 1);
+    const __m128i u16_shifted_34_x2 = _mm_slli_epi16(u16_shifted_34, 1);
+    const __m128i u16_shifted_5_x2 = _mm_slli_epi16(u16_shifted_5, 1);
 
-    const __m128i permuted_u32_top_x4 = _mm_slli_epi64(permuted_u32_top, 2);
-    const __m128i permuted_u32_mid_x4 = _mm_slli_epi64(permuted_u32_mid, 2);
-    const __m128i permuted_u32_top_x96 = _mm_add_epi64(permuted_u32_top_x64, permuted_u32_top_x32);
-    const __m128i permuted_u32_mid_x96 = _mm_add_epi64(permuted_u32_mid_x64, permuted_u32_mid_x32);
+    const __m128i u16_shf_x10_12 = _mm_add_epi16(u16_shifted_12_x8, u16_shifted_12_x2);
+    const __m128i u16_shf_x10_34 = _mm_add_epi16(u16_shifted_34_x8, u16_shifted_34_x2);
+    const __m128i u16_shf_x10_5 = _mm_add_epi16(u16_shifted_5_x8, u16_shifted_5_x2);
 
-    const __m128i permuted_u32_top_x100 = _mm_add_epi64(permuted_u32_top_x96, permuted_u32_top_x4);
-    const __m128i permuted_u32_mid_x100 = _mm_add_epi64(permuted_u32_mid_x96, permuted_u32_mid_x4);
-    const __m128i permuted_u32_bot_x10 = _mm_add_epi64(permuted_u32_bot_x8, permuted_u32_bot_x2);
-
-    const __m128i F_6554 = _mm_set1_epi16(6554);
-
-    const __m128i slided_u32_top = _mm_slli_si128(permuted_u32_top_x100, 4);
-    const __m128i slided_u32_mid = _mm_slli_si128(permuted_u32_mid_x100, 4);
-    const __m128i slided_u32_bot = _mm_slli_si128(permuted_u32_bot_x10, 4);
-
-    const __m128i res_u32_top = _mm_sub_epi64(permuted_u32_tosub_top, slided_u32_top);
-    const __m128i res_u32_mid = _mm_sub_epi64(permuted_u32_tosub_mid, slided_u32_mid);
-    const __m128i res_u32_bot = _mm_sub_epi64(permuted_u32_tosub_bot, slided_u32_bot);
-
-    const __m128i res_u32_top_shf_16 = _mm_slli_epi64(res_u32_top, 16);
-    const __m128i res_u32_mid_shf_16 = _mm_slli_epi64(res_u32_mid, 16);
-    const __m128i res_u32_packed_bot = _mm_packus_epi32(res_u32_bot, res_u32_bot);
-
-    const __m128i res_u16_packed_top = _mm_or_si128(res_u32_top_shf_16, res_u32_top);
-    const __m128i res_u16_packed_mid = _mm_or_si128(res_u32_mid_shf_16, res_u32_mid);
-
-    const __m128i res_u16_prod_top = _mm_mulhi_epu16(res_u16_packed_top, F_6554);
-    const __m128i res_u16_prod_mid = _mm_mulhi_epu16(res_u16_packed_mid, F_6554);
-
-    const __m128i res_u16_prod_top_x8 = _mm_slli_epi16(res_u16_prod_top, 3);
-    const __m128i res_u16_prod_mid_x8 = _mm_slli_epi16(res_u16_prod_mid, 3);
-    const __m128i res_u16_prod_top_x2 = _mm_slli_epi16(res_u16_prod_top, 1);
-    const __m128i res_u16_prod_mid_x2 = _mm_slli_epi16(res_u16_prod_mid, 1);
-
-    const __m128i res_u16_prod_top_x10 = _mm_add_epi16(res_u16_prod_top_x8, res_u16_prod_top_x2);
-    const __m128i res_u16_prod_mid_x10 = _mm_add_epi16(res_u16_prod_mid_x8, res_u16_prod_mid_x2);
-    const __m128i res_u16_bot = _mm_packus_epi16(res_u32_packed_bot, res_u32_packed_bot);
-
-    const __m128i ZERO_NUMS = _mm_setzero_si128();
     const __m128i ZERO_CHAR = _mm_set1_epi8('0');
     const __m128i LEAZ_Z_TOP_MID_LANES = _mm_set1_epi8(lead_z_top);
     const __m128i LEAZ_Z_BOT_LANES = _mm_set1_epi8(lead_z_bot);
 
-    const __m128i res_u16_blend_top = _mm_blend_epi16(res_u16_prod_top_x10, ZERO_NUMS, 0b0101'0101);
-    const __m128i res_u16_blend_mid = _mm_blend_epi16(res_u16_prod_mid_x10, ZERO_NUMS, 0b0101'0101);
+    const __m128i u16_slided_12 = _mm_slli_si128(u16_shf_x10_12, 2);
+    const __m128i u16_slided_34 = _mm_slli_si128(u16_shf_x10_34, 2);
+    const __m128i u16_slided_5 = _mm_slli_si128(u16_shf_x10_5, 2);
+    const __m128i u16_to_sub_12 = _mm_blend_epi16(u16_shifted_12, u16_orig_12, 0b1000'1000);
+    const __m128i u16_to_sub_34 = _mm_blend_epi16(u16_shifted_34, u16_orig_34, 0b1000'1000);
+    const __m128i u16_to_sub_5 = _mm_blend_epi16(u16_shifted_5, u16_orig_5, 0b1000'1000);
 
-    const __m128i res_u16_tosub_top = _mm_blend_epi16(res_u16_prod_top, res_u16_packed_top, 0b1010'1010);
-    const __m128i res_u16_tosub_mid = _mm_blend_epi16(res_u16_prod_mid, res_u16_packed_mid, 0b1010'1010);
+    const __m128i u16_res_12 = _mm_sub_epi16(u16_to_sub_12, u16_slided_12);
+    const __m128i u16_res_34 = _mm_sub_epi16(u16_to_sub_34, u16_slided_34);
+    const __m128i u16_res_5 = _mm_sub_epi16(u16_to_sub_5, u16_slided_5);
 
-    const __m128i res_u16_top = _mm_sub_epi16(res_u16_tosub_top, res_u16_blend_top);
-    const __m128i res_u16_mid = _mm_sub_epi16(res_u16_tosub_mid, res_u16_blend_mid);
+    const __m128i u8_res_packed_top = _mm_packus_epi16(u16_res_12, u16_res_34);
+    const __m128i u8_res_packed_bot = _mm_packus_epi16(u16_res_5, u16_res_5);
 
     const __m128i final_indices_top_mid = _mm_add_epi8(INDICES, LEAZ_Z_TOP_MID_LANES);
     const __m128i final_indices_bot = _mm_add_epi8(INDICES, LEAZ_Z_BOT_LANES);
 
-    const __m128i res_u8_packed_top = _mm_packus_epi16(res_u16_top, res_u16_mid);
-
-    const __m128i ascii_vec_top = _mm_add_epi8(res_u8_packed_top, ZERO_CHAR);
-    const __m128i ascii_vec_bot = _mm_add_epi8(res_u16_bot, ZERO_CHAR);
+    const __m128i ascii_vec_top = _mm_add_epi8(u8_res_packed_top, ZERO_CHAR);
+    const __m128i ascii_vec_bot = _mm_add_epi8(u8_res_packed_bot, ZERO_CHAR);
 
     const __m128i output_chars_top = _mm_shuffle_epi8(ascii_vec_top, final_indices_top_mid);
     const __m128i output_chars_bot = _mm_shuffle_epi8(ascii_vec_bot, final_indices_bot);
@@ -892,49 +800,38 @@ namespace Helpers::Simd::x86_64
     return len;
   }
 
+#else
+
+#endif
+
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
   {
     static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
 
-    const __m128i C_VAL = _mm_set1_epi32(input);
+    const uint64_t u8_acii_zero = 0x3030'3030'3030'3030ULL;
 
-    const __m128i C_ZEROS = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
-
-    const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
-    const __m128i u16_sub = _mm_sub_epi32(C_VAL, u16_prod);
-    const __m128i u16_shf = _mm_srli_epi16(u16_sub, 1);
-    const __m128i u16_add = _mm_add_epi16(u16_shf, u16_prod);
-
-    const __m128i u16_32_div = _mm_srlv_epi32(u16_add, M_SHIFTS_U16);
-    const __m128i u16_div = _mm_packus_epi32(u16_32_div, u16_32_div);
+    const uint64_t dig_1 = (uint64_t)input * 0xD1B71759U >> 45U;
+    const unsigned prod_2 = (uint64_t)input * 0x10624DD3U >> 38U;
+    const unsigned prod_3 = (uint64_t)input * 0x51EB851FU >> 37U;
+    const unsigned prod_4 = (uint64_t)input * 0xCCCCCCCDU >> 35U;
 
     const unsigned comp = 31U - __builtin_clz(input | 1U);
     const unsigned len = (input + table[comp]) >> 16U;
     const unsigned lead_z = (5U - len) << 3U;
 
-    // Pack back to 16-bit and insert the original input into lane 4
-    const __m128i u16_blend = _mm_blend_epi32(u16_div, C_VAL, 0b1100);
+    const uint64_t dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
+    const uint64_t dig_3 = prod_3 - ((prod_2 << 3U) + (prod_2 << 1U));
+    const uint64_t dig_4 = prod_4 - ((prod_3 << 3U) + (prod_3 << 1U));
+    const uint64_t dig_5 = input - ((prod_4 << 3U) + (prod_4 << 1U));
 
-    const __m128i u16_div_x8 = _mm_slli_epi16(u16_blend, 3);
-    const __m128i u16_div_x2 = _mm_slli_epi16(u16_blend, 1);
+    const uint64_t u8_res = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U;
 
-    // Digit Extraction logic
-    const __m128i u16_div_x10 = _mm_add_epi16(u16_div_x8, u16_div_x2);
-
-    const __m128i u16_div_x10_slided = _mm_slli_si128(u16_div_x10, 2);
-    const __m128i u16_res = _mm_sub_epi16(u16_blend, u16_div_x10_slided);
-
-    const __m128i u8_res = _mm_packus_epi16(u16_res, u16_res);
-
-    // Table Lookup conversion to ASCII
-    const __m128i u8_res_shf = _mm_srli_epi64(u8_res, lead_z);
-    const __m128i u8_chars = _mm_add_epi8(u8_res_shf, C_ZEROS);
+    const uint64_t u8_res_shf = u8_res >> lead_z;
+    const uint64_t u8_chars = u8_res_shf + u8_acii_zero;
 
     // Final Store (8 bytes)
-    _mm_storeu_si64(static_cast<void *>(buff), u8_chars);
+    *reinterpret_cast<uint64_t *>(buff) = u8_chars;
 
     return len;
   }
@@ -942,124 +839,25 @@ namespace Helpers::Simd::x86_64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    const __m64 u16_val = _mm_set1_pi16(input);
-    const __m64 u8_acii_zero = _mm_set1_pi8('0');
-    const __m64 M_MAGIC_U16 = _mm_setr_pi16(656, 6554, 0, 0);
+    const unsigned u8_acii_zero = 0x3030'3030U;
 
-    const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
+    const unsigned dig_1 = (unsigned)input * 0x0290U >> 16U;
+    const unsigned prod_2 = (unsigned)input * 0x199A >> 16U;
 
-    unsigned len = 1U;
-    len += (input >= 10);
-    len += (input >= 100);
-
+    const unsigned len = (input < 10) ? 1U : (input < 100) ? 2U : 3U;
     const unsigned lead_z = (3U - len) << 3U;
 
-    const __m64 u16_blend = _mm_insert_pi16(u16_prod, input, 2);
-    const __m64 u16_slided = _mm_slli_si64(u16_blend, 16);
+    const unsigned dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
+    const unsigned dig_3 = input - ((prod_2 << 3U) + (prod_2 << 1U));
 
-    const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
-    const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
+    const unsigned u8_packed = dig_1 | dig_2 << 8U | dig_3 << 16U;
 
-    const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
+    const unsigned u8_res_shf = u8_packed >> lead_z;
+    const unsigned u8_chars = u8_res_shf + u8_acii_zero;
 
-    const __m64 u16_res = _mm_sub_pi16(u16_blend, u16_slided_x10);
-
-    const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
-    const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
-    const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
-
-    _mm_storeu_si32(static_cast<void *>(buff), _mm_movpi64_epi64(u8_chars));
+    *reinterpret_cast<unsigned *>(buff) = u8_chars;
 
     return len;
   }
-
-#else
-  template <>
-  uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
-  {
-    const __m128i C_VAL = _mm_set1_epi32(input);
-
-    const __m128i C_ZEROS = _mm_set1_epi8('0');
-    const __m128i M_MAGIC_U16 = _mm_setr_epi32(0xA36F, 0x625, 0x47AF, 0x999A);
-    const __m128i M_SHIFTS_U16 = _mm_setr_epi32(13, 9, 6, 3);
-
-    const __m128i u16_prod = _mm_mulhi_epu16(C_VAL, M_MAGIC_U16);
-    const __m128i u16_sub = _mm_sub_epi32(C_VAL, u16_prod);
-    const __m128i u16_shf = _mm_srli_epi16(u16_sub, 1);
-    const __m128i u16_add = _mm_add_epi16(u16_shf, u16_prod);
-
-    const __m128i u16_32_div = _mm_srlv_epi32(u16_add, M_SHIFTS_U16);
-    const __m128i u16_div = _mm_packus_epi32(u16_32_div, u16_32_div);
-
-    // Branchless Length Calculation (Optimized for modern CPUs)
-    const constexpr uint16_t C_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
-
-    const uint32_t bits = 32U - __builtin_clz(input | 1U);
-    uint32_t len = (bits * 1233) >> 12U;
-
-    len += (input >= C_TABLE[len]);
-
-    const unsigned lead_z = (5 - len) << 3U;
-
-    // Pack back to 16-bit and insert the original input into lane 4
-    const __m128i u16_blend = _mm_blend_epi32(u16_div, C_VAL, 0b1100);
-
-    const __m128i u16_div_x8 = _mm_slli_epi16(u16_blend, 3);
-    const __m128i u16_div_x2 = _mm_slli_epi16(u16_blend, 1);
-
-    // Digit Extraction logic
-    const __m128i u16_div_x10 = _mm_add_epi16(u16_div_x8, u16_div_x2);
-
-    const __m128i u16_div_x10_slided = _mm_slli_si128(u16_div_x10, 2);
-    const __m128i u16_res = _mm_sub_epi16(u16_blend, u16_div_x10_slided);
-
-    const __m128i u8_res = _mm_packus_epi16(u16_res, u16_res);
-
-    // Table Lookup conversion to ASCII
-    const __m128i u8_res_shf = _mm_srli_epi64(u8_res, lead_z);
-    const __m128i u8_chars = _mm_add_epi8(u8_res_shf, C_ZEROS);
-
-    // Final Store (8 bytes)
-    _mm_storeu_si64(static_cast<void *>(buff), u8_chars);
-
-    return len;
-  }
-
-  template <>
-  uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
-  {
-    const unsigned input_shf16 = static_cast<uint16_t>(input << 6U);
-    const __m64 u16_val = _mm_setr_pi16(input, input_shf16, input_shf16 + 1, 0);
-    const __m64 u8_acii_zero = _mm_set1_pi8('0');
-    const __m64 M_MAGIC_U16 = _mm_setr_pi16(0xA3D8, 0x199A, 0xFFFF, 0);
-
-    const __m64 u16_prod = _mm_mulhi_pu16(u16_val, M_MAGIC_U16);
-
-    uint32_t len = 1U;
-    len += (input >= 10);
-    len += (input >= 100);
-
-    const unsigned lead_z = (3U - len) << 3U;
-
-    const __m64 u16_shf = _mm_srli_pi16(u16_prod, 6);
-    const __m64 u16_slided = _mm_slli_si64(u16_shf, 16);
-
-    const __m64 u16_slided_x8 = _mm_slli_pi16(u16_slided, 3);
-    const __m64 u16_slided_x2 = _mm_slli_pi16(u16_slided, 1);
-
-    const __m64 u16_slided_x10 = _mm_add_pi16(u16_slided_x8, u16_slided_x2);
-
-    const __m64 u16_res = _mm_sub_pi16(u16_shf, u16_slided_x10);
-
-    const __m64 u8_packed = _mm_packs_pu16(u16_res, u16_res);
-    const __m64 u8_res_shf = _mm_srli_si64(u8_packed, lead_z);
-    const __m64 u8_chars = _mm_add_pi8(u8_res_shf, u8_acii_zero);
-
-    _mm_storeu_si32(static_cast<void *>(buff), _mm_movpi64_epi64(u8_chars));
-
-    return len;
-  }
-
-#endif
 } // namespace Helpers::Simd::x86_64
 #endif
