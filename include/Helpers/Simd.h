@@ -1,12 +1,9 @@
 #pragma once
 
-#include <ammintrin.h>
 #include <array>
 #include <bit>
 #include <cstdint>
-#include <emmintrin.h>
 #include <limits>
-#include <smmintrin.h>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
 #elif defined(__ARM_NEON) || defined(__aarch64__)
@@ -164,48 +161,51 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint32_t>(char *__restrict__ buff, const uint32_t &input) noexcept
   {
+    static const uint64_t table[] = { 4294967296ULL,  8589934582ULL,  8589934582ULL,  8589934582ULL,  12884901788ULL, 12884901788ULL, 12884901788ULL, 17179868184ULL,
+                                      17179868184ULL, 17179868184ULL, 21474826480ULL, 21474826480ULL, 21474826480ULL, 21474826480ULL, 25769703776ULL, 25769703776ULL,
+                                      25769703776ULL, 30063771072ULL, 30063771072ULL, 30063771072ULL, 34349738368ULL, 34349738368ULL, 34349738368ULL, 34349738368ULL,
+                                      38554705664ULL, 38554705664ULL, 38554705664ULL, 41949672960ULL, 41949672960ULL, 41949672960ULL, 42949672960ULL, 42949672960ULL };
 
-    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0, 0x8313U, 0xA3D8U, 0x199AU, 0, 0x8313U, 0xA3D8U, 0x199AU };
-    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ 0, -9, -6, 0, 0, -9, -6, 0 };
+    const constexpr uint64_t ASCII_ZERO = 0x30303030'30303030;
 
-    static const constexpr auto INDICES = uint8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-    static const constexpr auto M_MAGIC_U32 = uint32x2_t{ 0x431BDE83ULL, 0x51EB851FULL };
-    static const constexpr auto M_SHIFTS_U32 = int64x2_t{ -50, -37 };
-    static const constexpr uint32_t LEN_TABLE[] = { 0, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000 };
+    const unsigned tmp_div_1 = ((uint64_t)input * 0x12E0BE83ULL) >> 32U, dig_1 = (((input - tmp_div_1) >> 1) + tmp_div_1) >> 29U;
+    const unsigned div_2 = ((uint64_t)input * 0x55E63B89U) >> 57;
+    const unsigned div_3 = ((uint64_t)input * 0x6B5FCA6BU) >> 54;
+    const unsigned div_4 = ((uint64_t)input * 0x431BDE83U) >> 50;
+    const unsigned tmp_div_5 = ((uint64_t)input * 0x4F8B588FULL) >> 32U, div_5 = (((input - tmp_div_5) >> 1) + tmp_div_5) >> 16U;
+    const unsigned div_6 = ((uint64_t)input * 0xD1B71759ULL) >> 45U;
+    const unsigned div_7 = ((uint64_t)input * 0x10624DD3ULL) >> 38U;
+    const unsigned div_8 = ((uint64_t)input * 0x51EB851FULL) >> 37U;
+    const unsigned div_9 = ((uint64_t)input * 0xCCCCCCCDULL) >> 35U;
 
-    const auto A = vdup_n_u32(input);
-    const auto prod = vmull_u32(A, M_MAGIC_U32);
-    const auto inputs = vmovn_u64(vshlq_u64(prod, M_SHIFTS_U32));
-    const auto inputs_x_10 = vmul_n_s32(inputs, 1'0000U);
-    const auto inputs_slided = vext_u32(vdup_n_u32(0), inputs_x_10, 1);
+    const unsigned comp = 31U - __builtin_clz(input | 1U);
+    const unsigned len = ((uint64_t)input + table[comp]) >> 32U;
 
-    const auto full_inputs = vsub_u32(inputs, inputs_slided);
-    const uint32_t lane_1 = vget_lane_u32(full_inputs, 0);
-    const uint32_t lane_2 = vget_lane_u32(full_inputs, 1);
-    uint16_t remainder = input - (vget_lane_u32(inputs, 1) * 100);
-    uint16_t remrem;
-    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(remainder, remrem);
+    const unsigned lead_z_top = 10U - len;
+    const unsigned lead_z_bot = (len >= 2U) ? 0U : 2U - len;
+    const unsigned bot_offset = (len < 2U) ? 0U : 8U - lead_z_top;
 
-    const auto n = vcombine_u16(vdup_n_u16(lane_1), vdup_n_u16(lane_2));
-    const auto t = umul_hi_u16x8(n, M_MAGIC_U16);
-    const auto n_div = vshlq_u16(t, M_SHIFTS_U16);
-    const auto res_times_10 = vmulq_n_u16(n_div, 10U);
-    const auto res_slided = vsetq_lane_u16(lane_1, vextq_u16(n_div, vdupq_n_u16(lane_2), 1), 3);
+    const uint64_t dig_2 = div_2 - ((dig_1 << 1) + (dig_1 << 3));
+    const uint64_t dig_3 = div_3 - ((div_2 << 1) + (div_2 << 3));
+    const uint64_t dig_4 = div_4 - ((div_3 << 1) + (div_3 << 3));
+    const uint64_t dig_5 = div_5 - ((div_4 << 1) + (div_4 << 3));
+    const uint64_t dig_6 = div_6 - ((div_5 << 1) + (div_5 << 3));
+    const uint64_t dig_7 = div_7 - ((div_6 << 1) + (div_6 << 3));
+    const uint64_t dig_8 = div_8 - ((div_7 << 1) + (div_7 << 3));
+    const uint64_t dig_9 = div_9 - ((div_8 << 1) + (div_8 << 3));
+    const uint64_t dig_10 = input - ((div_9 << 1) + (div_9 << 3));
 
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
+    const uint64_t top_digits = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U | dig_6 << 40U | dig_7 << 48U | dig_8 << 56U;
+    const uint64_t bot_digits = dig_9 | dig_10 << 8U;
 
-    len += (input >= LEN_TABLE[len]);
+    const uint64_t top_chars = top_digits + ASCII_ZERO;
+    const uint64_t bot_chars = bot_digits + ASCII_ZERO;
 
-    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const uint64_t output_top = top_chars >> (lead_z_top << 3U);
+    const uint64_t output_bot = bot_chars >> (lead_z_bot << 3U);
 
-    const auto full_res = vmovn_u16(vsubq_u16(res_slided, res_times_10));
-
-    const uint8x16_t combined = vcombine_u8(full_res, uint8x8_t{ static_cast<uint8_t>(remainder), static_cast<uint8_t>(remrem) });
-
-    const uint8x16_t out = vaddq_u8(vqtbl1q_u8(combined, vaddq_u8(INDICES, vdupq_n_u8(lead_z))), vdupq_n_u8('0'));
-
-    vst1q_s8(reinterpret_cast<int8_t *>(buff), out);
+    *reinterpret_cast<uint64_t *>(buff) = output_top;
+    *reinterpret_cast<uint16_t *>(buff + bot_offset) = static_cast<uint16_t>(output_bot);
 
     return len;
   }
@@ -213,34 +213,31 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint16_t>(char *__restrict__ buff, const uint16_t &input) noexcept
   {
-    static const constexpr auto M_MAGIC_U16 = uint16x8_t{ 0xA36F, 0x625U, 0x47AFU, 0x999AU, 0, 0, 0, 0 };
-    static const constexpr auto M_SHIFTS_U16 = int16x8_t{ -13, -9, -6, -3, 0, 0, 0, 0 };
-    static const constexpr uint32_t LEN_TABLE[] = { 0, 10, 100, 1'000, 10'000 };
+    static const uint32_t table[] = { 65536, 65536, 65536, 131062, 131072, 131072, 196508, 196608, 196608, 261144, 262144, 262144, 262144, 317680, 327680, 327680 };
 
-    static const constexpr auto INDICES = uint8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
+    const uint64_t u8_acii_zero = 0x3030'3030'3030'3030ULL;
 
-    const auto n = vdupq_n_u16(input);
-    const auto t = umul_hi_u16x8(n, M_MAGIC_U16);
-    const auto n_sub_t = vsubq_u16(n, t);
-    const auto n_sub_t_shf = vshrq_n_u16(n_sub_t, 1);
-    const auto n_sub_t_shf_add_t = vaddq_u16(n_sub_t_shf, t);
-    const auto n_sub_t_shf_add_t_shf = vsetq_lane_u16(input, vshlq_u16(n_sub_t_shf_add_t, M_SHIFTS_U16), 4);
-    const auto res_times_10 = vmulq_n_u16(n_sub_t_shf_add_t_shf, 10U);
-    const auto res_slided = vextq_u16(vdupq_n_u16(0), res_times_10, 7);
+    const uint64_t dig_1 = (uint64_t)input * 0xD1B71759U >> 45U;
+    const unsigned prod_2 = (uint64_t)input * 0x10624DD3U >> 38U;
+    const unsigned prod_3 = (uint64_t)input * 0x51EB851FU >> 37U;
+    const unsigned prod_4 = (uint64_t)input * 0xCCCCCCCDU >> 35U;
 
-    const uint32_t bits = (sizeof(std::remove_cvref_t<decltype(input)>) * 8) - std::countl_zero(input);
-    uint32_t len = (bits * 1233) >> 12;
+    const unsigned comp = 31U - __builtin_clz(input | 1U);
+    const unsigned len = (input + table[comp]) >> 16U;
+    const unsigned lead_z = (5U - len) << 3U;
 
-    len += (input >= LEN_TABLE[len]);
+    const uint64_t dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
+    const uint64_t dig_3 = prod_3 - ((prod_2 << 3U) + (prod_2 << 1U));
+    const uint64_t dig_4 = prod_4 - ((prod_3 << 3U) + (prod_3 << 1U));
+    const uint64_t dig_5 = input - ((prod_4 << 3U) + (prod_4 << 1U));
 
-    const uint16_t lead_z = std::numeric_limits<std::remove_cvref_t<decltype(input)>>::digits10 + 1 - len;
+    const uint64_t u8_res = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U;
 
-    const auto full_res = vsubq_u16(n_sub_t_shf_add_t_shf, res_slided);
+    const uint64_t u8_res_shf = u8_res >> lead_z;
+    const uint64_t u8_chars = u8_res_shf + u8_acii_zero;
 
-    const uint8x8_t chars = vadd_u8(vmovn_u16(full_res), vdup_n_u8('0'));
-    const uint8x8_t out = vtbl1_u8(chars, vadd_u8(INDICES, vdup_n_u8(lead_z)));
-
-    vst1_s8(reinterpret_cast<int8_t *>(buff), out);
+    // Final Store (8 bytes)
+    *reinterpret_cast<uint64_t *>(buff) = u8_chars;
 
     return len;
   }
@@ -248,7 +245,25 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint8_t>(char *__restrict__ buff, const uint8_t &input) noexcept
   {
-    return WriteCharsToPtrFowardReturnLength<uint16_t>(buff, static_cast<uint16_t>(input));
+    const unsigned u8_acii_zero = 0x3030'3030U;
+
+    const unsigned dig_1 = (unsigned)input * 0x0290U >> 16U;
+    const unsigned prod_2 = (unsigned)input * 0x199A >> 16U;
+
+    const unsigned len = (input < 10) ? 1U : (input < 100) ? 2U : 3U;
+    const unsigned lead_z = (3U - len) << 3U;
+
+    const unsigned dig_2 = prod_2 - ((dig_1 << 3U) + (dig_1 << 1U));
+    const unsigned dig_3 = input - ((prod_2 << 3U) + (prod_2 << 1U));
+
+    const unsigned u8_packed = dig_1 | dig_2 << 8U | dig_3 << 16U;
+
+    const unsigned u8_res_shf = u8_packed >> lead_z;
+    const unsigned u8_chars = u8_res_shf + u8_acii_zero;
+
+    *reinterpret_cast<unsigned *>(buff) = u8_chars;
+
+    return len;
   }
 }
 #endif

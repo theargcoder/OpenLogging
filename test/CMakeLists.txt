@@ -1,5 +1,9 @@
 # Set library path for the linker
-set(RYU_LIB /home/lucca/Work/ryu/build/libryu.a)
+if("${SYSTEM_ARCH}" MATCHES "(x86_64|amd64|i386|i686)")
+    set(RYU_LIB "/home/lucca/Work/ryu/build/libryu.a")
+elseif("${SYSTEM_ARCH}" MATCHES "(arm64|aarch64)")
+    set(RYU_LIB "/Users/luccalabattaglia/Work/ryu/build/libryu.a")
+endif()
 
 # Helper function to reduce "CMake shit"
 function(add_logging_test name src)

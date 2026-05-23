@@ -1,28 +1,13 @@
 #include "include/Algos/Competition.h"
-#include "include/Algos/Integer.h"
 #include "include/Helpers/Math.h"
 #include "include/Helpers/Simd.h"
-
-#include <charconv>
 
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
 #include <random>
 #include <stdio.h>
-#include <string>
 #include <vector>
-#include <x86intrin.h>
-
-// Evict a memory range from all levels of the cache
-inline void flush_cache(void *ptr, size_t size)
-{
-  char *cp = (char *)ptr;
-  for(size_t i = 0; i < size; i += 64)
-  {
-    _mm_clflush(cp + i);
-  }
-}
 
 /*
 int main(int argc, char **argv)
@@ -118,7 +103,7 @@ int main(int argc, char **argv)
 
     const uint64_t st_simdy = Helpers::Assembly::timer_start();
 
-    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(&buff[0], current_num);
+    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint16_t>(&buff[0], current_num);
 
     const uint64_t en_simdy = Helpers::Assembly::timer_end();
 

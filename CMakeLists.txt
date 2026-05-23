@@ -83,7 +83,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
       -Werror=shadow
       -Wnull-dereference
       -fno-omit-frame-pointer
-      -flto
       -fvectorize
       -fslp-vectorize
       -ffp-contract=fast)

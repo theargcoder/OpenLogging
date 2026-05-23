@@ -112,7 +112,7 @@ namespace Helpers::Numeric::Integral
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
                                 const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<UT>(ptr + static_cast<unsigned>(neg), val) + static_cast<unsigned>(neg);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
-    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>(ptr + static_cast<unsigned>(len), val) + static_cast<unsigned>(neg);
+                                const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<UT>(ptr + static_cast<unsigned>(neg), val) + static_cast<unsigned>(neg);
 #endif
 
                                 return len;
@@ -134,7 +134,7 @@ namespace Helpers::Numeric::Integral
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
                                 const uint32_t len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<T>(ptr, input);
 #elif defined(__ARM_NEON) || defined(__aarch64__)
-    const uint32_t len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(&buff[0], input);
+                                const uint32_t len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<T>(ptr, input);
 #endif
                                 return len;
                               });
