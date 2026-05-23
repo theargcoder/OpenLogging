@@ -17,38 +17,9 @@
 #if defined(__ARM_NEON) || defined(__aarch64__)
 namespace Helpers::Simd::ARM64
 {
-  __attribute__((always_inline)) static auto umul_hi_32x4(const uint32x4_t &v_a, const uint32x4_t &v_b) noexcept
-  {
-    const uint64x2_t prod_low = vmull_u32(vget_low_u32(v_a), vget_low_u32(v_b));
-    const uint64x2_t prod_high = vmull_high_u32(v_a, v_b);
+  using uint128_t = unsigned __int128;
 
-    // Re-combine the high 32-bits of each 64-bit result into one 128-bit vector This is essentially 'mulhi'
-    return vcombine_u32(vshrn_n_u64(prod_low, 32), vshrn_n_u64(prod_high, 32));
-  }
-
-  __attribute__((always_inline)) static auto umul_low_32x4(const uint32x4_t &v_a, const uint32x4_t &v_b) noexcept
-  {
-    return vmulq_u32(v_a, v_b);
-  }
-
-  __attribute__((always_inline)) static auto umul_hi_u16x8(const uint16x8_t &v_a, const uint16x8_t &v_b) noexcept
-  {
-    // 1. Widen multiply the low 4 elements (16-bit * 16-bit -> 32-bit)
-    const uint32x4_t prod_low = vmull_u16(vget_low_u16(v_a), vget_low_u16(v_b));
-
-    // 2. Widen multiply the high 4 elements (16-bit * 16-bit -> 32-bit)
-    const uint32x4_t prod_high = vmull_high_u16(v_a, v_b);
-
-    // 3. Shift right by 16 to keep only the "high" part of the 32-bit products
-    // 4. Narrow the 32-bit results back down to 16-bit and combine
-    return vcombine_u16(vshrn_n_u32(prod_low, 16), vshrn_n_u32(prod_high, 16));
-  }
-
-  __attribute__((always_inline)) static auto umul_low_u16x8(const uint16x8_t &v_a, const uint16x8_t &v_b) noexcept
-  {
-    // This returns the lower 16 bits of each 32-bit product
-    return vmulq_u16(v_a, v_b);
-  }
+#define ENTRY(digits, offset) ((((uint128_t)(digits)) << 64) - (offset))
 
   template <typename T>
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
@@ -57,103 +28,75 @@ namespace Helpers::Simd::ARM64
   template <>
   uint32_t WriteCharsToPtrFowardReturnLength<uint64_t>(char *__restrict__ buff, const uint64_t &input) noexcept
   {
-    static const constexpr uint16x8_t v_magics_u16_10e3 = { 0x625U, 0x47AFU, 0xCCCDU, 0xFFFF, 0x625U, 0x47AFU, 0xCCCDU, 0xFFFF };
-    static const constexpr int16x8_t v_first_shifts = { -9, -6, -3, 0, -9, -6, -3, 0 };
-    static const constexpr uint16_t MAX_uin16 = std::numeric_limits<uint16_t>::max();
-    static const constexpr uint16_t v_magic_div_10e3 = 0xCCCDU;
-    static const constexpr uint16_t v_magic_div_10e3_shf = -3;
+    // clang-format off
+    static const uint128_t table[64] = { ENTRY(1, 0), ENTRY(1, 0), ENTRY(1, 0), ENTRY(2, 10), ENTRY(2, 10), ENTRY(2, 10), ENTRY(3, 100), ENTRY(3, 100), ENTRY(3, 100), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(4, 1000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(5, 10000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(6, 100000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(7, 1000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(8, 10000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(9, 100000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(10, 1000000000), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(11, 10000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(12, 100000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(13, 1000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(14, 10000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(15, 100000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(16, 1000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(17, 10000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(18, 100000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(19, 1000000000000000000ULL), ENTRY(20, 10000000000000000000ULL) };
+    // clang-format on
+    const constexpr uint64_t ASCII_ZERO = 0x30303030'30303030;
 
-    if(input == 0)
-    {
-      *buff = '0';
-      *(buff + 1) = '\0';
-      return 1U;
-    }
+    const uint64_t dig_1 = ((uint128_t)input * 0x760F253EDB4AB0D3ULL) >> 126U;
+    const uint64_t div_2_tmp = ((uint128_t)input * 0x2725DD1D243ABA0FULL) >> 64U, div_2 = (((input - div_2_tmp) >> 1) + div_2_tmp) >> 59;
+    const uint64_t div_3_tmp = ((uint128_t)input * 0x70EF54646D496893ULL) >> 64U, div_3 = (((input - div_3_tmp) >> 1) + div_3_tmp) >> 56;
+    const uint64_t div_4 = ((uint128_t)input * 0x39A5652FB1137857ULL) >> 115U;
+    const uint64_t div_5_tmp = ((uint128_t)input * 0x203AF9EE756159B3ULL) >> 64U, div_5 = (((input - div_5_tmp) >> 1) + div_5_tmp) >> 49;
+    const uint64_t div_6 = ((uint128_t)input * 0xB424DC35095CD81ULL) >> 106U;
+    const uint64_t div_7 = ((uint128_t)input * 0x384B84D092ED0385ULL) >> 105U;
+    const uint64_t div_8 = ((uint128_t)input * 0x232F33025BD42233ULL) >> 101U;
+    const uint64_t div_9 = ((uint128_t)input * 0xAFEBFF0BCB24AAFFULL) >> 100U;
+    const uint64_t div_10 = ((uint128_t)input * 0xDBE6FECEBDEDD5BFULL) >> 97U;
+    const uint64_t div_11_tmp = ((uint128_t)input * 0x12E0BE826D694B2FULL) >> 64U, div_11 = (((input - div_11_tmp) >> 1) + div_11_tmp) >> 29;
+    const uint64_t div_12 = ((uint128_t)input * 0xABCC77118461CEFDULL) >> 90U;
+    const uint64_t div_13 = ((uint128_t)input * 0xD6BF94D5E57A42BDULL) >> 87U;
+    const uint64_t div_14 = ((uint128_t)input * 0x431BDE82D7B634DBULL) >> 82U;
+    const uint64_t div_15_tmp = ((uint128_t)input * 0x4F8B588E368F0847ULL) >> 64U, div_15 = (((input - div_15_tmp) >> 1) + div_15_tmp) >> 16;
+    const uint64_t div_16 = ((uint128_t)input * 0x346DC5D63886594BULL) >> 75;
+    const uint64_t div_17_tmp = ((uint128_t)input * 0x624DD2F1A9FBE77ULL) >> 64U, div_17 = (((input - div_17_tmp) >> 1) + div_17_tmp) >> 9;
+    const uint64_t div_18_tmp = ((uint128_t)input * 0x47AE147AE147AE15ULL) >> 64U, div_18 = (((input - div_18_tmp) >> 1) + div_18_tmp) >> 6;
+    const uint64_t div_19 = ((uint128_t)input * 0xCCCCCCCCCCCCCCCDULL) >> 67;
 
-    uint32_t lane_1 = Helpers::Math::Magic::Division::div_by_10_pow_n<16>(input);
-    uint32_t lane_2 = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<4>(Helpers::Math::Magic::Division::div_by_10_pow_n<12>(input));
-    uint32_t lane_3 = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<4>(Helpers::Math::Magic::Division::div_by_10_pow_n<8>(input));
-    uint32_t lane_4 = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<4>(Helpers::Math::Magic::Division::div_by_10_pow_n<4>(input));
-    uint32_t lane_5 = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<4>(input);
+    const unsigned comp = 63U - __builtin_clzll(input | 1ULL);
+    const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
-    const uint16x8_t top_mid_16x8 = vcombine_u16(vdup_n_u16(lane_1), vdup_n_u16(lane_2));
-    const uint16x8_t mid_low_16x8 = vcombine_u16(vdup_n_u16(lane_3), vdup_n_u16(lane_4));
-    const uint16x8_t low_low_16x8 = vdupq_n_u16(lane_5);
+    const unsigned lead_z_top = 20U - len;
+    const unsigned lead_z_mid = (len >= 12U && len >= 4U) ? 0U : 12U - len;
+    const unsigned lead_z_bot = (len >= 4U) ? 0U : 4U - len;
+    const unsigned mid_offset = (len < 12U) ? 0U : 8U - lead_z_top;
+    const unsigned bot_offset = (len < 4U) ? 0U : 16U - lead_z_top;
 
-    const uint16x8_t v_top_prod_16x8 = umul_hi_u16x8(top_mid_16x8, v_magics_u16_10e3);
-    const uint16x8_t v_mid_prod_16x8 = umul_hi_u16x8(mid_low_16x8, v_magics_u16_10e3);
-    const uint16x8_t v_low_prod_16x8 = umul_hi_u16x8(low_low_16x8, v_magics_u16_10e3);
+    const uint64_t dig_2 = div_2 - ((dig_1 << 1U) + (dig_1 << 3U));
+    const uint64_t dig_3 = div_3 - ((div_2 << 1U) + (div_2 << 3U));
+    const uint64_t dig_4 = div_4 - ((div_3 << 1U) + (div_3 << 3U));
+    const uint64_t dig_5 = div_5 - ((div_4 << 1U) + (div_4 << 3U));
+    const uint64_t dig_6 = div_6 - ((div_5 << 1U) + (div_5 << 3U));
+    const uint64_t dig_7 = div_7 - ((div_6 << 1U) + (div_6 << 3U));
+    const uint64_t dig_8 = div_8 - ((div_7 << 1U) + (div_7 << 3U));
+    const uint64_t dig_9 = div_9 - ((div_8 << 1U) + (div_8 << 3U));
+    const uint64_t dig_10 = div_10 - ((div_9 << 1U) + (div_9 << 3U));
+    const uint64_t dig_11 = div_11 - ((div_10 << 1U) + (div_10 << 3U));
+    const uint64_t dig_12 = div_12 - ((div_11 << 1U) + (div_11 << 3U));
+    const uint64_t dig_13 = div_13 - ((div_12 << 1U) + (div_12 << 3U));
+    const uint64_t dig_14 = div_14 - ((div_13 << 1U) + (div_13 << 3U));
+    const uint64_t dig_15 = div_15 - ((div_14 << 1U) + (div_14 << 3U));
+    const uint64_t dig_16 = div_16 - ((div_15 << 1U) + (div_15 << 3U));
+    const uint64_t dig_17 = div_17 - ((div_16 << 1U) + (div_16 << 3U));
+    const uint64_t dig_18 = div_18 - ((div_17 << 1U) + (div_17 << 3U));
+    const uint64_t dig_19 = div_19 - ((div_18 << 1U) + (div_18 << 3U));
+    const uint64_t dig_20 = input - ((div_19 << 1U) + (div_19 << 3U));
 
-    const uint16x8_t v_top_minus_v_subs = vandq_u16(vsubq_u16(top_mid_16x8, v_top_prod_16x8), uint16x8_t{ MAX_uin16, MAX_uin16, 0U, 0U, MAX_uin16, MAX_uin16, 0U, 0U });
-    const uint16x8_t v_mid_minus_v_subs = vandq_u16(vsubq_u16(mid_low_16x8, v_mid_prod_16x8), uint16x8_t{ MAX_uin16, MAX_uin16, 0U, 0U, MAX_uin16, MAX_uin16, 0U, 0U });
-    const uint16x8_t v_low_minus_v_subs = vandq_u16(vsubq_u16(low_low_16x8, v_low_prod_16x8), uint16x8_t{ MAX_uin16, MAX_uin16, 0U, 0U, MAX_uin16, MAX_uin16, 0U, 0U });
+    const uint64_t top_digits = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U | dig_6 << 40U | dig_7 << 48U | dig_8 << 56U;
+    const uint64_t mid_digits = dig_9 | dig_10 << 8U | dig_11 << 16U | dig_12 << 24U | dig_13 << 32U | dig_14 << 40U | dig_15 << 48U | dig_16 << 56U;
+    const unsigned bot_digits = dig_17 | dig_18 << 8U | dig_19 << 16U | dig_20 << 24U;
 
-    const uint16x8_t v_top_shf = vshlq_u16(v_top_minus_v_subs, vdupq_n_u16(-1));
-    const uint16x8_t v_mid_shf = vshlq_u16(v_mid_minus_v_subs, vdupq_n_u16(-1));
-    const uint16x8_t v_low_shf = vshlq_u16(v_low_minus_v_subs, vdupq_n_u16(-1));
+    const uint64_t top_chars = top_digits + ASCII_ZERO;
+    const uint64_t mid_chars = mid_digits + ASCII_ZERO;
+    const unsigned bot_chars = bot_digits + ASCII_ZERO;
 
-    const uint16x8_t v_top_add = vaddq_u16(v_top_shf, v_top_prod_16x8);
-    const uint16x8_t v_mid_add = vaddq_u16(v_mid_shf, v_mid_prod_16x8);
-    const uint16x8_t v_low_add = vaddq_u16(v_low_shf, v_low_prod_16x8);
+    const uint64_t output_top = top_chars >> (lead_z_top << 3U);
+    const uint64_t output_mid = mid_chars >> (lead_z_mid << 3U);
+    const unsigned output_bot = bot_chars >> (lead_z_bot << 3U);
 
-    const uint16x8_t v_top_digs_16x8 = vaddq_u16(vshlq_u16(v_top_add, v_first_shifts), vandq_u16(vcgtq_u16(top_mid_16x8, vdupq_n_u16(0)), uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 }));
-    const uint16x8_t v_mid_digs_16x8 = vaddq_u16(vshlq_u16(v_mid_add, v_first_shifts), vandq_u16(vcgtq_u16(mid_low_16x8, vdupq_n_u16(0)), uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 }));
-    const uint16x8_t v_low_digs_16x8 = vaddq_u16(vshlq_u16(v_low_add, v_first_shifts), vandq_u16(vcgtq_u16(low_low_16x8, vdupq_n_u16(0)), uint16x8_t{ 0, 0, 0, 1, 0, 0, 0, 1 }));
-
-    const uint16x8_t v_top_digs_16x8_div_10 = vshlq_u16(umul_hi_u16x8(v_top_digs_16x8, vdupq_n_u16(v_magic_div_10e3)), vdupq_n_u16(v_magic_div_10e3_shf));
-    const uint16x8_t v_mid_digs_16x8_div_10 = vshlq_u16(umul_hi_u16x8(v_mid_digs_16x8, vdupq_n_u16(v_magic_div_10e3)), vdupq_n_u16(v_magic_div_10e3_shf));
-    const uint16x8_t v_low_digs_16x8_div_10 = vshlq_u16(umul_hi_u16x8(v_low_digs_16x8, vdupq_n_u16(v_magic_div_10e3)), vdupq_n_u16(v_magic_div_10e3_shf));
-
-    const uint16x8_t v_top_digs_16x8_div_10_mul_10 = umul_low_u16x8(v_top_digs_16x8_div_10, vdupq_n_u16(10U));
-    const uint16x8_t v_mid_digs_16x8_div_10_mul_10 = umul_low_u16x8(v_mid_digs_16x8_div_10, vdupq_n_u16(10U));
-    const uint16x8_t v_low_digs_16x8_div_10_mul_10 = umul_low_u16x8(v_low_digs_16x8_div_10, vdupq_n_u16(10U));
-
-    const uint16x8_t top_full_res = vsubq_u16(v_top_digs_16x8, v_top_digs_16x8_div_10_mul_10);
-    const uint16x8_t mid_full_res = vsubq_u16(v_mid_digs_16x8, v_mid_digs_16x8_div_10_mul_10);
-    const uint16x8_t low_full_res = vandq_u16(vsubq_u16(v_low_digs_16x8, v_low_digs_16x8_div_10_mul_10), uint16x8_t{ MAX_uin16, MAX_uin16, MAX_uin16, MAX_uin16, 0, 0, 0, 0 });
-
-    // 3. Narrow 16x8 to 8x8
-    const uint16x8_t v_1_2_mask = vandq_u16(vcgtq_u16(top_full_res, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
-    const uint16x8_t v_3_4_mask = vandq_u16(vcgtq_u16(mid_full_res, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
-    const uint16x8_t v_5_0_mask = vandq_u16(vcgtq_u16(low_full_res, vdupq_n_u16(0)), uint16x8_t{ 128, 64, 32, 16, 8, 4, 2, 1 });
-    const uint32_t v_1_2_bitmask = vaddlvq_u8(v_1_2_mask);
-    const uint32_t v_3_4_bitmask = vaddlvq_u8(v_3_4_mask);
-    const uint32_t v_5_0_bitmask = vaddlvq_u8(v_5_0_mask);
-    const uint32_t combined_mask = (v_1_2_bitmask << 24U) | (v_3_4_bitmask << 16U) | (v_5_0_bitmask << 8U);
-
-    const uint16_t leading_z = std::countl_zero(combined_mask);
-
-    const uint8x16_t v_1234_combined = vcombine_u8(vmovn_u16(top_full_res), vmovn_u16(mid_full_res));
-    const uint8x8_t v_5_0_16_to8bit = vmovn_u16(low_full_res);
-
-    const uint8x16_t v_1234_and = vaddq_s8(v_1234_combined, vdupq_n_u8('0'));
-    const uint8x8_t v_50_and = vadd_s8(v_5_0_16_to8bit, int8x8_t{ '0', '0', '0', '0', 0, 0, 0, 0 });
-
-    if(leading_z <= 16)
-    {
-      static const constexpr int8x16_t indices = int8x16_t{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-
-      const int8x16_t shift_vector = vdupq_n_s8(leading_z);
-      const int8x16_t selector = vaddq_s8(indices, shift_vector);
-
-      // 3. Use TBL to "pick" the bytes at those new positions
-      const uint8x16_t result = vqtbl1q_u8(v_1234_and, selector);
-
-      vst1q_s8(reinterpret_cast<int8_t *>(buff), result);
-      vst1_s8(reinterpret_cast<int8_t *>(buff + (16 - leading_z)), v_50_and);
-    }
-    else
-    {
-      static const constexpr int8x8_t indices = int8x8_t{ 0, 1, 2, 3, 4, 5, 6, 7 };
-      const int8x8_t shift_vector = vdup_n_s8(leading_z - 16);
-      const int8x8_t selector = vadd_s8(indices, shift_vector);
-      // 3. Use TBL to "pick" the bytes at those new positions
-      const uint8x8_t result = vtbl1_u8(v_50_and, selector);
-
-      vst1_s8(reinterpret_cast<int8_t *>(buff), result);
-    }
-
-    const uint32_t len = (std::numeric_limits<uint64_t>::digits10 + 1) - leading_z;
+    *reinterpret_cast<uint64_t *>(buff) = output_top;
+    *reinterpret_cast<uint64_t *>(buff + mid_offset) = output_mid;
+    *reinterpret_cast<uint32_t *>(buff + bot_offset) = output_bot;
 
     return len;
   }
@@ -196,13 +139,13 @@ namespace Helpers::Simd::ARM64
     const uint64_t dig_10 = input - ((div_9 << 1) + (div_9 << 3));
 
     const uint64_t top_digits = dig_1 | dig_2 << 8U | dig_3 << 16U | dig_4 << 24U | dig_5 << 32U | dig_6 << 40U | dig_7 << 48U | dig_8 << 56U;
-    const uint64_t bot_digits = dig_9 | dig_10 << 8U;
+    const unsigned bot_digits = dig_9 | dig_10 << 8U;
 
     const uint64_t top_chars = top_digits + ASCII_ZERO;
-    const uint64_t bot_chars = bot_digits + ASCII_ZERO;
+    const unsigned bot_chars = bot_digits + ASCII_ZERO;
 
     const uint64_t output_top = top_chars >> (lead_z_top << 3U);
-    const uint64_t output_bot = bot_chars >> (lead_z_bot << 3U);
+    const unsigned output_bot = bot_chars >> (lead_z_bot << 3U);
 
     *reinterpret_cast<uint64_t *>(buff) = output_top;
     *reinterpret_cast<uint16_t *>(buff + bot_offset) = static_cast<uint16_t>(output_bot);
@@ -449,7 +392,7 @@ namespace Helpers::Simd::x86_64
     const unsigned len = ((uint128_t)input + table[comp]) >> 64U;
 
     const unsigned lead_z_top = 20U - len;
-    const unsigned lead_z_bot = (lead_z_top < 16U) ? 0U : lead_z_top;
+    const unsigned lead_z_bot = (len >= 4U) ? 0U : 4U - len;
     const unsigned bot_offset = (len < 4U) ? 0U : 16U - lead_z_top;
 
     const __m128i u16_orig_12 = _mm_blend_epi32(u64_res_1, u64_res_2, 0b1100);
