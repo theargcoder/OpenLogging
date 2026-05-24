@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 
     const uint64_t st_simdy = Helpers::Assembly::timer_start();
 
-    const auto len = Helpers::Simd::ARM64::WriteCharsToPtrFowardReturnLength<uint16_t>(&buff[0], current_num);
+    const auto len = Helpers::Simd::x86_64::WriteCharsToPtrFowardReturnLength<uint16_t>(&buff[0], current_num);
 
     const uint64_t en_simdy = Helpers::Assembly::timer_end();
 

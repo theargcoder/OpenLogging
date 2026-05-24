@@ -848,14 +848,17 @@ namespace Helpers::Math::IEEE754
   template <>
   auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &result, uint32_t &next_9_digits) noexcept
   {
-    static const constexpr uint32_t DEC9 = 1'000'000'000U;
+    const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-    const uint32_t p_hi_bottom = mantissa * table[0];
-    const uint32_t p_hi_bottom_1e9 = Helpers::Assembly::umulh32(p_hi_bottom, DEC9);
-    const uint32_t p_low_top = Helpers::Assembly::umulh32(mantissa, table[1]);
+    const uint64_t u64_prod_0 = mantissa * table[0];
+    const uint64_t u64_prod_1 = mantissa * table[1];
 
-    result = Helpers::Assembly::umulh32(mantissa, table[0]);
-    next_9_digits = p_low_top + p_hi_bottom_1e9;
+    const auto u32low_prod_0 = static_cast<uint32_t>(u64_prod_0);
+    const auto u32low_1e9 = Helpers::Assembly::umulh32(u32low_prod_0, DEC9);
+    const auto u32hig_prod_1 = static_cast<uint32_t>(u64_prod_1 >> 32U);
+
+    result = u64_prod_0 >> 32U;
+    next_9_digits = u32hig_prod_1 + u32low_1e9;
 
     while(next_9_digits >= DEC9)
     {
@@ -867,7 +870,7 @@ namespace Helpers::Math::IEEE754
   template <>
   auto Multiply<double>(const uint64_t &mantissa, const uint32_t *table, uint64_t &result, uint32_t &next_9_digits) noexcept
   {
-    static const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+    const constexpr uint64_t DEC9 = 1'000'000'000ULL;
 
     const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
     const uint64_t p_hi_mid_bottom = (mantissa)*m_high_mid;

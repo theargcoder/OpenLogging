@@ -31,8 +31,10 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const constexpr unsigned DEC8 = 100'000'000U;
     const constexpr uint32_t ROUNDING_FACTOR = 5U;
 
-    const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10 - 1);
-    const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10);
+    const constexpr auto MIN_PRECISION = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10 - 1);
+    const constexpr auto MAX_PRECISION = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10);
+
+    const constexpr auto PRECISION_TABLE = Constants::Tables::GetPrecistionTable<unsigned>();
 
     assert(PRECISION <= 8); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
@@ -78,7 +80,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     unsigned digits_10, remainder;
     Helpers::Math::IEEE754::Multiply<float>(mantissa, table, digits_10, extra_digits);
 
-    if(digits_10 < min_precision)
+    if(digits_10 < MIN_PRECISION)
     {
       digits_10 *= BASE;
       remainder = Helpers::Math::Magic::Division::div_by_10_pow_n<8>(extra_digits);
@@ -87,7 +89,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       extra_digits *= BASE;
       exp_base_10_int--;
     }
-    else if(digits_10 > max_precision)
+    else if(digits_10 > MAX_PRECISION)
     {
       Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
       Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(extra_digits);
@@ -122,10 +124,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       }
     }
 
-    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<unsigned>();
-    if(digits_10 >= precision_table[PRECISION])
+    if(digits_10 >= PRECISION_TABLE[PRECISION])
     {
-      digits_10 /= BASE;
+      Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(digits_10);
       exp_base_10_int++;
     }
 
@@ -161,6 +162,8 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 2);
     const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
+
+    const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
 
     assert(PRECISION <= MAX_PRECISION); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
@@ -261,10 +264,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       }
     }
 
-    static const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
     if(digits_10 >= precision_table[PRECISION])
     {
-      digits_10 /= BASE;
+      Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(digits_10);
       exp_base_10_int++;
     }
 
