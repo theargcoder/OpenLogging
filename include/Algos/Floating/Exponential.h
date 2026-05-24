@@ -20,31 +20,28 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 {
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
-  static auto ToStrCharArray(const T &input, int PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
+  static auto ToStrCharArray(char *__restrict__ buff, const T &input, int PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
     using Floating = Constants::Tables::Floating<double>;
     using type = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
-    static const constexpr type BASE = 10U;
-    static const constexpr type DEC8 = 100'000'000U;
-    static const constexpr uint32_t ROUNDING_FACTOR = 5U;
-    static const constexpr int32_t MAX_PRECISION = std::is_same_v<T, float> ? 8 : 17;
+    const constexpr type BASE = 10U;
+    const constexpr type DEC8 = 100'000'000U;
+    const constexpr uint32_t ROUNDING_FACTOR = 5U;
+    const constexpr int32_t MAX_PRECISION = std::is_same_v<T, float> ? 8 : 17;
 
-    static const constexpr auto SIZE_OF_BUFF = Floating::MAX_DIGITS10 + Floating::MAX_EXP_DIGITS10 + 10;
+    const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
 
-    static const constexpr uint8_t magic_number = std::is_same_v<T, float> ? 1 : 2;
-
-    static const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number);
-    static const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number + 1);
+    const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number);
+    const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - magic_number + 1);
 
     assert(PRECISION <= MAX_PRECISION); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
-    Helpers::Numeric::Integral::char_array_len<SIZE_OF_BUFF> buff;
-    buff.length = 0;
+    unsigned len = 0;
 
-    if(input < 0)
+    if(input < 0.0)
     {
-      buff.array[buff.length++] = '-';
+      buff[len++] = '-';
     }
 
     uint64_t mantissa;
@@ -53,26 +50,26 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     {
       if(mantissa == 0)
       {
-        buff.length = 3;
-        std::memcpy(&buff.array[3], "nan", 3);
+        len = 3;
+        std::memcpy(&buff[0], "nan", 3);
       }
       else if(mantissa == 1)
       {
-        buff.length = 3;
-        std::memcpy(&buff.array[3], "inf", 3);
+        len = 3;
+        std::memcpy(&buff[0], "inf", 3);
       }
       else if(mantissa == 2)
       {
-        buff.length = 4;
-        std::memcpy(&buff.array[3], "-inf", 4);
+        len = 4;
+        std::memcpy(&buff[0], "-inf", 4);
       }
       else
       {
-        buff.length = 5;
-        std::memcpy(&buff.array[5], "0.0E0", 5);
+        len = 5;
+        std::memcpy(&buff[0], "0.0E0", 5);
       }
 
-      return buff;
+      return len;
     }
 
     const auto *table = &Floating::DIGITS[exp_base_10_int][0];
@@ -144,30 +141,33 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       exp_base_10_int++;
     }
 
-    buff.array[buff.length++] = '.';
+    buff[len++] = '.';
 
-    remainder = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff.array[0] + buff.length, digits_10);
+    remainder = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff[len], digits_10);
 
-    std::swap(buff.array[buff.length - 1], buff.array[buff.length]);
+    std::swap(buff[len - 1], buff[len]);
 
-    buff.length += remainder;
+    len += remainder;
 
-    buff.array[buff.length++] = 'e';
+    buff[len++] = 'e';
 
-    buff.array[buff.length++] = (exp_base_10_int < 0) ? '-' : '+';
+    buff[len++] = (exp_base_10_int < 0) ? '-' : '+';
 
-    uint32_t exp_abs = std::abs(exp_base_10_int);
+    const uint32_t exp_abs = std::abs(exp_base_10_int);
 
-    buff.length += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff.array[0] + buff.length, exp_abs);
+    len += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff[len], exp_abs);
 
-    return buff;
+    return len;
   }
 
   template <typename T>
     requires std::is_floating_point_v<T> && (Helpers::Templating::Assert::at_most_64_bit_double_radix_2<T>())
   static std::string ToStr(const T &input, const int &PRECISION = Constants::Tables::Floating<T>::MAX_DIGITS10)
   {
-    const auto buff = Helpers::Numeric::Floating::ExponentialNotation::ToStrCharArray(input, PRECISION);
-    return std::string(&buff.array[0], buff.length);
+    char buff[64];
+
+    const uint32_t len = ToStrCharArray<T>(&buff[0], input, PRECISION);
+
+    return std::string{ &buff[0], len };
   }
 } // namespace Helpers::Numeric::Floating::ExponentialNotation

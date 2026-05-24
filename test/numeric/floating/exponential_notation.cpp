@@ -146,10 +146,6 @@ namespace
       UIntType raw_bits = dist(rng);
       Type val = std::bit_cast<Type>(raw_bits);
 
-      // Optional: Skip NaN and Infinity if your parser doesn't handle them yet
-      if(!std::isfinite(val))
-        continue;
-
       std::string open_logging, std_format, ryu;
 
       const auto st_open_logging = Helpers::Assembly::timer_start();
@@ -174,13 +170,15 @@ namespace
 
       if(open_logging != std_format)
       {
+        if(open_logging.contains("nan") && std_format.contains("nan"))
+          continue;
+
         const auto log_val = std::strtold(open_logging.c_str(), nullptr);
         const auto ref_val = std::strtold(std_format.c_str(), nullptr);
 
-        BOOST_CHECK_EQUAL(log_val, ref_val);
-
         if(log_val != ref_val)
         {
+          BOOST_CHECK_EQUAL(log_val, ref_val);
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
           open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
@@ -197,7 +195,7 @@ namespace
   const auto lopper_format_exponential = []<typename Type>(const int &PRECISION, const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took,
                                                            auto &open_logging_cycles, auto &std_fmt_took, auto &std_cycles, auto &ryu_took, auto &ryu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 100'000;
+    const constexpr auto WISHED_RANGE = 500'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
