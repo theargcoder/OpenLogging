@@ -157,7 +157,7 @@ namespace
       const auto en_std_fmt = Helpers::Assembly::timer_end();
 
       const auto st_ryu = Helpers::Assembly::timer_start();
-      ryu = Helpers::Numeric::Ryu::ToStr(val);
+      ryu = Helpers::Numeric::Ryu::ToStr(static_cast<double>(val), PRECISION);
       const auto en_ryu = Helpers::Assembly::timer_end();
 
       open_logging_took
@@ -217,16 +217,7 @@ namespace
       const auto en_std_fmt = Helpers::Assembly::timer_end();
 
       const auto st_ryu = Helpers::Assembly::timer_start();
-
-      if constexpr(std::is_same_v<double, Type>)
-      {
-        ryu = Helpers::Numeric::Ryu::ToStr(val, PRECISION);
-      }
-      else
-      {
-        ryu = Helpers::Numeric::Ryu::ToStr(val);
-      }
-
+      ryu = Helpers::Numeric::Ryu::ToStr(static_cast<double>(val), PRECISION);
       const auto en_ryu = Helpers::Assembly::timer_end();
 
       open_logging_took
@@ -242,10 +233,12 @@ namespace
         const auto log_val = std::strtold(open_logging.c_str(), nullptr);
         const auto ref_val = std::strtold(std_format.c_str(), nullptr);
 
-        BOOST_CHECK_EQUAL(log_val, ref_val);
+        if(open_logging.contains("nan") && std_format.contains("nan"))
+          continue;
 
         if(log_val != ref_val) // if(!almost_equal(i, log_val, ref_val))
         {
+          BOOST_CHECK_EQUAL(log_val, ref_val);
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
           open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
