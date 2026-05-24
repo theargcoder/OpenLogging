@@ -142,9 +142,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     buff[len++] = (exp_base_10_int < 0) ? '-' : '+';
 
-    const uint32_t exp_abs = std::abs(exp_base_10_int);
+    const unsigned exp_abs = std::abs(exp_base_10_int);
 
-    len += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len], exp_abs);
+    len += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<uint16_t>(&buff[len], static_cast<uint16_t>(exp_abs));
 
     return len;
   }
@@ -282,9 +282,9 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     buff[len++] = (exp_base_10_int < 0) ? '-' : '+';
 
-    const uint32_t exp_abs = std::abs(exp_base_10_int);
+    const unsigned exp_abs = std::abs(exp_base_10_int);
 
-    len += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<type>(&buff[len], exp_abs);
+    len += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<uint16_t>(&buff[len], static_cast<uint16_t>(exp_abs));
 
     return len;
   }

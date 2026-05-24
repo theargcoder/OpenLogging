@@ -873,11 +873,12 @@ namespace Helpers::Math::IEEE754
     const constexpr uint64_t DEC9 = 1'000'000'000ULL;
 
     const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
-    const uint64_t p_hi_mid_bottom = (mantissa)*m_high_mid;
-    const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(p_hi_mid_bottom, DEC9));
     const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
 
-    result = Helpers::Assembly::umulh64(mantissa, m_high_mid);
+    const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
+    const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC9));
+
+    result = u128_prod >> 64U;
     next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
 
     while(next_9_digits >= DEC9)
