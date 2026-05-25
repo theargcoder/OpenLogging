@@ -2193,7 +2193,7 @@ namespace Constants::Tables
   static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
   {
     constexpr auto N = sizeof...(I);
-    return std::array<Type, N>{ (10 * Helpers::Math::Constexpr::ipow(Type{ 10 }, I))... };
+    return std::array<Type, N>{ (Helpers::Math::Constexpr::ipow(Type{ 10 }, I))... };
   }
 
   template <typename Type>
