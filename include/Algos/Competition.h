@@ -118,18 +118,33 @@ namespace Helpers::Numeric::Std
 
 namespace Helpers::Numeric::Ryu
 {
-  static auto ToStr(double v, const auto &PRECISION)
+  namespace Exponential
   {
-    char buffer[32];
-    int len = d2exp_buffered_n(v, PRECISION, &buffer[0]);
-    return std::string(&buffer[0], len);
-  }
+    static std::string ToStr(double v, const int &PRECISION)
+    {
+      char buffer[32];
+      const int len = d2exp_buffered_n(v, PRECISION, &buffer[0]);
+      return std::string{ &buffer[0], static_cast<size_t>(len) };
+    }
 
-  static auto ToStr(float v)
+    static std::string ToStr(float v, const int &PRECISION)
+    {
+      return ToStr(static_cast<double>(v), PRECISION);
+    }
+  } // namespace Exponential
+
+  namespace Fixed
   {
-    char buffer[32];
-    int len = f2s_buffered_n(v, &buffer[0]);
-    return std::string(&buffer[0], len);
-  }
+    static std::string ToStr(double v, const int &PRECISION)
+    {
+      char buffer[2048];
+      const int len = d2fixed_buffered_n(v, PRECISION, &buffer[0]);
+      return std::string{ &buffer[0], static_cast<size_t>(len) };
+    }
 
+    static std::string ToStr(float v, const int &PRECISION)
+    {
+      return ToStr(static_cast<double>(v), PRECISION);
+    }
+  } // namespace Fixed
 } // namespace Helpers::Numeric::Ryu

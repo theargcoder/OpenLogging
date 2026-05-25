@@ -34,7 +34,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const constexpr auto MIN_PRECISION = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10 - 1);
     const constexpr auto MAX_PRECISION = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10);
 
-    const constexpr auto PRECISION_TABLE = Constants::Tables::GetPrecistionTable<unsigned>();
+    const constexpr auto PRECISION_TABLE = Constants::Tables::Exponential::GetPrecistionTable<unsigned>();
 
     assert(PRECISION <= 8); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 
@@ -163,7 +163,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const constexpr auto min_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 2);
     const constexpr auto max_precision = Helpers::Math::Constexpr::ipow(type{ 10 }, std::numeric_limits<type>::digits10 - 1);
 
-    const constexpr auto precision_table = Constants::Tables::GetPrecistionTable<type>();
+    const constexpr auto precision_table = Constants::Tables::Exponential::GetPrecistionTable<type>();
 
     assert(PRECISION <= MAX_PRECISION); // no point of printing more than 8 or 17 digits respectively its actually not even necesary for round tripping
 

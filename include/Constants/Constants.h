@@ -2189,19 +2189,39 @@ namespace Constants::Tables
     return GetExponentialRoundingTableImpl<Type, BASE>(std::make_index_sequence<N>());
   }
 
-  template <typename Type, std::size_t... I>
-  static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
+  namespace Exponential
   {
-    constexpr auto N = sizeof...(I);
-    return std::array<Type, N>{ (Helpers::Math::Constexpr::ipow(Type{ 10 }, I))... };
-  }
+    template <typename Type, std::size_t... I>
+    static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
+    {
+      constexpr auto N = sizeof...(I);
+      return std::array<Type, N>{ Type{ 10 } * (Helpers::Math::Constexpr::ipow(Type{ 10 }, I))... };
+    }
 
-  template <typename Type>
-  static constexpr auto GetPrecistionTable()
+    template <typename Type>
+    static constexpr auto GetPrecistionTable()
+    {
+      const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+      return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
+    }
+  } // namespace Exponential
+
+  namespace Fixed
   {
-    const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
-    return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
-  }
+    template <typename Type, std::size_t... I>
+    static constexpr auto GetPrecistionTableImpl(std::index_sequence<I...> /*unused*/)
+    {
+      constexpr auto N = sizeof...(I);
+      return std::array<Type, N>{ (Helpers::Math::Constexpr::ipow(Type{ 10 }, I))... };
+    }
+
+    template <typename Type>
+    static constexpr auto GetPrecistionTable()
+    {
+      const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+      return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
+    }
+  } // namespace Fixed
 
   template <typename TypeBase, std::size_t... I>
   static constexpr auto GetTruncationTableImpl(std::index_sequence<I...> /*unused*/)
