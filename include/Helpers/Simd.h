@@ -227,6 +227,7 @@ namespace Helpers::Simd::x86_64
     const __m256i ZERO = _mm256_setzero_si256();
     const __m256i DEC9 = _mm256_set1_epi64x(1'000'000'000U);
     const __m256i DEC8 = _mm256_set1_epi64x(100'000'000U);
+    const __m256i DIV9 = _mm256_set1_epi64x(0x12E0BE83U);
 
     const __m256i u64_prod = _mm256_mul_epu32(MANTISSA, TABLE);
     const __m256i u32_low_prod = _mm256_blend_epi32(u64_prod, ZERO, 0b1010'1010);
@@ -235,9 +236,27 @@ namespace Helpers::Simd::x86_64
     const __m256i u32_low_prod_1e9 = _mm256_mul_epu32(u32_low_prod, DEC9);
     const __m256i u32_low_prod_1e9_hig = _mm256_srli_epi64(u32_low_prod_1e9, 32U);
 
-    const __m256i u32_slided = _mm256_alignr_epi64(u32_low_prod_1e9_hig, ZERO, 7);
+    const __m256i u32_slided = _mm256_alignr_epi64(u32_low_prod_1e9_hig, ZERO, 3);
 
-    const __m256i u32_res = _mm256_add_epi64(u32_hig_prod, u32_slided);
+    const __m256i u32_n = _mm256_add_epi64(u32_hig_prod, u32_slided);
+
+    // else if constexpr(N == 9) { const uint32_t t = Helpers::Assembly::umulh32(n, 0x12E0BE83ULL); return (((n - t) >> 1) + t) >> 29U; }
+
+    const __m256i u32_prod = _mm256_mul_epu32(u32_n, DIV9);
+
+    const __m256i u32_t = _mm256_srli_epi64(u32_prod, 32);
+
+    const __m256i u32_n_sub_t = _mm256_sub_epi64(u32_n, u32_t);
+
+    const __m256i u32_n_sub_t_shf = _mm256_srli_epi64(u32_n_sub_t, 1);
+
+    const __m256i u32_n_sub_t_shf_add_t = _mm256_add_epi64(u32_n_sub_t_shf, u32_t);
+
+    const __m256i u32_div9 = _mm256_srli_epi64(u32_n_sub_t_shf_add_t, 29);
+
+    const __m256i u32_div9_slided = _mm256_alignr_epi64(ZERO, u32_div9, 1);
+
+    const __m256i u32_res = _mm256_add_epi64(u32_n, u32_div9_slided);
 
     const __mmask8 u32_res_lt_1e8 = _mm256_cmplt_epi64_mask(u32_res, DEC8);
     const __mmask8 u32_res_ge_1e9 = _mm256_cmpge_epi64_mask(u32_res, DEC9);

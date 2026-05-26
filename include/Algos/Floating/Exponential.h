@@ -27,12 +27,8 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
   {
     using Floating = Constants::Tables::Floating<double>;
 
-    const constexpr unsigned BASE = 10U;
-    const constexpr unsigned DEC8 = 100'000'000U;
     const constexpr uint32_t ROUNDING_FACTOR = 5U;
-
-    const constexpr auto MIN_PRECISION = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10 - 1);
-    const constexpr auto MAX_PRECISION = Helpers::Math::Constexpr::ipow(10U, std::numeric_limits<unsigned>::digits10);
+    const constexpr uint32_t DEC9 = 1'000'000'000U;
 
     const constexpr auto PRECISION_TABLE = Constants::Tables::Exponential::GetPrecistionTable<unsigned>();
 
@@ -76,63 +72,174 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
     const auto *table = &Floating::DIGITS[exp_base_10_int][0];
     exp_base_10_int = (((exp_base_10_int - Floating::BIAS) * 78'913) >> 18U);
 
-    unsigned extra_digits;
-    unsigned digits_10, remainder;
-    Helpers::Math::IEEE754::Exponential::Multiply<float>(mantissa, table, digits_10, extra_digits);
+    unsigned first_9_digits, middle_9_digits, last_9_digits, remainder;
+    const unsigned mul_cmp_res = Helpers::Simd::x86_64::Multiply<float>(mantissa, table, first_9_digits, middle_9_digits, last_9_digits);
 
-    if(digits_10 < MIN_PRECISION)
-    {
-      digits_10 *= BASE;
-      remainder = Helpers::Math::Magic::Division::div_by_10_pow_n<8>(extra_digits);
-      digits_10 += remainder;
-      extra_digits -= remainder * DEC8;
-      extra_digits *= BASE;
-      exp_base_10_int--;
-    }
-    else if(digits_10 > MAX_PRECISION)
-    {
-      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
-      Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(extra_digits);
-      extra_digits += remainder * DEC8;
-      exp_base_10_int++;
-    }
+    int lvl_1 = (1 - (mul_cmp_res & 0b11U));
+    int lvl_2 = (1 - ((mul_cmp_res & 0b11'0000'0000U) >> 8U));
+    int lvl_3 = (1 - ((mul_cmp_res & 0b11'0000'0000'0000'0000U) >> 16U));
 
-    Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, std::numeric_limits<unsigned>::digits10 - PRECISION - 2);
-
-    const bool extra = extra_digits != 0 || remainder != 0;
-
-    Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(digits_10, remainder);
-
-    if(remainder > ROUNDING_FACTOR)
-    {
-      digits_10++;
-    }
-    else if(remainder == ROUNDING_FACTOR)
-    {
-      if(extra)
-      {
-        digits_10++;
-      }
-      else
-      {
-        // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
-        remainder = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<1>(digits_10); // digits_10 % 10;
-        if(remainder & 1U)
-        {
-          digits_10++;
-        }
-      }
-    }
-
-    if(digits_10 >= PRECISION_TABLE[PRECISION])
-    {
-      Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(digits_10);
-      exp_base_10_int++;
-    }
+    int round_lvl_1 = 8 + lvl_1;
+    int round_lvl_2 = 8 + lvl_2;
+    int round_lvl_3 = 8 + lvl_3;
 
     buff[len++] = '.';
 
-    remainder = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len], digits_10);
+    if(PRECISION < round_lvl_1)
+    {
+      const auto this_precision = PRECISION;
+      const auto to_trunc = std::numeric_limits<unsigned>::digits10 - this_precision - 2 + lvl_1;
+      exp_base_10_int += lvl_1;
+
+      Helpers::Math::Precision::truncate_plus_1_quo_rem(first_9_digits, remainder, to_trunc);
+
+      const bool extra = remainder != 0 || middle_9_digits != 0 || last_9_digits != 0;
+
+      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(first_9_digits, remainder);
+
+      if(remainder > ROUNDING_FACTOR)
+      {
+        first_9_digits++;
+      }
+      else if(remainder == ROUNDING_FACTOR)
+      {
+        if(extra)
+        {
+          first_9_digits++;
+        }
+        else
+        {
+          // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+          remainder = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<1>(first_9_digits); // digits_10 % 10;
+          if(remainder & 1U)
+          {
+            first_9_digits++;
+          }
+        }
+      }
+
+      const auto precision_val = PRECISION_TABLE[PRECISION];
+      if(first_9_digits >= precision_val)
+      {
+        Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(first_9_digits);
+        exp_base_10_int++;
+      }
+
+      remainder = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len], first_9_digits);
+    }
+    else if(PRECISION < (round_lvl_1 + round_lvl_2))
+    {
+      const auto this_precision = PRECISION - round_lvl_1 - round_lvl_2;
+      const auto to_trunc = std::numeric_limits<unsigned>::digits10 - this_precision - 2;
+      exp_base_10_int += lvl_2;
+
+      Helpers::Math::Precision::truncate_plus_1_quo_rem(middle_9_digits, remainder, to_trunc);
+
+      const bool extra = remainder != 0 || last_9_digits != 0;
+
+      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(middle_9_digits, remainder);
+
+      if(remainder > ROUNDING_FACTOR)
+      {
+        middle_9_digits++;
+      }
+      else if(remainder == ROUNDING_FACTOR)
+      {
+        if(extra)
+        {
+          middle_9_digits++;
+        }
+        else
+        {
+          // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+          remainder = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<1>(middle_9_digits); // digits_10 % 10;
+          if(remainder & 1U)
+          {
+            middle_9_digits++;
+          }
+        }
+      }
+
+      const auto precision_val = PRECISION_TABLE[this_precision];
+      if(middle_9_digits >= precision_val)
+      {
+        while(middle_9_digits > precision_val)
+        {
+          first_9_digits++;
+          middle_9_digits -= precision_val;
+        }
+
+        if(first_9_digits >= DEC9)
+        {
+          Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(middle_9_digits);
+          exp_base_10_int++;
+        }
+      }
+
+      remainder = 0;
+      remainder += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len], first_9_digits);
+      remainder += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len + remainder], middle_9_digits);
+    }
+    else if(PRECISION < (round_lvl_1 + round_lvl_2 + round_lvl_3))
+    {
+      const auto this_precision = PRECISION - round_lvl_1 - round_lvl_2;
+      const auto to_trunc = std::numeric_limits<unsigned>::digits10 - this_precision - 2;
+      exp_base_10_int += lvl_3;
+
+      Helpers::Math::Precision::truncate_plus_1_quo_rem(middle_9_digits, remainder, to_trunc);
+
+      const bool extra = remainder != 0;
+
+      Helpers::Math::Magic::Modulo::mod_by_10_pow_n_void<1>(middle_9_digits, remainder);
+
+      if(remainder > ROUNDING_FACTOR)
+      {
+        last_9_digits++;
+      }
+      else if(remainder == ROUNDING_FACTOR)
+      {
+        if(extra)
+        {
+          last_9_digits++;
+        }
+        else
+        {
+          // Apply Round-Ties-To-Even on the LAST VISIBLE DIGIT.
+          remainder = Helpers::Math::Magic::Modulo::mod_by_10_pow_n<1>(middle_9_digits); // digits_10 % 10;
+          if(remainder & 1U)
+          {
+            last_9_digits++;
+          }
+        }
+      }
+
+      const auto precision_val = PRECISION_TABLE[this_precision];
+      if(last_9_digits >= precision_val)
+      {
+        while(last_9_digits > precision_val)
+        {
+          middle_9_digits++;
+          last_9_digits -= precision_val;
+        }
+
+        if(middle_9_digits >= DEC9)
+        {
+          first_9_digits++;
+          middle_9_digits -= DEC9;
+
+          if(first_9_digits >= DEC9)
+          {
+            Helpers::Math::Magic::Division::div_by_10_pow_n_void<1>(middle_9_digits);
+            exp_base_10_int++;
+          }
+        }
+      }
+
+      remainder = 0;
+      remainder += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len], first_9_digits);
+      remainder += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len + remainder], middle_9_digits);
+      remainder += Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen<unsigned>(&buff[len + remainder], last_9_digits);
+    } // else no rounding lol
 
     std::swap(buff[len - 1], buff[len]);
 

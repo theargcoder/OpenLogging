@@ -2201,7 +2201,7 @@ namespace Constants::Tables
     template <typename Type>
     static constexpr auto GetPrecistionTable()
     {
-      const constexpr auto N = std::numeric_limits<Type>::digits10 - 1;
+      const constexpr auto N = std::numeric_limits<Type>::digits10;
       return GetPrecistionTableImpl<Type>(std::make_index_sequence<N>());
     }
   } // namespace Exponential

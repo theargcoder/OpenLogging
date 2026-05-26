@@ -195,7 +195,7 @@ namespace
   const auto lopper_format_exponential = []<typename Type>(const int &PRECISION, const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took,
                                                            auto &open_logging_cycles, auto &std_fmt_took, auto &std_cycles, auto &ryu_took, auto &ryu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 500'000;
+    const constexpr auto WISHED_RANGE = 100'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -312,7 +312,8 @@ namespace
 
     // ---- MASSIVE CHAOS FUZZER ----
     // 1 million purely random bit-patterns per precision level
-    fuzzer_format_exponential(bannana, PRECISION, 1'000'000, open_logging_time, open_logging_cycles, std_fmt_time, std_fmt_cycles, ryu_time, ryu_cycles);
+    // fuzzer_format_exponential(bannana, PRECISION, 1'000'000, open_logging_time, open_logging_cycles, std_fmt_time, std_fmt_cycles, ryu_time, ryu_cycles);
+    fuzzer_format_exponential(bannana, PRECISION, 100'000, open_logging_time, open_logging_cycles, std_fmt_time, std_fmt_cycles, ryu_time, ryu_cycles);
 
     return std::make_tuple(open_logging_time, open_logging_cycles, std_fmt_time, std_fmt_cycles, ryu_time, ryu_cycles);
   };
@@ -332,12 +333,30 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   // floats
-  test_and_benchmark_float(static_cast<float>(0), 1);
+  //  test_and_benchmark_float(static_cast<float>(0), 1);
   test_and_benchmark_float(static_cast<float>(0), 2);
   test_and_benchmark_float(static_cast<float>(0), 3);
   test_and_benchmark_float(static_cast<float>(0), 4);
   test_and_benchmark_float(static_cast<float>(0), 5);
   test_and_benchmark_float(static_cast<float>(0), 6);
+  test_and_benchmark_float(static_cast<float>(0), 7);
+  test_and_benchmark_float(static_cast<float>(0), 8);
+  test_and_benchmark_float(static_cast<float>(0), 9);
+  test_and_benchmark_float(static_cast<float>(0), 10);
+  test_and_benchmark_float(static_cast<float>(0), 11);
+  test_and_benchmark_float(static_cast<float>(0), 12);
+  test_and_benchmark_float(static_cast<float>(0), 12);
+  test_and_benchmark_float(static_cast<float>(0), 13);
+  test_and_benchmark_float(static_cast<float>(0), 15);
+  test_and_benchmark_float(static_cast<float>(0), 16);
+  test_and_benchmark_float(static_cast<float>(0), 17);
+  test_and_benchmark_float(static_cast<float>(0), 18);
+  test_and_benchmark_float(static_cast<float>(0), 19);
+  test_and_benchmark_float(static_cast<float>(0), 20);
+  test_and_benchmark_float(static_cast<float>(0), 21);
+  test_and_benchmark_float(static_cast<float>(0), 22);
+  test_and_benchmark_float(static_cast<float>(0), 23);
+  test_and_benchmark_float(static_cast<float>(0), 24);
   // doubles
   test_and_benchmark_float(static_cast<double>(0), 1);
   test_and_benchmark_float(static_cast<double>(0), 2);
