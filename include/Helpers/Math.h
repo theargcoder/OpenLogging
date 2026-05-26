@@ -728,25 +728,21 @@ namespace Helpers::Math::IEEE754
 {
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-  static bool GetMantissaExponent(const T &input, uint64_t &mantissa, int &exponent) noexcept;
-
-  template <typename T>
-    requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-  static auto Multiply(const uint64_t &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept;
+  static bool GetMantissaExponent(const T &input, auto &mantissa, int &exponent) noexcept;
 
   template <>
-  bool GetMantissaExponent<float>(const float &input, uint64_t &mantissa, int &exponent) noexcept
+  bool GetMantissaExponent<float>(const float &input, uint32_t &mantissa, int &exponent) noexcept
   {
     using underlying = uint32_t;
 
     static const constexpr uint8_t EXPONENT_ST = 23U;
-    static const constexpr uint8_t MANTISSA_SHIFT = 9U;
+    static const constexpr uint8_t MANTISSA_SHIFT = 8U;
     static const constexpr uint8_t EXPONENT_LEFT_OFFSET = sizeof(float) * 8 - EXPONENT_ST - 1;
     static const constexpr uint8_t EXPONENT_ALL_BITS_ON = 255U; // as defined in IEEE-754
 
     static const constexpr int16_t MIN_EXPONENT = std::numeric_limits<float>::min_exponent - std::numeric_limits<float>::digits;
     static const constexpr int16_t EXPONENT_TABLE_OFFSET = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
-    static const constexpr int16_t EXPONENT_TABLE_BIAS = -EXPONENT_TABLE_OFFSET + MIN_EXPONENT + EXPONENT_ST - 1;
+    static const constexpr int16_t EXPONENT_TABLE_BIAS = -EXPONENT_TABLE_OFFSET + MIN_EXPONENT + EXPONENT_ST;
 
     static const constexpr underlying EXPONENT_ONLY = 0x7F800000U;
     static const constexpr underlying MANTISSA_ONLY = 0x007FFFFFU;
@@ -768,7 +764,7 @@ namespace Helpers::Math::IEEE754
 
     if(exp > 0) [[likely]]
     {
-      mantissa = static_cast<uint64_t>(man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
+      mantissa = (man | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
       exponent = exp + EXPONENT_TABLE_BIAS;
     }
     else
@@ -777,7 +773,7 @@ namespace Helpers::Math::IEEE754
 
       if(shift_internal <= EXPONENT_ST) [[likely]]
       {
-        mantissa = static_cast<uint64_t>(((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
+        mantissa = (((man << shift_internal) & MANTISSA_ONLY) | MANTISSA_IMPLICIT_1) << MANTISSA_SHIFT;
         exponent = 1 - shift_internal + EXPONENT_TABLE_BIAS;
       }
       else
@@ -845,46 +841,127 @@ namespace Helpers::Math::IEEE754
     return false;
   }
 
-  template <>
-  auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &result, uint32_t &next_9_digits) noexcept
+  namespace Exponential
   {
-    const constexpr uint32_t DEC9 = 1'000'000'000U;
+    template <typename T>
+      requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
+    static inline auto Multiply(const auto &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept;
 
-    const uint64_t u64_prod_0 = mantissa * table[0];
-    const uint64_t u64_prod_1 = mantissa * table[1];
-
-    const auto u32low_prod_0 = static_cast<uint32_t>(u64_prod_0);
-    const auto u32low_1e9 = Helpers::Assembly::umulh32(u32low_prod_0, DEC9);
-    const auto u32hig_prod_1 = static_cast<uint32_t>(u64_prod_1 >> 32U);
-
-    result = u64_prod_0 >> 32U;
-    next_9_digits = u32hig_prod_1 + u32low_1e9;
-
-    while(next_9_digits >= DEC9)
+    template <>
+    inline auto Multiply<float>(const uint32_t &mantissa, const uint32_t *table, uint32_t &result, uint32_t &next_9_digits) noexcept
     {
-      result++;
-      next_9_digits -= DEC9;
-    }
-  }
+      const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-  template <>
-  auto Multiply<double>(const uint64_t &mantissa, const uint32_t *table, uint64_t &result, uint32_t &next_9_digits) noexcept
+      const uint64_t u64_prod_0 = static_cast<uint64_t>(mantissa) * table[0];
+      const uint64_t u64_prod_1 = static_cast<uint64_t>(mantissa) * table[1];
+
+      const auto u32low_prod_0 = static_cast<uint32_t>(u64_prod_0);
+      const auto u32low_1e9 = Helpers::Assembly::umulh32(u32low_prod_0, DEC9);
+      const auto u32hig_prod_1 = static_cast<uint32_t>(u64_prod_1 >> 32U);
+
+      result = u64_prod_0 >> 32U;
+      next_9_digits = u32hig_prod_1 + u32low_1e9;
+
+      while(next_9_digits >= DEC9)
+      {
+        result++;
+        next_9_digits -= DEC9;
+      }
+    }
+
+    template <>
+    inline auto Multiply<double>(const uint64_t &mantissa, const uint32_t *table, uint64_t &result, uint32_t &next_9_digits) noexcept
+    {
+      const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+
+      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
+      const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
+
+      const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
+      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC9));
+
+      result = u128_prod >> 64U;
+      next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
+
+      while(next_9_digits >= DEC9)
+      {
+        result++;
+        next_9_digits -= DEC9;
+      }
+    }
+  } // namespace Exponential
+
+  namespace Fixed
   {
-    const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+    template <typename T>
+      requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
+    static auto Multiply(const uint64_t &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept;
 
-    const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
-    const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
-
-    const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
-    const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC9));
-
-    result = u128_prod >> 64U;
-    next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
-
-    while(next_9_digits >= DEC9)
+    template <>
+    auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &result, uint32_t &next_9_digits) noexcept
     {
-      result++;
-      next_9_digits -= DEC9;
+      const constexpr uint64_t DEC_u64_9 = 1'000'000'000ULL;
+
+      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC_u64_9 + table[1];
+      const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
+
+      const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
+      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC_u64_9));
+
+      auto u64_result = u128_prod >> 64U;
+      auto u64_next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
+
+      while(u64_next_9_digits >= DEC_u64_9)
+      {
+        u64_result++;
+        u64_next_9_digits -= DEC_u64_9;
+      }
+
+      const constexpr uint32_t DEC9 = 1'000'000'000U;
+
+      const uint64_t u64_prod_0 = mantissa * table[0];
+      const uint64_t u64_prod_1 = mantissa * table[1];
+      const uint64_t u64_prod_2 = mantissa * table[2];
+
+      const auto u32_0_prod_low = static_cast<uint32_t>(u64_prod_0);
+      const auto u32_1_prod_low = static_cast<uint32_t>(u64_prod_1);
+      const auto u32_1_prod_hig = static_cast<uint32_t>(u64_prod_1 >> 32U);
+      const auto u32_2_prod_hig = static_cast<uint32_t>(u64_prod_2 >> 32U);
+      const auto u32_0_prod_low_1e9 = Helpers::Assembly::umulh32(u32_0_prod_low, DEC9);
+      const auto u32_1_prod_low_1e9 = Helpers::Assembly::umulh32(u32_1_prod_low, DEC9);
+
+      const auto u32_fir_9_digits = u64_prod_0 >> 32U;
+      const auto u32_next_9_digits = u32_1_prod_hig + u32_0_prod_low_1e9;
+      const auto u32_last__9_digits = u32_2_prod_hig + u32_1_prod_low_1e9;
+
+      while(next_9_digits >= DEC9)
+      {
+        result++;
+        next_9_digits -= DEC9;
+      }
     }
-  }
-}
+
+    template <>
+    auto Multiply<double>(const uint64_t &mantissa, const uint32_t *table, uint64_t &result, uint32_t &next_9_digits) noexcept
+    {
+      const constexpr uint64_t DEC9 = 1'000'000'000ULL;
+
+      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
+      const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
+
+      const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
+      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC9));
+
+      result = u128_prod >> 64U;
+      next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
+
+      while(next_9_digits >= DEC9)
+      {
+        result++;
+        next_9_digits -= DEC9;
+      }
+    }
+  } // namespace Fixed
+} // namespace Helpers::Math::IEEE754
+
+//

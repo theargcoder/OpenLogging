@@ -1,5 +1,3 @@
-#include "include/Algos/Floating/DigitsPrecision.h"
-#include "include/Helpers/Math.h"
 #define BOOST_TEST_MODULE ScientificNotatioTests
 #include <boost/test/included/unit_test.hpp>
 
@@ -11,7 +9,9 @@
 #include <type_traits>
 
 #include "include/Algos/Competition.h"
+#include "include/Algos/Floating/DigitsPrecision.h"
 #include "include/Algos/Floating/Exponential.h"
+#include "include/Helpers/Math.h"
 
 namespace
 {
@@ -198,7 +198,7 @@ namespace
   const auto lopper_format_exponential = []<typename Type>(const int &PRECISION, const bool &PLUS, const Type &DELIM, const Type &JUMP, auto &open_logging_took,
                                                            auto &open_logging_cycles, auto &std_fmt_took, auto &std_cycles, auto &ryu_took, auto &ryu_cycles) -> void
   {
-    const constexpr auto WISHED_RANGE = 500'000;
+    const constexpr auto WISHED_RANGE = 100'000;
     const constexpr auto MAX_NUM = std::numeric_limits<Type>::max();
     const constexpr Type RANGE = WISHED_RANGE < MAX_NUM ? WISHED_RANGE : MAX_NUM;
     const constexpr Type MAX_ERRORS = 10;
@@ -210,13 +210,12 @@ namespace
     {
       std::string open_logging, std_format, ryu;
 
-      // if constexpr(std::is_same_v<Type, double>) { log = logger.format("{15}", i); } else { six in reality should be 5 log = logger.format("{6}", i); }
       const auto st_open_logging = Helpers::Assembly::timer_start();
-      open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
+      open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND>(val, PRECISION);
       const auto en_open_logging = Helpers::Assembly::timer_end();
 
       const auto st_std_fmt = Helpers::Assembly::timer_start();
-      std_format = Helpers::Numeric::Std::to_string<true>(val, PRECISION);
+      std_format = Helpers::Numeric::Std::to_string<false>(val, PRECISION);
       const auto en_std_fmt = Helpers::Assembly::timer_end();
 
       const auto st_ryu = Helpers::Assembly::timer_start();

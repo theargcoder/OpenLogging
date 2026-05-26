@@ -14,6 +14,7 @@
 
 #include "include/Algos/Integer.h"
 
+#include "include/Helpers/Simd.h"
 #include "include/Helpers/Templating.h"
 
 namespace Helpers::Numeric::Floating::DigitsPrecision
@@ -85,7 +86,7 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       const constexpr auto PRECISION_TABLE = Constants::Tables::Fixed::GetPrecistionTable<unsigned>();
 
       unsigned len = 0;
-      uint64_t mantissa;
+      unsigned mantissa;
       int exp_base_10_int;
       if(Helpers::Math::IEEE754::GetMantissaExponent<float>(input, mantissa, exp_base_10_int)) [[unlikely]]
       {
@@ -106,19 +107,26 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
         }
         else
         {
-          len = 5;
-          std::memcpy(&buff[0], "0.0E0", 5);
+          len = 2;
+          std::memcpy(&buff[0], "0.", len);
+          std::memset(&buff[len], '0', PRECISION);
+          len += PRECISION;
         }
 
         return len;
       }
 
+      if(input < 0.0)
+      {
+        buff[len++] = '-';
+      }
+
       const auto *table = &Floating::DIGITS[exp_base_10_int][0];
       exp_base_10_int = (((exp_base_10_int - Floating::BIAS) * 78'913) >> 18U);
 
-      unsigned extra_digits;
-      unsigned digits_10, remainder;
-      Helpers::Math::IEEE754::Multiply<float>(mantissa, table, digits_10, extra_digits);
+      unsigned remainder;
+      unsigned digits_10, extra_digits, last_9_digits;
+      Helpers::Simd::x86_64::Multiply<float>(mantissa, table, digits_10, extra_digits, last_9_digits);
 
       if(digits_10 < MIN_PRECISION)
       {
@@ -146,11 +154,11 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       }
       else
       {
-        const int to_comp = PRECISION - exp_base_10_int + 1;
-        visible_digits = std::max(to_comp, 0);
+        const int to_comp = PRECISION + exp_base_10_int + 1;
+        visible_digits = std::min(to_comp, std::numeric_limits<unsigned>::digits10 - 1);
       }
 
-      if(visible_digits >= 0 && visible_digits <= Floating::MAX_DIGITS10)
+      if(visible_digits >= 0 && visible_digits <= std::numeric_limits<unsigned>::digits10 - 2)
       {
         const auto trunc_qty = std::numeric_limits<unsigned>::digits10 - visible_digits - 1;
         Helpers::Math::Precision::truncate_plus_1_quo_rem(digits_10, remainder, trunc_qty);
@@ -210,15 +218,22 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
       }
       else
       {
-        if(exp_base_10_int <= Floating::MAX_DIGITS10)
+        if(exp_base_10_int <= std::numeric_limits<unsigned>::digits10 - 2)
         {
-          buff[len++] = '.';
-          Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen(&buff[len], digits_10);
-          std::swap(buff[len - 1], buff[len + exp_base_10_int]);
-          len += visible_digits;
+          const auto len_wr = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen(&buff[len], digits_10);
+          std::memmove(&buff[len + exp_10_abs + 1U], &buff[len + exp_10_abs], len_wr);
+          buff[len + exp_10_abs] = '.';
+          len += len_wr + 1;
         }
         else
         {
+          const auto len_wr_1 = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen(&buff[len], digits_10);
+          const auto len_wr_2 = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen(&buff[len + len_wr_1], digits_10);
+          const auto missin = std::max(0, static_cast<int>(exp_10_abs - len_wr_1 - len_wr_2));
+          std::memset(&buff[len + len_wr_1 + len_wr_2], '0', missin);
+          std::memmove(&buff[len + exp_10_abs + 1U], &buff[len + exp_10_abs], len_wr_1 + len_wr_2);
+          buff[len + exp_10_abs] = '.';
+          len += exp_10_abs + 1;
           std::memset(&buff[len], '0', PRECISION);
           len += PRECISION;
         }

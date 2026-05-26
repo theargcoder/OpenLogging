@@ -3,6 +3,7 @@
 #include <array>
 #include <bit>
 #include <cstdint>
+#include <emmintrin.h>
 #include <limits>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
@@ -214,6 +215,51 @@ namespace Helpers::Simd::ARM64
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 namespace Helpers::Simd::x86_64
 {
+  template <typename T>
+    requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
+  static auto Multiply(const uint64_t &, const uint32_t *, uint32_t &, uint32_t &, uint32_t &) noexcept;
+
+  template <>
+  auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &first_9_digits, uint32_t &middle_9_digits, uint32_t &last_9_digits) noexcept
+  {
+    const __m256i TABLE = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(table)));
+    const __m256i DEC9 = _mm256_set1_epi64x(1'000'000'000U);
+    const __m256i ZERO = _mm256_setzero_si256();
+    const __m256i MANTISSA = _mm256_set1_epi64x(mantissa);
+
+    const __m256i u64_prod = _mm256_mul_epu32(MANTISSA, TABLE);
+    const __m256i u32_low_prod = _mm256_blend_epi32(u64_prod, ZERO, 0b1010'1010);
+    const __m256i u32_hig_prod = _mm256_srli_epi64(u64_prod, 32U);
+
+    const __m256i u32_low_prod_1e9 = _mm256_mul_epu32(u32_low_prod, DEC9);
+    const __m256i u32_low_prod_1e9_hig = _mm256_srli_epi64(u32_low_prod_1e9, 32U);
+
+    const __m256i u32_slided = _mm256_alignr_epi64(u32_low_prod_1e9_hig, ZERO, 7);
+
+    const __m256i u32_res = _mm256_add_epi64(u32_hig_prod, u32_slided);
+
+    const uint64_t u64_prod_0 = mantissa * table[0];
+    const uint64_t u64_prod_1 = mantissa * table[1];
+    const uint64_t u64_prod_2 = mantissa * table[2];
+
+    const auto u32_0_prod_low = static_cast<uint32_t>(u64_prod_0);
+    const auto u32_1_prod_low = static_cast<uint32_t>(u64_prod_1);
+    const auto u32_1_prod_hig = static_cast<uint32_t>(u64_prod_1 >> 32U);
+    const auto u32_2_prod_hig = static_cast<uint32_t>(u64_prod_2 >> 32U);
+    const uint32_t u32_0_prod_low_1e9 = (uint64_t)u32_0_prod_low * 1'000'000'000U >> 32U;
+    const uint32_t u32_1_prod_low_1e9 = (uint64_t)u32_1_prod_low * 1'000'000'000U >> 32U;
+
+    auto u32_fir_9_digits = u64_prod_0 >> 32U;
+    auto u32_next_9_digits = u32_1_prod_hig + u32_0_prod_low_1e9;
+    auto u32_last__9_digits = u32_2_prod_hig + u32_1_prod_low_1e9;
+
+    while(u32_fir_9_digits >= 1'000'000'000U)
+    {
+      u32_fir_9_digits++;
+      u32_next_9_digits -= 1'000'000'000U;
+    }
+  }
+
   template <typename T>
     requires(std::is_integral_v<T> && std::is_unsigned_v<T>)
   static uint32_t WriteCharsToPtrFowardReturnLength(char *__restrict__ buff, const auto &input) noexcept;

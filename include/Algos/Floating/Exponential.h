@@ -45,7 +45,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
       buff[len++] = '-';
     }
 
-    uint64_t mantissa;
+    unsigned mantissa;
     int exp_base_10_int;
     if(Helpers::Math::IEEE754::GetMantissaExponent<float>(input, mantissa, exp_base_10_int)) [[unlikely]]
     {
@@ -78,7 +78,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     unsigned extra_digits;
     unsigned digits_10, remainder;
-    Helpers::Math::IEEE754::Multiply<float>(mantissa, table, digits_10, extra_digits);
+    Helpers::Math::IEEE754::Exponential::Multiply<float>(mantissa, table, digits_10, extra_digits);
 
     if(digits_10 < MIN_PRECISION)
     {
@@ -207,7 +207,7 @@ namespace Helpers::Numeric::Floating::ExponentialNotation
 
     uint32_t extra_digits;
     type digits_10, remainder;
-    Helpers::Math::IEEE754::Multiply<double>(mantissa, table, digits_10, extra_digits);
+    Helpers::Math::IEEE754::Exponential::Multiply<double>(mantissa, table, digits_10, extra_digits);
 
     if(digits_10 < min_precision)
     {
