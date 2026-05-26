@@ -243,7 +243,7 @@ namespace
           BOOST_CHECK_EQUAL(log_val, ref_val);
           log_str_and_into_hex(LogHexStr("open_logging", open_logging), LogHexStr("std::format", std_format), LogHexStr("ryu", ryu));
 
-          open_logging = Helpers::Numeric::Floating::ExponentialNotation::ToStr(val, PRECISION);
+          open_logging = Helpers::Numeric::Floating::DigitsPrecision::ToStr<Helpers::Numeric::Floating::DigitsPrecision::RoundingBehavior::ROUND>(val, PRECISION);
 
           char buffer[1024];
           d2exp_buffered(val, PRECISION, buffer);

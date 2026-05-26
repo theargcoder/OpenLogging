@@ -895,71 +895,42 @@ namespace Helpers::Math::IEEE754
   {
     template <typename T>
       requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-    static auto Multiply(const uint64_t &mantissa, const uint32_t *table, auto &result, auto &next_9_digits) noexcept;
+    static unsigned Multiply(const auto &, const uint32_t *, uint32_t &, uint32_t &, uint32_t &) noexcept;
 
     template <>
-    auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &result, uint32_t &next_9_digits) noexcept
+    unsigned Multiply<float>(const uint32_t &mantissa, const uint32_t *table, uint32_t &first_9_digits, uint32_t &middle_9_digits, uint32_t &last_9_digits) noexcept
     {
-      const constexpr uint64_t DEC_u64_9 = 1'000'000'000ULL;
-
-      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC_u64_9 + table[1];
-      const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
-
-      const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
-      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC_u64_9));
-
-      auto u64_result = u128_prod >> 64U;
-      auto u64_next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
-
-      while(u64_next_9_digits >= DEC_u64_9)
-      {
-        u64_result++;
-        u64_next_9_digits -= DEC_u64_9;
-      }
-
+      const constexpr uint32_t DEC8 = 100'000'000U;
       const constexpr uint32_t DEC9 = 1'000'000'000U;
 
-      const uint64_t u64_prod_0 = mantissa * table[0];
-      const uint64_t u64_prod_1 = mantissa * table[1];
-      const uint64_t u64_prod_2 = mantissa * table[2];
+      const uint64_t u64_prod_0 = static_cast<uint64_t>(mantissa) * table[0];
+      const uint64_t u64_prod_1 = static_cast<uint64_t>(mantissa) * table[1];
+      const uint64_t u64_prod_2 = static_cast<uint64_t>(mantissa) * table[2];
 
       const auto u32_0_prod_low = static_cast<uint32_t>(u64_prod_0);
       const auto u32_1_prod_low = static_cast<uint32_t>(u64_prod_1);
       const auto u32_1_prod_hig = static_cast<uint32_t>(u64_prod_1 >> 32U);
       const auto u32_2_prod_hig = static_cast<uint32_t>(u64_prod_2 >> 32U);
-      const auto u32_0_prod_low_1e9 = Helpers::Assembly::umulh32(u32_0_prod_low, DEC9);
-      const auto u32_1_prod_low_1e9 = Helpers::Assembly::umulh32(u32_1_prod_low, DEC9);
+      const uint32_t u32_0_prod_low_1e9 = (uint64_t)u32_0_prod_low * DEC9 >> 32U;
+      const uint32_t u32_1_prod_low_1e9 = (uint64_t)u32_1_prod_low * DEC9 >> 32U;
 
-      const auto u32_fir_9_digits = u64_prod_0 >> 32U;
-      const auto u32_next_9_digits = u32_1_prod_hig + u32_0_prod_low_1e9;
-      const auto u32_last__9_digits = u32_2_prod_hig + u32_1_prod_low_1e9;
+      first_9_digits = u64_prod_0 >> 32U;
+      middle_9_digits = u32_1_prod_hig + u32_0_prod_low_1e9;
+      last_9_digits = u32_2_prod_hig + u32_1_prod_low_1e9;
 
-      while(next_9_digits >= DEC9)
-      {
-        result++;
-        next_9_digits -= DEC9;
-      }
+      const unsigned fir9 = ((first_9_digits < DEC8)) + ((~((first_9_digits >= DEC9) & 0b1U)) & 0b1U);
+      const unsigned mid9 = ((middle_9_digits < DEC8)) + ((~((middle_9_digits >= DEC9) & 0b1U)) & 0b1U);
+      const unsigned las9 = ((last_9_digits < DEC8)) + ((~((last_9_digits >= DEC9) & 0b1U)) & 0b1U);
+
+      const unsigned status = fir9 | mid9 << 8U | las9 << 16U;
+
+      return status;
     }
 
     template <>
-    auto Multiply<double>(const uint64_t &mantissa, const uint32_t *table, uint64_t &result, uint32_t &next_9_digits) noexcept
+    unsigned Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &first_9_digits, uint32_t &middle_9_digits, uint32_t &last_9_digits) noexcept
     {
-      const constexpr uint64_t DEC9 = 1'000'000'000ULL;
-
-      const uint64_t m_high_mid = static_cast<uint64_t>(table[0]) * DEC9 + table[1];
-      const auto p_low_top = static_cast<uint32_t>(Helpers::Assembly::umulh64(mantissa, table[2]));
-
-      const __uint128_t u128_prod = (__uint128_t)mantissa * m_high_mid;
-      const auto p_hi_mid_rem_times_1e9 = static_cast<uint32_t>(Helpers::Assembly::umulh64(u128_prod, DEC9));
-
-      result = u128_prod >> 64U;
-      next_9_digits = p_low_top + p_hi_mid_rem_times_1e9;
-
-      while(next_9_digits >= DEC9)
-      {
-        result++;
-        next_9_digits -= DEC9;
-      }
+      return 0U;
     }
   } // namespace Fixed
 } // namespace Helpers::Math::IEEE754

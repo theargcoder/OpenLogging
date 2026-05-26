@@ -217,15 +217,16 @@ namespace Helpers::Simd::x86_64
 {
   template <typename T>
     requires std::is_floating_point_v<T> && std::numeric_limits<T>::is_iec559
-  static auto Multiply(const uint64_t &, const uint32_t *, uint32_t &, uint32_t &, uint32_t &) noexcept;
+  static unsigned Multiply(const auto &, const uint32_t *, uint32_t &, uint32_t &, uint32_t &) noexcept;
 
   template <>
-  auto Multiply<float>(const uint64_t &mantissa, const uint32_t *table, uint32_t &first_9_digits, uint32_t &middle_9_digits, uint32_t &last_9_digits) noexcept
+  unsigned Multiply<float>(const uint32_t &mantissa, const uint32_t *table, uint32_t &first_9_digits, uint32_t &middle_9_digits, uint32_t &last_9_digits) noexcept
   {
     const __m256i TABLE = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(table)));
-    const __m256i DEC9 = _mm256_set1_epi64x(1'000'000'000U);
-    const __m256i ZERO = _mm256_setzero_si256();
     const __m256i MANTISSA = _mm256_set1_epi64x(mantissa);
+    const __m256i ZERO = _mm256_setzero_si256();
+    const __m256i DEC9 = _mm256_set1_epi64x(1'000'000'000U);
+    const __m256i DEC8 = _mm256_set1_epi64x(100'000'000U);
 
     const __m256i u64_prod = _mm256_mul_epu32(MANTISSA, TABLE);
     const __m256i u32_low_prod = _mm256_blend_epi32(u64_prod, ZERO, 0b1010'1010);
@@ -238,26 +239,20 @@ namespace Helpers::Simd::x86_64
 
     const __m256i u32_res = _mm256_add_epi64(u32_hig_prod, u32_slided);
 
-    const uint64_t u64_prod_0 = mantissa * table[0];
-    const uint64_t u64_prod_1 = mantissa * table[1];
-    const uint64_t u64_prod_2 = mantissa * table[2];
+    const __mmask8 u32_res_lt_1e8 = _mm256_cmplt_epi64_mask(u32_res, DEC8);
+    const __mmask8 u32_res_ge_1e9 = _mm256_cmpge_epi64_mask(u32_res, DEC9);
 
-    const auto u32_0_prod_low = static_cast<uint32_t>(u64_prod_0);
-    const auto u32_1_prod_low = static_cast<uint32_t>(u64_prod_1);
-    const auto u32_1_prod_hig = static_cast<uint32_t>(u64_prod_1 >> 32U);
-    const auto u32_2_prod_hig = static_cast<uint32_t>(u64_prod_2 >> 32U);
-    const uint32_t u32_0_prod_low_1e9 = (uint64_t)u32_0_prod_low * 1'000'000'000U >> 32U;
-    const uint32_t u32_1_prod_low_1e9 = (uint64_t)u32_1_prod_low * 1'000'000'000U >> 32U;
+    first_9_digits = static_cast<uint32_t>(_mm256_extract_epi64(u32_res, 0));
+    middle_9_digits = static_cast<uint32_t>(_mm256_extract_epi64(u32_res, 1));
+    last_9_digits = static_cast<uint32_t>(_mm256_extract_epi64(u32_res, 2));
 
-    auto u32_fir_9_digits = u64_prod_0 >> 32U;
-    auto u32_next_9_digits = u32_1_prod_hig + u32_0_prod_low_1e9;
-    auto u32_last__9_digits = u32_2_prod_hig + u32_1_prod_low_1e9;
+    const unsigned fir9 = ((u32_res_lt_1e8 & 0b0001U)) + ((~(u32_res_ge_1e9 & 0b0001U)) & 0b0001U);
+    const unsigned mid9 = ((u32_res_lt_1e8 & 0b0010U) >> 1U) + (((~(u32_res_ge_1e9 & 0b0010U)) & 0b0010U) >> 1U);
+    const unsigned las9 = ((u32_res_lt_1e8 & 0b0100U) >> 2U) + (((~(u32_res_ge_1e9 & 0b0100U)) & 0b0100U) >> 2U);
 
-    while(u32_fir_9_digits >= 1'000'000'000U)
-    {
-      u32_fir_9_digits++;
-      u32_next_9_digits -= 1'000'000'000U;
-    }
+    const unsigned status = fir9 | mid9 << 8U | las9 << 16U;
+
+    return status;
   }
 
   template <typename T>

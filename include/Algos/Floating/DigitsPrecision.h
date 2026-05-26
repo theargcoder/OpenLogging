@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -126,7 +127,15 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
 
       unsigned remainder;
       unsigned digits_10, extra_digits, last_9_digits;
-      Helpers::Simd::x86_64::Multiply<float>(mantissa, table, digits_10, extra_digits, last_9_digits);
+      const auto res_simd_mul = Helpers::Simd::x86_64::Multiply<float>(mantissa, table, digits_10, extra_digits, last_9_digits);
+      const auto res_iee_mul = Helpers::Math::IEEE754::Fixed::Multiply<float>(mantissa, table, digits_10, extra_digits, last_9_digits);
+
+      if(res_simd_mul != res_iee_mul)
+      {
+        const auto res_simd_mul_1 = Helpers::Simd::x86_64::Multiply<float>(mantissa, table, digits_10, extra_digits, last_9_digits);
+        const auto res_iee_mul_1 = Helpers::Math::IEEE754::Fixed::Multiply<float>(mantissa, table, digits_10, extra_digits, last_9_digits);
+        assert(res_iee_mul == res_simd_mul);
+      }
 
       if(digits_10 < MIN_PRECISION)
       {
@@ -223,7 +232,8 @@ namespace Helpers::Numeric::Floating::DigitsPrecision
           const auto len_wr = Helpers::Numeric::Integral::ToStrFowardWriteSIMDReturnLen(&buff[len], digits_10);
           std::memmove(&buff[len + exp_10_abs + 1U], &buff[len + exp_10_abs], len_wr);
           buff[len + exp_10_abs] = '.';
-          len += len_wr + 1;
+          len += exp_10_abs;
+          len += PRECISION;
         }
         else
         {
