@@ -3,7 +3,6 @@
 #include <array>
 #include <bit>
 #include <cstdint>
-#include <emmintrin.h>
 #include <limits>
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
@@ -12,8 +11,6 @@
 #endif
 
 #include <type_traits>
-
-#include "include/Helpers/Math.h"
 
 #if defined(__ARM_NEON) || defined(__aarch64__)
 namespace Helpers::Simd::ARM64

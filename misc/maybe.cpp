@@ -7,8 +7,6 @@
 int main()
 {
   constexpr uint32_t k = 1074;
-  constexpr int N_WORDS = 36;
-  uint32_t extra[N_WORDS] = { 0 };
   // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
   // ALL heap allocation (std::vector) is eliminated.
   constexpr int NUM_WORDS = 36;

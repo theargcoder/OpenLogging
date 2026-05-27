@@ -149,3 +149,4 @@ target_link_libraries(OpenLogging INTERFACE Boost::headers)
 # ------------------------------------------------------------
 enable_testing()
 add_subdirectory(test)
+add_subdirectory(misc)

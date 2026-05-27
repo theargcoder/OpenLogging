@@ -1,66 +1,118 @@
-#include <algorithm>
-#include <iomanip>
-#include <iostream>
-#include <vector>
-
-using BigInt = std::vector<uint32_t>;
-
-// Extracts the next 8 least-significant digits.
-// Uses purely 64-bit ops downcast to 32-bit results.
-uint32_t extract_chunk_rtl(BigInt &a)
-{
-  uint64_t rem = 0;
-  // Iterate from most significant word to least
-  for(int i = (int)a.size() - 1; i >= 0; --i)
-  {
-    uint64_t val = (rem << 32) | a[i];
-    a[i] = (uint32_t)(val / 100000000ULL); // Divide by 10^8
-    rem = val % 100000000ULL;              // Keep remainder
-  }
-
-  // Trim leading zero words to keep the BigInt minimal
-  while(!a.empty() && a.back() == 0)
-  {
-    a.pop_back();
-  }
-  return (uint32_t)rem;
-}
+#include <cmath>
+#include <cstdint> // Added for explicit uint32_t and uint64_t types
+#include <cstring>
 
 int main()
 {
-  uint32_t k = 1027; // Works flawlessly for the entire [1, 1027] range
+  constexpr uint32_t k = 1074;
+  // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
+  constexpr int NUM_WORDS = 36;
+  const uint32_t P = std::floor(k * std::log10(2));
 
-  // 1. O(1) INITIALIZATION: Computing 2^k requires ZERO multiplication.
-  // We simply set the k-th bit in our 32-bit array.
-  uint32_t words_needed = (k / 32) + 1;
-  BigInt N(words_needed, 0);
-  N[k / 32] = (1u << (k % 32));
+  // Calculate exactly how many times we need to multiply by 10^8
+  uint32_t E = (P > 0) ? (P - 1) >> 3U : 0;
+  uint32_t rprime[NUM_WORDS] = { 0 };
+  rprime[0] = 1;
+  // Initialize our base as a BigInt equivalent to 10^8
+  uint32_t base[NUM_WORDS] = { 0 };
+  base[0] = 100'000'000U;
 
-  // 2. EXTRACT CHUNKS: Generate the 8-digit blocks Right-to-Left
-  std::vector<uint32_t> chunks;
-  while(!N.empty())
+  // --- Exponentiation by Squaring Loop ---
+  while(E > 0)
   {
-    chunks.push_back(extract_chunk_rtl(N));
+    // If E is odd, multiply the current result by the base
+    if(E & 1)
+    {
+      uint32_t temp[NUM_WORDS] = { 0 };
+      for(int i = 0; i < NUM_WORDS; ++i)
+      {
+        uint64_t carry = 0;
+        for(int j = 0; j < NUM_WORDS - i; ++j)
+        {
+          uint64_t p = (uint64_t)rprime[i] * base[j] + temp[i + j] + carry;
+          temp[i + j] = (uint32_t)p;
+          carry = p >> 32;
+        }
+      }
+      // Copy temp back to rprime
+      for(int w = 0; w < NUM_WORDS; ++w)
+        rprime[w] = temp[w];
+    }
+
+    // Square the base: base = base * base
+    // Optimization: Skip the final squaring if E is about to become 0
+    if(E > 1)
+    {
+      uint32_t temp[NUM_WORDS] = { 0 };
+      for(int i = 0; i < NUM_WORDS; ++i)
+      {
+        uint64_t carry = 0;
+        for(int j = 0; j < NUM_WORDS - i; ++j)
+        {
+          uint64_t p = (uint64_t)base[i] * base[j] + temp[i + j] + carry;
+          temp[i + j] = (uint32_t)p;
+          carry = p >> 32;
+        }
+      }
+      // Copy temp back to base
+      for(int w = 0; w < NUM_WORDS; ++w)
+        base[w] = temp[w];
+    }
+
+    E >>= 1; // Divide exponent by 2
   }
 
-  // 3. REVERSE: Align them for Left-to-Right dynamic reading
-  std::reverse(chunks.begin(), chunks.end());
+  // Calculate exactly how many times we need to multiply by 10^8
+  E = (P > 0) ? (P - 1) >> 3U : 0;
+  uint32_t rrprime[NUM_WORDS] = { 0 };
+  rrprime[0] = 1;
+  // Initialize our base as a BigInt equivalent to 10^8
+  uint32_t rbase[NUM_WORDS] = { 0 };
+  rbase[0] = 100'000'000U;
 
-  // Output the results
-  int chunk_count = 1;
-  for(uint32_t chunk : chunks)
+  // --- Exponentiation by Squaring Loop ---
+  while(E > 0)
   {
-    // The very first chunk might not have exactly 8 digits,
-    // so we don't pad it with leading zeros.
-    if(chunk_count == 1)
+    // If E is odd, multiply the current result by the base
+    if(E & 1)
     {
-      std::cout << "Chunk " << chunk_count++ << ": " << chunk << "\n";
+      uint32_t temp[NUM_WORDS] = { 0 };
+      for(int i = 0; i < NUM_WORDS; ++i)
+      {
+        uint64_t carry = 0;
+        for(int j = 0; j < NUM_WORDS - i; ++j)
+        {
+          uint64_t p = (uint64_t)rrprime[i] * rbase[j] + temp[i + j] + carry;
+          temp[i + j] = (uint32_t)p;
+          carry = p >> 32;
+        }
+      }
+      // Copy temp back to rprime
+      for(int w = 0; w < NUM_WORDS; ++w)
+        rrprime[w] = temp[w];
     }
-    else
+
+    // Square the base: base = base * base
+    // Optimization: Skip the final squaring if E is about to become 0
+    if(E > 1)
     {
-      // All subsequent chunks are strictly 8 digits
-      std::cout << "Chunk " << chunk_count++ << ": " << std::setfill('0') << std::setw(8) << chunk << "\n";
+      uint32_t temp[NUM_WORDS] = { 0 };
+      for(int i = 0; i < NUM_WORDS; ++i)
+      {
+        uint64_t carry = 0;
+        for(int j = 0; j < NUM_WORDS - i; ++j)
+        {
+          uint64_t p = (uint64_t)rbase[i] * rbase[j] + temp[i + j] + carry;
+          temp[i + j] = (uint32_t)p;
+          carry = p >> 32;
+        }
+      }
+      // Copy temp back to base
+      for(int w = 0; w < NUM_WORDS; ++w)
+        rbase[w] = temp[w];
     }
+
+    E >>= 1; // Divide exponent by 2
   }
 
   return 0;
