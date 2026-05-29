@@ -2,6 +2,9 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint> // Added for explicit uint32_t and uint64_t types
+#include <cstring>
+#include <iomanip>
+#include <iostream>
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
@@ -61,27 +64,29 @@ int main()
     179034081,  2355293519, 3468291195, 3563470881, 2702541568, 3437458918, 2217683442, 129,        // 2 - again
   };
 
-  for(int k = 984; k < 985; k++)
+  for(int k = 0; k < 1075; k++)
   {
     // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
     const unsigned P = std::floor(k * std::log10(2));
 
-    const unsigned P_3 = P >> 3U;
+    const unsigned P_DIV_8 = P >> 3U;
 
-    const unsigned P_3_4 = P_3 >> 2U;
+    const unsigned P_DIV_32 = P >> 5U;
+
+    const unsigned K_DIV_32 = static_cast<unsigned>(k) >> 5U;
 
     const __m512i ZERO = _mm512_setzero_si512();
 
-    __m512i rrprime_1 = _mm512_cvtepu32_epi64(_mm256_loadu_epi32(&POW_5_CACHE[POW_5_IDX[P_3_4]]));
-    __m512i rrprime_2 = _mm512_cvtepu32_epi64(_mm256_loadu_epi32(&POW_5_CACHE[POW_5_IDX[P_3_4] + 8U]));
-    __m512i rrprime_3 = _mm512_cvtepu32_epi64(_mm256_loadu_epi32(&POW_5_CACHE[POW_5_IDX[P_3_4] + 16U]));
+    __m512i rrprime_1 = _mm512_cvtepu32_epi64(_mm256_loadu_epi32(&POW_5_CACHE[POW_5_IDX[P_DIV_32]]));
+    __m512i rrprime_2 = _mm512_cvtepu32_epi64(_mm256_loadu_epi32(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 8U]));
+    __m512i rrprime_3 = _mm512_cvtepu32_epi64(_mm256_loadu_epi32(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 16U]));
     __m512i rrprime_4 = ZERO;
     __m512i r1e8 = _mm512_set1_epi64(POW_5_CORRECTION[8]);
-    __m512i r1emis = _mm512_set1_epi64(POW_5_CORRECTION[P - (P_3 << 3U)]);
+    __m512i r1emis = _mm512_set1_epi64(POW_5_CORRECTION[P - (P_DIV_8 << 3U)]);
 
-    const unsigned E_o = POW_5_E[P_3_4];
+    const unsigned E_o = POW_5_E[P_DIV_32];
 
-    for(unsigned E = E_o; E < P_3; E++)
+    for(unsigned E = E_o; E < P_DIV_8; E++)
     {
       const __m512i u64_prod_1 = _mm512_mul_epu32(rrprime_1, r1e8);
       const __m512i u64_prod_2 = _mm512_mul_epu32(rrprime_2, r1e8);
@@ -144,18 +149,37 @@ int main()
       rrprime_4 = _mm512_add_epi32(rrprime_4, rrprime_slide_4);
     }
 
-    const unsigned rrprime_1_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_1, ZERO);
-    const unsigned rrprime_2_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_2, ZERO);
-    const unsigned rrprime_3_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_3, ZERO);
-    const unsigned rrprime_4_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_4, ZERO);
+    // Total digits in 5^k
+    const uint32_t total_digits = std::floor(k * std::log10(5)) + 1;
+    constexpr unsigned NUM_WORDS = 40;
+    unsigned digits_computed = 0;
+
+    std::cout << "k = " << k << std::endl;
+    uint32_t r[NUM_WORDS] = { 0 };
+    r[0] = 1; // Initialize R = 1
+
+    for(uint32_t i = 0; i < P; ++i)
+    {
+      uint32_t carry = 0;
+      for(unsigned int &w : r)
+      {
+        uint64_t p = (uint64_t)w * 10ULL + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+    }
 
     const unsigned bit_shift = k & ((1U << 6U) - 1);
     const unsigned mod_mask = (bit_shift == 0) ? 0 : ((1U << bit_shift) - 1);
 
     const __m512i mod_vec = _mm512_set1_epi64(mod_mask);
 
-    unsigned comb = rrprime_1_zero_mask << 24U | rrprime_2_zero_mask << 16U | rrprime_3_zero_mask << 8U | rrprime_4_zero_mask;
-    unsigned lead_z = __builtin_ctz(comb) - 5U;
+    const unsigned rrprime_1_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_1, ZERO);
+    const unsigned rrprime_2_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_2, ZERO);
+    const unsigned rrprime_3_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_3, ZERO);
+    const unsigned rrprime_4_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_4, ZERO);
+    unsigned comb = rrprime_4_zero_mask << 24U | rrprime_3_zero_mask << 16U | rrprime_2_zero_mask << 8U | rrprime_1_zero_mask;
+    unsigned lead_z = __builtin_clz(comb) - 8U;
     while(lead_z != 0)
     {
       if(lead_z >= 16)
@@ -164,7 +188,7 @@ int main()
         rrprime_3 = rrprime_1;
         rrprime_2 = ZERO;
         rrprime_1 = ZERO;
-        comb >>= 5U;
+        comb <<= 16U;
       }
       else if(lead_z >= 8)
       {
@@ -172,7 +196,7 @@ int main()
         rrprime_3 = rrprime_2;
         rrprime_2 = rrprime_1;
         rrprime_1 = ZERO;
-        comb >>= 4U;
+        comb <<= 8U;
       }
       else if(lead_z >= 4)
       {
@@ -180,7 +204,7 @@ int main()
         rrprime_3 = _mm512_alignr_epi64(rrprime_3, rrprime_2, 4);
         rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 4);
         rrprime_1 = _mm512_alignr_epi64(rrprime_1, ZERO, 4);
-        comb >>= 3U;
+        comb <<= 4U;
       }
       else if(lead_z >= 2)
       {
@@ -188,28 +212,37 @@ int main()
         rrprime_3 = _mm512_alignr_epi64(rrprime_3, rrprime_2, 6);
         rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 6);
         rrprime_1 = _mm512_alignr_epi64(rrprime_1, ZERO, 6);
-        comb >>= 2U;
+        comb <<= 2U;
       }
       else
       {
         rrprime_4 = _mm512_alignr_epi64(rrprime_4, rrprime_3, 7);
-        rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 7);
         rrprime_3 = _mm512_alignr_epi64(rrprime_3, rrprime_2, 7);
+        rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 7);
         rrprime_1 = _mm512_alignr_epi64(rrprime_1, ZERO, 7);
-        comb >>= 1U;
+        comb <<= 1U;
       }
-      lead_z = __builtin_ctz(comb) - 5U;
+      lead_z = __builtin_clz(comb) - 8U;
     }
 
-    // Total digits in 5^k
-    const uint32_t total_digits = std::floor(k * std::log10(5)) + 1;
-    unsigned digits_computed = 0;
-
-    char buff_out[512] = { 0 };
-    char *__restrict__ ptr = &buff_out[0];
+    uint32_t word_idx = k / 32;
+    uint64_t chunk = 0;
+    unsigned next_8;
+    unsigned simdy_8;
 
     while(digits_computed < total_digits)
     {
+
+      // Step A & B: Multiply by 10^8 and cascade the carry
+      uint32_t carry = 0; // Carry max is 10^8, fits safely in uint32_t
+      for(unsigned int &w : r)
+      {
+        // Max size: (2^32 - 1) * 10^8 + 10^8 = 2^32 * 10^8. Fits comfortably in uint64_t.
+        uint64_t p = (uint64_t)w * 100'000'000U + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+
       const __m512i u64_prod_1 = _mm512_mul_epu32(rrprime_1, r1e8);
       const __m512i u64_prod_2 = _mm512_mul_epu32(rrprime_2, r1e8);
       const __m512i u64_prod_3 = _mm512_mul_epu32(rrprime_3, r1e8);
@@ -239,22 +272,54 @@ int main()
       rrprime_3 = _mm512_add_epi32(rrprime_3, rrprime_slide_3);
       rrprime_4 = _mm512_add_epi32(rrprime_4, rrprime_slide_4);
 
-      const __m512i next = _mm512_alignr_epi64(ZERO, rrprime_4, 1);
+      const __m512i next_o = _mm512_alignr_epi64(rrprime_3, ZERO, 7);
 
-      const __m512i lo = _mm512_srli_epi64(rrprime_4, bit_shift);
+      const __m512i last_lsb = _mm512_alignr_epi64(ZERO, rrprime_3, 7);
 
-      const __m512i hi = _mm512_slli_epi64(next, 32U - bit_shift);
+      const __m512i lo_o = _mm512_srli_epi64(rrprime_4, bit_shift);
+      const __m512i hi_o = _mm512_slli_epi64(next_o, 32U - bit_shift);
 
-      const __m512i chunks = _mm512_or_si512(lo, hi);
+      const __m512i lo_n = _mm512_srli_epi64(last_lsb, bit_shift);
+      const __m512i hi_n = _mm512_slli_epi64(rrprime_4, 32U - bit_shift);
 
-      rrprime_4 = _mm512_mask_and_epi64(rrprime_4, 0b0000'0001, rrprime_4, mod_vec);
+      const __m512i chunks_o = _mm512_or_si512(lo_o, hi_o);
+      const __m512i chunks_n = _mm512_or_si512(lo_n, hi_n);
 
-      rrprime_4 = _mm512_mask_blend_epi64(0b0000'0010, rrprime_4, ZERO);
+      // Step C: Extract next8 chunk (R >> k)
+      chunk = 0;
+      if(word_idx < NUM_WORDS)
+      {
+        chunk = r[word_idx] >> bit_shift;
+      }
+      if(word_idx + 1 < NUM_WORDS && bit_shift != 0)
+      {
+        // Cast to uint64_t before shifting to prevent any 32-bit boundary overflow
+        chunk |= ((uint64_t)r[word_idx + 1] << (32 - bit_shift));
+      }
+      next_8 = (uint32_t)chunk;
+
+      // Step D: Apply Modulo 2^k instantly
+      if(word_idx < NUM_WORDS)
+      {
+        r[word_idx] &= mod_mask;
+        std::memset(static_cast<void *>(&r[word_idx + 1]), 0, (NUM_WORDS - word_idx - 1) * 4);
+      }
+
+      rrprime_3 = _mm512_mask_and_epi64(rrprime_3, 0b1000'0000, rrprime_3, mod_vec);
+
+      rrprime_4 = ZERO;
+
+      simdy_8 = _mm_extract_epi32(_mm512_castsi512_si128(chunks_n), 0);
+
+      assert(simdy_8 == next_8);
+
+      // Step E: Print immediately
+      // std::cout << std::setfill('0') << std::setw(8) << simdy_8;
 
       digits_computed += 8;
     }
 
-    const uint32_t one = 1;
+    // std::cout << "\n";
   }
 
   return 0;
