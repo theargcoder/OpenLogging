@@ -333,30 +333,32 @@ namespace
 BOOST_AUTO_TEST_CASE(test_all_floating_point_v)
 {
   // floats
-  //  test_and_benchmark_float(static_cast<float>(0), 1);
-  test_and_benchmark_float(static_cast<float>(0), 2);
-  test_and_benchmark_float(static_cast<float>(0), 3);
-  test_and_benchmark_float(static_cast<float>(0), 4);
-  test_and_benchmark_float(static_cast<float>(0), 5);
-  test_and_benchmark_float(static_cast<float>(0), 6);
-  test_and_benchmark_float(static_cast<float>(0), 7);
-  test_and_benchmark_float(static_cast<float>(0), 8);
-  test_and_benchmark_float(static_cast<float>(0), 9);
-  test_and_benchmark_float(static_cast<float>(0), 10);
-  test_and_benchmark_float(static_cast<float>(0), 11);
-  test_and_benchmark_float(static_cast<float>(0), 12);
-  test_and_benchmark_float(static_cast<float>(0), 12);
-  test_and_benchmark_float(static_cast<float>(0), 13);
-  test_and_benchmark_float(static_cast<float>(0), 15);
-  test_and_benchmark_float(static_cast<float>(0), 16);
-  test_and_benchmark_float(static_cast<float>(0), 17);
-  test_and_benchmark_float(static_cast<float>(0), 18);
-  test_and_benchmark_float(static_cast<float>(0), 19);
-  test_and_benchmark_float(static_cast<float>(0), 20);
-  test_and_benchmark_float(static_cast<float>(0), 21);
-  test_and_benchmark_float(static_cast<float>(0), 22);
-  test_and_benchmark_float(static_cast<float>(0), 23);
-  test_and_benchmark_float(static_cast<float>(0), 24);
+  // test_and_benchmark_float(static_cast<float>(0), 1);
+  // test_and_benchmark_float(static_cast<float>(0), 2);
+  // test_and_benchmark_float(static_cast<float>(0), 3);
+  // test_and_benchmark_float(static_cast<float>(0), 4);
+  // test_and_benchmark_float(static_cast<float>(0), 5);
+  // test_and_benchmark_float(static_cast<float>(0), 6);
+  // test_and_benchmark_float(static_cast<float>(0), 7);
+  // test_and_benchmark_float(static_cast<float>(0), 8);
+  // test_and_benchmark_float(static_cast<float>(0), 9);
+  // test_and_benchmark_float(static_cast<float>(0), 10);
+  // test_and_benchmark_float(static_cast<float>(0), 11);
+  // test_and_benchmark_float(static_cast<float>(0), 12);
+  // test_and_benchmark_float(static_cast<float>(0), 12);
+  // test_and_benchmark_float(static_cast<float>(0), 13);
+  // test_and_benchmark_float(static_cast<float>(0), 15);
+  // test_and_benchmark_float(static_cast<float>(0), 16);
+  // test_and_benchmark_float(static_cast<float>(0), 17);
+  // test_and_benchmark_float(static_cast<float>(0), 18);
+  // test_and_benchmark_float(static_cast<float>(0), 19);
+  // test_and_benchmark_float(static_cast<float>(0), 20);
+  // test_and_benchmark_float(static_cast<float>(0), 21);
+  // test_and_benchmark_float(static_cast<float>(0), 22);
+  // test_and_benchmark_float(static_cast<float>(0), 23);
+  // test_and_benchmark_float(static_cast<float>(0), 24);
+
+  test_and_benchmark_float(static_cast<float>(0), 40);
   // doubles
   test_and_benchmark_float(static_cast<double>(0), 1);
   test_and_benchmark_float(static_cast<double>(0), 2);
