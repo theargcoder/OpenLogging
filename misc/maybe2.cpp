@@ -2,11 +2,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint> // Added for explicit uint32_t and uint64_t types
-#include <cstring>
-#include <iomanip>
-#include <iostream>
-#include <string>
-#include <vector>
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h> // x86 SIMD
@@ -149,24 +144,69 @@ int main()
       rrprime_4 = _mm512_add_epi32(rrprime_4, rrprime_slide_4);
     }
 
-    const unsigned rrprime_1_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_1, ZERO);
-    const unsigned rrprime_2_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_2, ZERO);
-    const unsigned rrprime_3_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_3, ZERO);
-    const unsigned rrprime_4_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_4, ZERO);
-
-    const unsigned rrprime_1_mod_mask = rrprime_1_zero_mask >> 1U;
-    const unsigned rrprime_2_mod_mask = rrprime_2_zero_mask >> 1U;
-    const unsigned rrprime_3_mod_mask = rrprime_3_zero_mask >> 1U;
-    const unsigned rrprime_4_mod_mask = rrprime_4_zero_mask >> 1U;
+    const unsigned rrprime_1_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_1, ZERO);
+    const unsigned rrprime_2_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_2, ZERO);
+    const unsigned rrprime_3_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_3, ZERO);
+    const unsigned rrprime_4_zero_mask = _mm512_cmpneq_epi64_mask(rrprime_4, ZERO);
 
     const unsigned bit_shift = k & ((1U << 6U) - 1);
     const unsigned mod_mask = (bit_shift == 0) ? 0 : ((1U << bit_shift) - 1);
 
     const __m512i mod_vec = _mm512_set1_epi64(mod_mask);
 
+    unsigned comb = rrprime_1_zero_mask << 24U | rrprime_2_zero_mask << 16U | rrprime_3_zero_mask << 8U | rrprime_4_zero_mask;
+    unsigned lead_z = __builtin_ctz(comb) - 5U;
+    while(lead_z != 0)
+    {
+      if(lead_z >= 16)
+      {
+        rrprime_4 = rrprime_2;
+        rrprime_3 = rrprime_1;
+        rrprime_2 = ZERO;
+        rrprime_1 = ZERO;
+        comb >>= 5U;
+      }
+      else if(lead_z >= 8)
+      {
+        rrprime_4 = rrprime_3;
+        rrprime_3 = rrprime_2;
+        rrprime_2 = rrprime_1;
+        rrprime_1 = ZERO;
+        comb >>= 4U;
+      }
+      else if(lead_z >= 4)
+      {
+        rrprime_4 = _mm512_alignr_epi64(rrprime_4, rrprime_3, 4);
+        rrprime_3 = _mm512_alignr_epi64(rrprime_3, rrprime_2, 4);
+        rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 4);
+        rrprime_1 = _mm512_alignr_epi64(rrprime_1, ZERO, 4);
+        comb >>= 3U;
+      }
+      else if(lead_z >= 2)
+      {
+        rrprime_4 = _mm512_alignr_epi64(rrprime_4, rrprime_3, 6);
+        rrprime_3 = _mm512_alignr_epi64(rrprime_3, rrprime_2, 6);
+        rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 6);
+        rrprime_1 = _mm512_alignr_epi64(rrprime_1, ZERO, 6);
+        comb >>= 2U;
+      }
+      else
+      {
+        rrprime_4 = _mm512_alignr_epi64(rrprime_4, rrprime_3, 7);
+        rrprime_2 = _mm512_alignr_epi64(rrprime_2, rrprime_1, 7);
+        rrprime_3 = _mm512_alignr_epi64(rrprime_3, rrprime_2, 7);
+        rrprime_1 = _mm512_alignr_epi64(rrprime_1, ZERO, 7);
+        comb >>= 1U;
+      }
+      lead_z = __builtin_ctz(comb) - 5U;
+    }
+
     // Total digits in 5^k
     const uint32_t total_digits = std::floor(k * std::log10(5)) + 1;
     unsigned digits_computed = 0;
+
+    char buff_out[512] = { 0 };
+    char *__restrict__ ptr = &buff_out[0];
 
     while(digits_computed < total_digits)
     {
@@ -199,25 +239,17 @@ int main()
       rrprime_3 = _mm512_add_epi32(rrprime_3, rrprime_slide_3);
       rrprime_4 = _mm512_add_epi32(rrprime_4, rrprime_slide_4);
 
-      __m512i next = _mm512_alignr_epi64(ZERO, rrprime_3, 1);
+      const __m512i next = _mm512_alignr_epi64(ZERO, rrprime_4, 1);
 
-      __m512i next_modded = _mm512_and_epi64(next, _mm512_set1_epi64(mod_mask));
+      const __m512i lo = _mm512_srli_epi64(rrprime_4, bit_shift);
 
-      __m512i lo = _mm512_srli_epi64(rrprime_3, bit_shift);
+      const __m512i hi = _mm512_slli_epi64(next, 32U - bit_shift);
 
-      __m512i hi = _mm512_slli_epi64(next, 32U - bit_shift);
+      const __m512i chunks = _mm512_or_si512(lo, hi);
 
-      __m512i chunks = _mm512_or_si512(lo, hi);
+      rrprime_4 = _mm512_mask_and_epi64(rrprime_4, 0b0000'0001, rrprime_4, mod_vec);
 
-      rrprime_1 = _mm512_mask_and_epi64(rrprime_1, rrprime_1_mod_mask, rrprime_1, mod_vec);
-      rrprime_2 = _mm512_mask_and_epi64(rrprime_2, rrprime_2_mod_mask, rrprime_2, mod_vec);
-      rrprime_3 = _mm512_mask_and_epi64(rrprime_3, rrprime_3_mod_mask, rrprime_3, mod_vec);
-      rrprime_4 = _mm512_mask_and_epi64(rrprime_4, rrprime_4_mod_mask, rrprime_4, mod_vec);
-
-      rrprime_1 = _mm512_mask_blend_epi64(rrprime_1_zero_mask, rrprime_1, ZERO);
-      rrprime_2 = _mm512_mask_blend_epi64(rrprime_2_zero_mask, rrprime_2, ZERO);
-      rrprime_3 = _mm512_mask_blend_epi64(rrprime_3_zero_mask, rrprime_3, ZERO);
-      rrprime_4 = _mm512_mask_blend_epi64(rrprime_4_zero_mask, rrprime_4, ZERO);
+      rrprime_4 = _mm512_mask_blend_epi64(0b0000'0010, rrprime_4, ZERO);
 
       digits_computed += 8;
     }
