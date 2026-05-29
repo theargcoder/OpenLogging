@@ -69,11 +69,11 @@ int main()
   for(int k = 984; k < 985; k++)
   {
     // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
-    const uint32_t P = std::floor(k * std::log10(2));
+    const unsigned P = std::floor(k * std::log10(2));
 
-    const uint32_t P_3 = P >> 3U;
+    const unsigned P_3 = P >> 3U;
 
-    const uint32_t P_3_4 = P_3 >> 2U;
+    const unsigned P_3_4 = P_3 >> 2U;
 
     const __m512i ZERO = _mm512_setzero_si512();
 
@@ -84,9 +84,9 @@ int main()
     __m512i r1e8 = _mm512_set1_epi64(POW_5_CORRECTION[8]);
     __m512i r1emis = _mm512_set1_epi64(POW_5_CORRECTION[P - (P_3 << 3U)]);
 
-    uint32_t E = POW_5_E[P_3_4];
+    const unsigned E_o = POW_5_E[P_3_4];
 
-    for(; E < P_3; E++)
+    for(unsigned E = E_o; E < P_3; E++)
     {
       const __m512i u64_prod_1 = _mm512_mul_epu32(rrprime_1, r1e8);
       const __m512i u64_prod_2 = _mm512_mul_epu32(rrprime_2, r1e8);
@@ -149,7 +149,16 @@ int main()
       rrprime_4 = _mm512_add_epi32(rrprime_4, rrprime_slide_4);
     }
 
-    const unsigned word_idx = k >> 5U;
+    const unsigned rrprime_1_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_1, ZERO);
+    const unsigned rrprime_2_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_2, ZERO);
+    const unsigned rrprime_3_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_3, ZERO);
+    const unsigned rrprime_4_zero_mask = _mm512_cmpeq_epi64_mask(rrprime_4, ZERO);
+
+    const unsigned rrprime_1_mod_mask = rrprime_1_zero_mask >> 1U;
+    const unsigned rrprime_2_mod_mask = rrprime_2_zero_mask >> 1U;
+    const unsigned rrprime_3_mod_mask = rrprime_3_zero_mask >> 1U;
+    const unsigned rrprime_4_mod_mask = rrprime_4_zero_mask >> 1U;
+
     const unsigned bit_shift = k & ((1U << 6U) - 1);
     const unsigned mod_mask = (bit_shift == 0) ? 0 : ((1U << bit_shift) - 1);
 
@@ -199,6 +208,16 @@ int main()
       __m512i hi = _mm512_slli_epi64(next, 32U - bit_shift);
 
       __m512i chunks = _mm512_or_si512(lo, hi);
+
+      rrprime_1 = _mm512_mask_and_epi64(rrprime_1, rrprime_1_mod_mask, rrprime_1, mod_vec);
+      rrprime_2 = _mm512_mask_and_epi64(rrprime_2, rrprime_2_mod_mask, rrprime_2, mod_vec);
+      rrprime_3 = _mm512_mask_and_epi64(rrprime_3, rrprime_3_mod_mask, rrprime_3, mod_vec);
+      rrprime_4 = _mm512_mask_and_epi64(rrprime_4, rrprime_4_mod_mask, rrprime_4, mod_vec);
+
+      rrprime_1 = _mm512_mask_blend_epi64(rrprime_1_zero_mask, rrprime_1, ZERO);
+      rrprime_2 = _mm512_mask_blend_epi64(rrprime_2_zero_mask, rrprime_2, ZERO);
+      rrprime_3 = _mm512_mask_blend_epi64(rrprime_3_zero_mask, rrprime_3, ZERO);
+      rrprime_4 = _mm512_mask_blend_epi64(rrprime_4_zero_mask, rrprime_4, ZERO);
 
       digits_computed += 8;
     }
