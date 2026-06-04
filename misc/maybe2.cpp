@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdint> // Added for explicit uint32_t and uint64_t types
 #include <cstring>
-#include <iomanip>
+#include <emmintrin.h>
 #include <iostream>
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
@@ -12,6 +12,1277 @@
 #include <arm_neon.h> // ARM SIMD
 #endif
 
+int main()
+{
+  constexpr uint32_t POW_5_CORRECTION[] = { 1, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000 };
+  constexpr uint8_t POW_5_IDX[] = { 0, 24, 48, 72, 96, 120, 144, 168, 192, 216, 240 };
+  constexpr uint8_t POW_5_E[] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40 };
+
+  constexpr uint32_t POW_5_CACHE[] = {
+    1,          0,          0,          0,          0,          0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    2242703233, 762134875,  1262,       0,          0,          0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    3211403009, 1849224548, 3668416493, 3913284084, 1593091,    0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    3776417409, 3833115195, 474402842,  2046101519, 1659368615, 1657637457, 2010764683, 0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    781532673,  64985353,   253049085,  594863151,  3553621484, 3288652808, 3167596762, 2788392729, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3911132675, 590,        0,          0,          0,          0,          0,          0,          // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    4223872385, 1378013428, 3071223888, 1460925171, 3695318035, 3594083709, 4166588825, 9582620, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    2259883222, 2057664441, 314048097,  745834,     0,          0,          0,          0,       // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,       // 2 - again
+
+    2894159105, 2850127391, 1678958885, 1990048638, 4055408710, 4272372864, 3869429580, 1940770817, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3594030316, 3284427401, 4246652165, 2708404372, 1313461594, 941374947,  0,          0,          // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    3031420033, 1112378521, 855339782,  4191278750, 248038208,  1136169807, 2230652081, 3378214371, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    1653863564, 613940998,  1392057263, 562793371,  894754680,  2060902835, 2039635717, 2771255238, // 1 - again -
+    276,        0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    2553183233, 3201533787, 3638140786, 303378311,  1809731782, 3477761648, 3583367183, 649228654,  // 0 - _mm256i loaded and 0 extended to a _mm256i
+    2915460784, 487929380,  1011012442, 1677677582, 3428152256, 1710878487, 1438394610, 2161952759, // 1 - again -
+    4100910556, 1608314830, 349175,     0,          0,          0,          0,          0,          // 2 - again
+
+    3940379521, 184513341,  2872588323, 2214530454, 38258512,   2980860351, 114267010,  2188874685, // 0 - _mm256i loaded and 0 extended to a _mm512i
+    234079247,  2101059099, 1948702207, 947446250,  864457656,  507589568,  1321007357, 3911984176, // 1 - again -
+    1011110295, 2382358050, 2389730781, 730678769,  440721283,  0,          0,          0,          // 2 - again
+
+    1352440577, 3353128433, 943566124,  1942375735, 3933038544, 1369155590, 3288593144, 2689786274, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3608159034, 1149596585, 3474119098, 1887901699, 1390164635, 3853669096, 119012174,  3192759855, // 1 - again -
+    179034081,  2355293519, 3468291195, 3563470881, 2702541568, 3437458918, 2217683442, 129,        // 2 - again
+  };
+
+  for(int k = 0; k < 1075; k++)
+  {
+  backwards:
+    // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
+    const unsigned P = std::floor(k * std::log10(2));
+
+    const unsigned P_DIV_8 = P >> 3U;
+
+    const unsigned P_DIV_32 = P >> 5U;
+
+    const unsigned K_DIV_32 = static_cast<unsigned>(k) >> 5U;
+
+    const __m256i ZERO = _mm256_setzero_si256();
+
+    // Total digits in 5^k
+    const uint32_t total_digits = std::floor(k * std::log10(5)) + 1;
+    constexpr unsigned NUM_WORDS = 40;
+    std::array<uint32_t, NUM_WORDS> SIMD_PRE_WRITTEN = { 0 };
+    std::array<uint32_t, NUM_WORDS> SLOW_PRE_ARR = { 0 };
+
+    std::array<uint64_t, 28> SIMD_ARRAY;
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[0]), ZERO);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[4]), ZERO);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[8]), ZERO);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[12]), ZERO);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[16]), ZERO);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[20]), ZERO);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[24]), ZERO);
+
+    __m256i rrprime_1 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32]])));
+    __m256i rrprime_2 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 4U])));
+    __m256i rrprime_3 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 8U])));
+    __m256i rrprime_4 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 12U])));
+    __m256i rrprime_5 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 16U])));
+    __m256i rrprime_6 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 20U])));
+    __m256i rrprime_7 = ZERO;
+    const __m256i R1E8 = _mm256_set1_epi64x(POW_5_CORRECTION[8]);
+    const __m256i R1REMMIS = _mm256_set1_epi64x(POW_5_CORRECTION[P - (P_DIV_8 << 3U)]);
+
+    const unsigned E_o = POW_5_E[P_DIV_32];
+
+    for(unsigned E = E_o; E < P_DIV_8; E++)
+    {
+      const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1E8);
+      const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1E8);
+      const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1E8);
+      const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1E8);
+      const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1E8);
+      const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1E8);
+      const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1E8);
+      const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+      const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+      const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+      const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+      const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+      const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+      const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+      const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+      const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+      const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+      rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+      rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+      rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+      rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+      rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+      rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+      const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+      const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+      const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+      const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+      const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+      const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+      const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+      rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+      rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+      rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+      rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+      rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+      rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+    }
+    {
+      const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1REMMIS);
+      const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1REMMIS);
+      const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1REMMIS);
+      const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1REMMIS);
+      const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1REMMIS);
+      const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1REMMIS);
+      const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1REMMIS);
+      const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+      const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+      const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+      const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+      const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+      const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+      const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+      const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+      const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+      const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+      rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+      rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+      rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+      rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+      rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+      rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+      const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+      const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+      const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+      const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+      const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+      const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+      const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+      rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+      rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+      rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+      rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+      rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+      rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+    }
+
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[0]), rrprime_1);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[4]), rrprime_2);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[8]), rrprime_3);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[12]), rrprime_4);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[16]), rrprime_5);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[20]), rrprime_6);
+    _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[24]), rrprime_7);
+
+    {
+      const __m128i u32_pack_1 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_1, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_2 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_2, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_3 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_3, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_4 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_4, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_5 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_5, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_6 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_6, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_7 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_7, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[0]), u32_pack_1);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[4]), u32_pack_2);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[8]), u32_pack_3);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[12]), u32_pack_4);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[16]), u32_pack_5);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[20]), u32_pack_6);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&SIMD_PRE_WRITTEN[24]), u32_pack_7);
+    }
+
+    SLOW_PRE_ARR[0] = 1; // Initialize R = 1
+
+    for(uint32_t i = 0; i < P; ++i)
+    {
+      uint32_t carry = 0;
+      for(unsigned int &w : SLOW_PRE_ARR)
+      {
+        uint64_t p = (uint64_t)w * 10ULL + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+    }
+
+    std::array<uint32_t, NUM_WORDS> X10byx10_ARR = SLOW_PRE_ARR;
+
+    size_t first = 0;
+
+    while(first < SLOW_PRE_ARR.size() && SLOW_PRE_ARR[first] == 0)
+    {
+      ++first;
+    }
+
+    if(first != 0 && first != SLOW_PRE_ARR.size())
+    {
+      const size_t count = SLOW_PRE_ARR.size() - first;
+
+      std::memmove(SLOW_PRE_ARR.data(), SLOW_PRE_ARR.data() + first, count * sizeof(uint32_t));
+
+      std::memset(SLOW_PRE_ARR.data() + count, 0, first * sizeof(uint32_t));
+    }
+
+    if(SIMD_PRE_WRITTEN != SLOW_PRE_ARR)
+    {
+      std::cout << "k = " << k << "; P = " << P << '\n';
+      goto backwards;
+    }
+
+    assert(SIMD_PRE_WRITTEN == SLOW_PRE_ARR);
+
+    // unsigned lead_z = 24U - (K_DIV_32 - ((k * 1233U) >> 17U)) - (k < 32); //+ (K_DIV_32 & 0b0111);
+
+    unsigned digits_computed = 0;
+    unsigned word_idx = k / 32U;
+    unsigned simdy_idx = (K_DIV_32 - ((k * 1233U) >> 17U));
+    uint64_t chunk = 0;
+    unsigned next_8;
+    unsigned simdy_8;
+
+    const unsigned bit_shift = k & ((1U << 5U) - 1);
+    const unsigned mod_mask = (bit_shift == 0) ? 0 : ((1U << bit_shift) - 1);
+
+    while(digits_computed < total_digits)
+    {
+      // Step A & B: Multiply by 10^8 and cascade the carry
+      uint32_t carry = 0; // Carry max is 10^8, fits safely in uint32_t
+      for(unsigned int &w : X10byx10_ARR)
+      {
+        // Max size: (2^32 - 1) * 10^8 + 10^8 = 2^32 * 10^8. Fits comfortably in uint64_t.
+        uint64_t p = (uint64_t)w * 100'000'000U + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+
+      {
+        __m256i rrrprime_1 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[0]));
+        __m256i rrrprime_2 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[4]));
+        __m256i rrrprime_3 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[8]));
+        __m256i rrrprime_4 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[12]));
+        __m256i rrrprime_5 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[16]));
+        __m256i rrrprime_6 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[20]));
+        __m256i rrrprime_7 = _mm256_loadu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[24]));
+        const __m256i u64_prod_1 = _mm256_mul_epu32(rrrprime_1, R1E8);
+        const __m256i u64_prod_2 = _mm256_mul_epu32(rrrprime_2, R1E8);
+        const __m256i u64_prod_3 = _mm256_mul_epu32(rrrprime_3, R1E8);
+        const __m256i u64_prod_4 = _mm256_mul_epu32(rrrprime_4, R1E8);
+        const __m256i u64_prod_5 = _mm256_mul_epu32(rrrprime_5, R1E8);
+        const __m256i u64_prod_6 = _mm256_mul_epu32(rrrprime_6, R1E8);
+        const __m256i u64_prod_7 = _mm256_mul_epu32(rrrprime_7, R1E8);
+        const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+        const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+        const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+        const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+        const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+        const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+        const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+        const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+        const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+        const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+        rrrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+        rrrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+        rrrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+        rrrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+        rrrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+        rrrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+        rrrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+        const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_1, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_2, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_3, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_4, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_5, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_6, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrrprime_7, 0b10'01'00'11), 32U);
+        const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+        const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+        const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+        const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+        const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+        const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+        const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+        rrrprime_1 = _mm256_add_epi32(rrrprime_1, rrprime_slide_1);
+        rrrprime_2 = _mm256_add_epi32(rrrprime_2, rrprime_slide_2);
+        rrrprime_3 = _mm256_add_epi32(rrrprime_3, rrprime_slide_3);
+        rrrprime_4 = _mm256_add_epi32(rrrprime_4, rrprime_slide_4);
+        rrrprime_5 = _mm256_add_epi32(rrrprime_5, rrprime_slide_5);
+        rrrprime_6 = _mm256_add_epi32(rrrprime_6, rrprime_slide_6);
+        rrrprime_7 = _mm256_add_epi32(rrrprime_7, rrprime_slide_7);
+        rrrprime_1 = _mm256_blend_epi32(rrrprime_1, ZERO, 0b1010'1010);
+        rrrprime_2 = _mm256_blend_epi32(rrrprime_2, ZERO, 0b1010'1010);
+        rrrprime_3 = _mm256_blend_epi32(rrrprime_3, ZERO, 0b1010'1010);
+        rrrprime_4 = _mm256_blend_epi32(rrrprime_4, ZERO, 0b1010'1010);
+        rrrprime_5 = _mm256_blend_epi32(rrrprime_5, ZERO, 0b1010'1010);
+        rrrprime_6 = _mm256_blend_epi32(rrrprime_6, ZERO, 0b1010'1010);
+        rrrprime_7 = _mm256_blend_epi32(rrrprime_7, ZERO, 0b1010'1010);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[0]), rrrprime_1);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[4]), rrrprime_2);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[8]), rrrprime_3);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[12]), rrrprime_4);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[16]), rrrprime_5);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[20]), rrrprime_6);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[24]), rrrprime_7);
+      }
+
+      // Step C: Extract next8 chunk (R >> k)
+      chunk = X10byx10_ARR[word_idx] >> bit_shift;
+      // Cast to uint64_t before shifting to prevent any 32-bit boundary overflow
+      chunk |= ((uint64_t)X10byx10_ARR[word_idx + 1] << (32 - bit_shift));
+      next_8 = (uint32_t)chunk;
+
+      X10byx10_ARR[word_idx] &= mod_mask;
+      std::memset(static_cast<void *>(&X10byx10_ARR[word_idx + 1]), 0, (NUM_WORDS - word_idx - 1) * 4);
+
+      chunk = SIMD_ARRAY[simdy_idx] >> bit_shift;
+      chunk |= (SIMD_ARRAY[simdy_idx + 1] << (32 - bit_shift));
+      simdy_8 = (uint32_t)chunk;
+      SIMD_ARRAY[simdy_idx] &= mod_mask;
+      _mm256_storeu_si256(reinterpret_cast<__m256i *>(&SIMD_ARRAY[simdy_idx + 1]), ZERO);
+
+      if(simdy_8 != next_8)
+      {
+        std::cout << "k = " << k << "; P = " << P << '\n';
+        goto backwards;
+      }
+
+      assert(simdy_8 == next_8);
+
+      // Step E: Print immediately
+      // std::cout << std::setfill('0') << std::setw(8) << simdy_8;
+
+      digits_computed += 8;
+    }
+    //
+  }
+
+  return 0;
+}
+
+/*
+int main()
+{
+  constexpr uint32_t POW_5_CORRECTION[] = { 1, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000 };
+  constexpr uint8_t POW_5_IDX[] = { 0, 24, 48, 72, 96, 120, 144, 168, 192, 216, 240 };
+  constexpr uint8_t POW_5_E[] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40 };
+
+  constexpr uint32_t POW_5_CACHE[] = {
+    1,          0,          0,          0,          0,          0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    2242703233, 762134875,  1262,       0,          0,          0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    3211403009, 1849224548, 3668416493, 3913284084, 1593091,    0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    3776417409, 3833115195, 474402842,  2046101519, 1659368615, 1657637457, 2010764683, 0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    781532673,  64985353,   253049085,  594863151,  3553621484, 3288652808, 3167596762, 2788392729, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3911132675, 590,        0,          0,          0,          0,          0,          0,          // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    4223872385, 1378013428, 3071223888, 1460925171, 3695318035, 3594083709, 4166588825, 9582620, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    2259883222, 2057664441, 314048097,  745834,     0,          0,          0,          0,       // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,       // 2 - again
+
+    2894159105, 2850127391, 1678958885, 1990048638, 4055408710, 4272372864, 3869429580, 1940770817, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3594030316, 3284427401, 4246652165, 2708404372, 1313461594, 941374947,  0,          0,          // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    3031420033, 1112378521, 855339782,  4191278750, 248038208,  1136169807, 2230652081, 3378214371, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    1653863564, 613940998,  1392057263, 562793371,  894754680,  2060902835, 2039635717, 2771255238, // 1 - again -
+    276,        0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    2553183233, 3201533787, 3638140786, 303378311,  1809731782, 3477761648, 3583367183, 649228654,  // 0 - _mm256i loaded and 0 extended to a _mm256i
+    2915460784, 487929380,  1011012442, 1677677582, 3428152256, 1710878487, 1438394610, 2161952759, // 1 - again -
+    4100910556, 1608314830, 349175,     0,          0,          0,          0,          0,          // 2 - again
+
+    3940379521, 184513341,  2872588323, 2214530454, 38258512,   2980860351, 114267010,  2188874685, // 0 - _mm256i loaded and 0 extended to a _mm512i
+    234079247,  2101059099, 1948702207, 947446250,  864457656,  507589568,  1321007357, 3911984176, // 1 - again -
+    1011110295, 2382358050, 2389730781, 730678769,  440721283,  0,          0,          0,          // 2 - again
+
+    1352440577, 3353128433, 943566124,  1942375735, 3933038544, 1369155590, 3288593144, 2689786274, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3608159034, 1149596585, 3474119098, 1887901699, 1390164635, 3853669096, 119012174,  3192759855, // 1 - again -
+    179034081,  2355293519, 3468291195, 3563470881, 2702541568, 3437458918, 2217683442, 129,        // 2 - again
+  };
+
+  for(int k = 0; k < 1075; k++)
+  {
+  backwards:
+    // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
+    const unsigned P = std::floor(k * std::log10(2));
+
+    const unsigned P_DIV_8 = P >> 3U;
+
+    const unsigned P_DIV_32 = P >> 5U;
+
+    const unsigned K_DIV_32 = static_cast<unsigned>(k) >> 5U;
+
+    const __m256i ZERO = _mm256_setzero_si256();
+
+    __m256i rrprime_1 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32]])));
+    __m256i rrprime_2 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 4U])));
+    __m256i rrprime_3 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 8U])));
+    __m256i rrprime_4 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 12U])));
+    __m256i rrprime_5 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 16U])));
+    __m256i rrprime_6 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 20U])));
+    __m256i rrprime_7 = ZERO;
+    __m256i rrprime_8 = ZERO;
+    const __m256i R1E8 = _mm256_set1_epi64x(POW_5_CORRECTION[8]);
+    const __m256i R1REMMIS = _mm256_set1_epi64x(POW_5_CORRECTION[P - (P_DIV_8 << 3U)]);
+
+    const unsigned E_o = POW_5_E[P_DIV_32];
+
+    for(unsigned E = E_o; E < P_DIV_8; E++)
+    {
+      const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1E8);
+      const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1E8);
+      const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1E8);
+      const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1E8);
+      const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1E8);
+      const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1E8);
+      const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1E8);
+      const __m256i u64_prod_8 = _mm256_mul_epu32(rrprime_8, R1E8);
+      const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_8 = _mm256_blend_epi32(u64_prod_8, ZERO, 0b1010'1010);
+      const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+      const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+      const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+      const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+      const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+      const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+      const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+      const __m256i u32_hi_prod_8 = _mm256_srli_epi64(u64_prod_8, 32);
+      const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_8 = _mm256_permute4x64_epi64(u32_hi_prod_8, 0b10'01'00'11);
+      const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_8 = _mm256_blend_epi32(u32_hi_prod_perm_8, u32_hi_prod_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+      rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+      rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+      rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+      rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+      rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+      rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+      rrprime_8 = _mm256_add_epi64(u32_lo_prod_8, u32_hi_prod_slide_8);
+      const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_8 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_8, 0b10'01'00'11), 32U);
+      const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+      const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+      const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+      const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+      const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+      const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+      const __m256i rrprime_slide_8 = _mm256_blend_epi32(rrprime_perm_8, rrprime_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+      rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+      rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+      rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+      rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+      rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+      rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+      rrprime_8 = _mm256_add_epi32(rrprime_8, rrprime_slide_8);
+    }
+    {
+      const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1REMMIS);
+      const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1REMMIS);
+      const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1REMMIS);
+      const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1REMMIS);
+      const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1REMMIS);
+      const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1REMMIS);
+      const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1REMMIS);
+      const __m256i u64_prod_8 = _mm256_mul_epu32(rrprime_8, R1REMMIS);
+      const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_8 = _mm256_blend_epi32(u64_prod_8, ZERO, 0b1010'1010);
+      const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+      const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+      const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+      const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+      const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+      const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+      const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+      const __m256i u32_hi_prod_8 = _mm256_srli_epi64(u64_prod_8, 32);
+      const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_8 = _mm256_permute4x64_epi64(u32_hi_prod_8, 0b10'01'00'11);
+      const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_8 = _mm256_blend_epi32(u32_hi_prod_perm_8, u32_hi_prod_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+      rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+      rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+      rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+      rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+      rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+      rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+      rrprime_8 = _mm256_add_epi64(u32_lo_prod_8, u32_hi_prod_slide_8);
+      const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_8 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_8, 0b10'01'00'11), 32U);
+      const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+      const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+      const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+      const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+      const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+      const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+      const __m256i rrprime_slide_8 = _mm256_blend_epi32(rrprime_perm_8, rrprime_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+      rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+      rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+      rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+      rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+      rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+      rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+      rrprime_8 = _mm256_add_epi32(rrprime_8, rrprime_slide_8);
+    }
+
+    // Total digits in 5^k
+    const uint32_t total_digits = std::floor(k * std::log10(5)) + 1;
+    constexpr unsigned NUM_WORDS = 40;
+    std::array<uint32_t, NUM_WORDS> written = { 0 };
+    std::array<uint32_t, NUM_WORDS> r = { 0 };
+
+    {
+      const __m128i u32_pack_1 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_1, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_2 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_2, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_3 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_3, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_4 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_4, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_5 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_5, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_6 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_6, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_7 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_7, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+      const __m128i u32_pack_8 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_8, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[0]), u32_pack_1);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[4]), u32_pack_2);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[8]), u32_pack_3);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[12]), u32_pack_4);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[16]), u32_pack_5);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[20]), u32_pack_6);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[24]), u32_pack_7);
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[28]), u32_pack_8);
+    }
+
+    r[0] = 1; // Initialize R = 1
+
+    for(uint32_t i = 0; i < P; ++i)
+    {
+      uint32_t carry = 0;
+      for(unsigned int &w : r)
+      {
+        uint64_t p = (uint64_t)w * 10ULL + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+    }
+
+    size_t first = 0;
+
+    while(first < r.size() && r[first] == 0)
+    {
+      ++first;
+    }
+
+    if(first != 0 && first != r.size())
+    {
+      const size_t count = r.size() - first;
+
+      std::memmove(r.data(), r.data() + first, count * sizeof(uint32_t));
+
+      std::memset(r.data() + count, 0, first * sizeof(uint32_t));
+    }
+
+    if(written != r)
+    {
+      std::cout << "k = " << k << "; P = " << P << '\n';
+      goto backwards;
+    }
+
+    assert(written == r);
+
+    unsigned lead_z = 24U - (K_DIV_32 - ((k * 1233U) >> 17U)) - (k < 32); //+ (K_DIV_32 & 0b0111);
+
+    while(lead_z != 0)
+    {
+      if(lead_z >= 16)
+      {
+        rrprime_8 = rrprime_4;
+        rrprime_7 = rrprime_3;
+        rrprime_6 = rrprime_2;
+        rrprime_5 = rrprime_1;
+        rrprime_4 = ZERO;
+        rrprime_3 = ZERO;
+        rrprime_2 = ZERO;
+        rrprime_1 = ZERO;
+        lead_z -= 16U;
+      }
+      else if(lead_z >= 8)
+      {
+        rrprime_8 = rrprime_6;
+        rrprime_7 = rrprime_5;
+        rrprime_6 = rrprime_4;
+        rrprime_5 = rrprime_3;
+        rrprime_4 = rrprime_2;
+        rrprime_3 = rrprime_1;
+        rrprime_2 = ZERO;
+        rrprime_1 = ZERO;
+
+        lead_z -= 8U;
+      }
+      else if(lead_z >= 4)
+      {
+        rrprime_8 = rrprime_7;
+        rrprime_7 = rrprime_6;
+        rrprime_6 = rrprime_5;
+        rrprime_5 = rrprime_4;
+        rrprime_4 = rrprime_3;
+        rrprime_3 = rrprime_2;
+        rrprime_2 = rrprime_1;
+        rrprime_1 = ZERO;
+
+        lead_z -= 4U;
+      }
+      else if(lead_z >= 2)
+      {
+        const __m256i perm_8 = _mm256_permute4x64_epi64(rrprime_8, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_7 = _mm256_permute4x64_epi64(rrprime_7, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_6 = _mm256_permute4x64_epi64(rrprime_6, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_5 = _mm256_permute4x64_epi64(rrprime_5, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_4 = _mm256_permute4x64_epi64(rrprime_4, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_3 = _mm256_permute4x64_epi64(rrprime_3, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_2 = _mm256_permute4x64_epi64(rrprime_2, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i perm_1 = _mm256_permute4x64_epi64(rrprime_1, _MM_SHUFFLE(1, 0, 3, 2));
+
+        rrprime_1 = _mm256_blend_epi32(perm_1, ZERO, 0b00001111);
+        rrprime_2 = _mm256_blend_epi32(perm_2, perm_1, 0b00001111);
+        rrprime_3 = _mm256_blend_epi32(perm_3, perm_2, 0b00001111);
+        rrprime_4 = _mm256_blend_epi32(perm_4, perm_3, 0b00001111);
+        rrprime_5 = _mm256_blend_epi32(perm_5, perm_4, 0b00001111);
+        rrprime_6 = _mm256_blend_epi32(perm_6, perm_5, 0b00001111);
+        rrprime_7 = _mm256_blend_epi32(perm_7, perm_6, 0b00001111);
+        rrprime_8 = _mm256_blend_epi32(perm_8, perm_7, 0b00001111);
+
+        lead_z -= 2U;
+      }
+      else
+      {
+        const __m256i u32_hi_prod_perm_8 = _mm256_permute4x64_epi64(rrprime_8, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11);
+        rrprime_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+        rrprime_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+        rrprime_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+        rrprime_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+        rrprime_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+        rrprime_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+        rrprime_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+        rrprime_8 = _mm256_blend_epi32(u32_hi_prod_perm_8, u32_hi_prod_perm_7, 0b00'00'00'11);
+        lead_z -= 1U;
+      }
+    }
+
+    unsigned digits_computed = 0;
+    unsigned word_idx = k / 32U;
+    uint64_t chunk = 0;
+    unsigned next_8;
+    unsigned simdy_8;
+
+    const unsigned bit_shift = k & ((1U << 6U) - 1);
+    const unsigned mod_mask = (bit_shift == 0) ? 0 : ((1U << bit_shift) - 1);
+
+    while(digits_computed < total_digits)
+    {
+      // Step A & B: Multiply by 10^8 and cascade the carry
+      uint32_t carry = 0; // Carry max is 10^8, fits safely in uint32_t
+      for(unsigned int &w : r)
+      {
+        // Max size: (2^32 - 1) * 10^8 + 10^8 = 2^32 * 10^8. Fits comfortably in uint64_t.
+        uint64_t p = (uint64_t)w * 100'000'000U + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+
+      {
+        const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1E8);
+        const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1E8);
+        const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1E8);
+        const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1E8);
+        const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1E8);
+        const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1E8);
+        const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1E8);
+        const __m256i u64_prod_8 = _mm256_mul_epu32(rrprime_8, R1E8);
+        const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+        const __m256i u32_lo_prod_8 = _mm256_blend_epi32(u64_prod_8, ZERO, 0b1010'1010);
+        const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+        const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+        const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+        const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+        const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+        const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+        const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+        const __m256i u32_hi_prod_8 = _mm256_srli_epi64(u64_prod_8, 32);
+        const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+        const __m256i u32_hi_prod_perm_8 = _mm256_permute4x64_epi64(u32_hi_prod_8, 0b10'01'00'11);
+        const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+        const __m256i u32_hi_prod_slide_8 = _mm256_blend_epi32(u32_hi_prod_perm_8, u32_hi_prod_perm_7, 0b00'00'00'11);
+        rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+        rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+        rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+        rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+        rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+        rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+        rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+        rrprime_8 = _mm256_add_epi64(u32_lo_prod_8, u32_hi_prod_slide_8);
+        const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+        const __m256i rrprime_perm_8 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_8, 0b10'01'00'11), 32U);
+        const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+        const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+        const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+        const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+        const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+        const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+        const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+        const __m256i rrprime_slide_8 = _mm256_blend_epi32(rrprime_perm_8, rrprime_perm_7, 0b00'00'00'11);
+        rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+        rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+        rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+        rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+        rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+        rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+        rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+        rrprime_8 = _mm256_add_epi32(rrprime_8, rrprime_slide_8);
+      }
+
+      const __m128i rrprime_7_128 = _mm256_castsi256_si128(rrprime_7);
+
+      const __m128i next_o = _mm_shuffle_epi32(rrprime_7_128, 0b01'00'11'10);
+
+      const __m128i lo_o = _mm_srli_epi64(rrprime_7_128, bit_shift);
+      const __m128i hi_o = _mm_slli_epi64(next_o, 32U - bit_shift);
+      const __m128i chunks_o = _mm_or_si128(lo_o, hi_o);
+
+      // Step C: Extract next8 chunk (R >> k)
+      chunk = 0;
+      if(word_idx < NUM_WORDS)
+      {
+        chunk = r[word_idx] >> bit_shift;
+      }
+      if(word_idx + 1 < NUM_WORDS && bit_shift != 0)
+      {
+        // Cast to uint64_t before shifting to prevent any 32-bit boundary overflow
+        chunk |= ((uint64_t)r[word_idx + 1] << (32 - bit_shift));
+      }
+      next_8 = (uint32_t)chunk;
+
+      // Step D: Apply Modulo 2^k instantly
+      if(word_idx < NUM_WORDS)
+      {
+        r[word_idx] &= mod_mask;
+        std::memset(static_cast<void *>(&r[word_idx + 1]), 0, (NUM_WORDS - word_idx - 1) * 4);
+      }
+
+      const unsigned r_wrd_idx = _mm256_extract_epi32(rrprime_6, 6);
+      const unsigned r_wrd_idx_plus_1 = _mm256_extract_epi32(rrprime_7, 0);
+
+      const unsigned r_pt_1 = ((r_wrd_idx) >> bit_shift);
+      const unsigned r_pt_2 = (r_wrd_idx_plus_1 << (32 - bit_shift));
+
+      simdy_8 = r_pt_1 | r_pt_2;
+
+      const unsigned r_wrd_idx_masked = r_wrd_idx & mod_mask;
+
+      const __m256i rrprime_7_modd = _mm256_set1_epi64x(r_wrd_idx_masked);
+      rrprime_6 = _mm256_blend_epi32(rrprime_6, rrprime_7_modd, 0b11'00'00'00);
+      rrprime_7 = ZERO;
+
+      if(simdy_8 != next_8)
+      {
+        std::cout << "k = " << k << "; P = " << P << '\n';
+        goto backwards;
+      }
+
+      assert(simdy_8 == next_8);
+
+      // Step E: Print immediately
+      // std::cout << std::setfill('0') << std::setw(8) << simdy_8;
+
+      digits_computed += 8;
+    }
+    //
+  }
+
+  return 0;
+}
+*/
+
+/*
+int main()
+{
+  constexpr uint32_t POW_5_CORRECTION[] = { 1, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000 };
+  constexpr uint8_t POW_5_IDX[] = { 0, 24, 48, 72, 96, 120, 144, 168, 192, 216, 240 };
+  constexpr uint8_t POW_5_E[] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40 };
+
+  constexpr uint32_t POW_5_CACHE[] = {
+    1,          0,          0,          0,          0,          0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    2242703233, 762134875,  1262,       0,          0,          0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    3211403009, 1849224548, 3668416493, 3913284084, 1593091,    0,          0,          0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    3776417409, 3833115195, 474402842,  2046101519, 1659368615, 1657637457, 2010764683, 0, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    0,          0,          0,          0,          0,          0,          0,          0, // 1 - again
+    0,          0,          0,          0,          0,          0,          0,          0, // 2 - again
+
+    781532673,  64985353,   253049085,  594863151,  3553621484, 3288652808, 3167596762, 2788392729, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3911132675, 590,        0,          0,          0,          0,          0,          0,          // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    4223872385, 1378013428, 3071223888, 1460925171, 3695318035, 3594083709, 4166588825, 9582620, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    2259883222, 2057664441, 314048097,  745834,     0,          0,          0,          0,       // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,       // 2 - again
+
+    2894159105, 2850127391, 1678958885, 1990048638, 4055408710, 4272372864, 3869429580, 1940770817, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3594030316, 3284427401, 4246652165, 2708404372, 1313461594, 941374947,  0,          0,          // 1 - again -
+    0,          0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    3031420033, 1112378521, 855339782,  4191278750, 248038208,  1136169807, 2230652081, 3378214371, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    1653863564, 613940998,  1392057263, 562793371,  894754680,  2060902835, 2039635717, 2771255238, // 1 - again -
+    276,        0,          0,          0,          0,          0,          0,          0,          // 2 - again
+
+    2553183233, 3201533787, 3638140786, 303378311,  1809731782, 3477761648, 3583367183, 649228654,  // 0 - _mm256i loaded and 0 extended to a _mm256i
+    2915460784, 487929380,  1011012442, 1677677582, 3428152256, 1710878487, 1438394610, 2161952759, // 1 - again -
+    4100910556, 1608314830, 349175,     0,          0,          0,          0,          0,          // 2 - again
+
+    3940379521, 184513341,  2872588323, 2214530454, 38258512,   2980860351, 114267010,  2188874685, // 0 - _mm256i loaded and 0 extended to a _mm512i
+    234079247,  2101059099, 1948702207, 947446250,  864457656,  507589568,  1321007357, 3911984176, // 1 - again -
+    1011110295, 2382358050, 2389730781, 730678769,  440721283,  0,          0,          0,          // 2 - again
+
+    1352440577, 3353128433, 943566124,  1942375735, 3933038544, 1369155590, 3288593144, 2689786274, // 0 - _mm256i loaded and 0 extended to a _mm256i
+    3608159034, 1149596585, 3474119098, 1887901699, 1390164635, 3853669096, 119012174,  3192759855, // 1 - again -
+    179034081,  2355293519, 3468291195, 3563470881, 2702541568, 3437458918, 2217683442, 129,        // 2 - again
+  };
+
+  for(int k = 0; k < 1075; k++)
+  {
+  backwards:
+    // 36 words * 32 bits = 1152 bits. Perfectly fits k=1100 + 10^8 overflow.
+    const unsigned P = std::floor(k * std::log10(2));
+
+    const unsigned P_DIV_8 = P >> 3U;
+
+    const unsigned P_DIV_32 = P >> 5U;
+
+    const unsigned K_DIV_32 = static_cast<unsigned>(k) >> 5U;
+
+    const __m256i ZERO = _mm256_setzero_si256();
+
+    __m256i rrprime_1 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32]])));
+    __m256i rrprime_2 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 4U])));
+    __m256i rrprime_3 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 8U])));
+    __m256i rrprime_4 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 12U])));
+    __m256i rrprime_5 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 16U])));
+    __m256i rrprime_6 = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(&POW_5_CACHE[POW_5_IDX[P_DIV_32] + 20U])));
+    __m256i rrprime_7 = ZERO;
+    __m256i rrprime_8 = ZERO;
+    const __m256i R1E8 = _mm256_set1_epi64x(POW_5_CORRECTION[8]);
+    const __m256i R1REMMIS = _mm256_set1_epi64x(POW_5_CORRECTION[P - (P_DIV_8 << 3U)]);
+
+    const unsigned E_o = POW_5_E[P_DIV_32];
+
+    for(unsigned E = E_o; E < P_DIV_8; E++)
+    {
+      const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1E8);
+      const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1E8);
+      const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1E8);
+      const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1E8);
+      const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1E8);
+      const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1E8);
+      const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1E8);
+      const __m256i u64_prod_8 = _mm256_mul_epu32(rrprime_8, R1E8);
+      const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_8 = _mm256_blend_epi32(u64_prod_8, ZERO, 0b1010'1010);
+      const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+      const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+      const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+      const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+      const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+      const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+      const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+      const __m256i u32_hi_prod_8 = _mm256_srli_epi64(u64_prod_8, 32);
+      const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_8 = _mm256_permute4x64_epi64(u32_hi_prod_8, 0b10'01'00'11);
+      const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_8 = _mm256_blend_epi32(u32_hi_prod_perm_8, u32_hi_prod_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+      rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+      rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+      rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+      rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+      rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+      rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+      rrprime_8 = _mm256_add_epi64(u32_lo_prod_8, u32_hi_prod_slide_8);
+      const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_8 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_8, 0b10'01'00'11), 32U);
+      const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+      const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+      const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+      const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+      const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+      const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+      const __m256i rrprime_slide_8 = _mm256_blend_epi32(rrprime_perm_8, rrprime_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+      rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+      rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+      rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+      rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+      rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+      rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+      rrprime_8 = _mm256_add_epi32(rrprime_8, rrprime_slide_8);
+    }
+    {
+      const __m256i u64_prod_1 = _mm256_mul_epu32(rrprime_1, R1REMMIS);
+      const __m256i u64_prod_2 = _mm256_mul_epu32(rrprime_2, R1REMMIS);
+      const __m256i u64_prod_3 = _mm256_mul_epu32(rrprime_3, R1REMMIS);
+      const __m256i u64_prod_4 = _mm256_mul_epu32(rrprime_4, R1REMMIS);
+      const __m256i u64_prod_5 = _mm256_mul_epu32(rrprime_5, R1REMMIS);
+      const __m256i u64_prod_6 = _mm256_mul_epu32(rrprime_6, R1REMMIS);
+      const __m256i u64_prod_7 = _mm256_mul_epu32(rrprime_7, R1REMMIS);
+      const __m256i u64_prod_8 = _mm256_mul_epu32(rrprime_8, R1REMMIS);
+      const __m256i u32_lo_prod_1 = _mm256_blend_epi32(u64_prod_1, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_2 = _mm256_blend_epi32(u64_prod_2, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_3 = _mm256_blend_epi32(u64_prod_3, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_4 = _mm256_blend_epi32(u64_prod_4, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_5 = _mm256_blend_epi32(u64_prod_5, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_6 = _mm256_blend_epi32(u64_prod_6, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_7 = _mm256_blend_epi32(u64_prod_7, ZERO, 0b1010'1010);
+      const __m256i u32_lo_prod_8 = _mm256_blend_epi32(u64_prod_8, ZERO, 0b1010'1010);
+      const __m256i u32_hi_prod_1 = _mm256_srli_epi64(u64_prod_1, 32);
+      const __m256i u32_hi_prod_2 = _mm256_srli_epi64(u64_prod_2, 32);
+      const __m256i u32_hi_prod_3 = _mm256_srli_epi64(u64_prod_3, 32);
+      const __m256i u32_hi_prod_4 = _mm256_srli_epi64(u64_prod_4, 32);
+      const __m256i u32_hi_prod_5 = _mm256_srli_epi64(u64_prod_5, 32);
+      const __m256i u32_hi_prod_6 = _mm256_srli_epi64(u64_prod_6, 32);
+      const __m256i u32_hi_prod_7 = _mm256_srli_epi64(u64_prod_7, 32);
+      const __m256i u32_hi_prod_8 = _mm256_srli_epi64(u64_prod_8, 32);
+      const __m256i u32_hi_prod_perm_1 = _mm256_permute4x64_epi64(u32_hi_prod_1, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_2 = _mm256_permute4x64_epi64(u32_hi_prod_2, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_3 = _mm256_permute4x64_epi64(u32_hi_prod_3, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_4 = _mm256_permute4x64_epi64(u32_hi_prod_4, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_5 = _mm256_permute4x64_epi64(u32_hi_prod_5, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_6 = _mm256_permute4x64_epi64(u32_hi_prod_6, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_7 = _mm256_permute4x64_epi64(u32_hi_prod_7, 0b10'01'00'11);
+      const __m256i u32_hi_prod_perm_8 = _mm256_permute4x64_epi64(u32_hi_prod_8, 0b10'01'00'11);
+      const __m256i u32_hi_prod_slide_1 = _mm256_blend_epi32(u32_hi_prod_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_2 = _mm256_blend_epi32(u32_hi_prod_perm_2, u32_hi_prod_perm_1, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_3 = _mm256_blend_epi32(u32_hi_prod_perm_3, u32_hi_prod_perm_2, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_4 = _mm256_blend_epi32(u32_hi_prod_perm_4, u32_hi_prod_perm_3, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_5 = _mm256_blend_epi32(u32_hi_prod_perm_5, u32_hi_prod_perm_4, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_6 = _mm256_blend_epi32(u32_hi_prod_perm_6, u32_hi_prod_perm_5, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_7 = _mm256_blend_epi32(u32_hi_prod_perm_7, u32_hi_prod_perm_6, 0b00'00'00'11);
+      const __m256i u32_hi_prod_slide_8 = _mm256_blend_epi32(u32_hi_prod_perm_8, u32_hi_prod_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi64(u32_lo_prod_1, u32_hi_prod_slide_1);
+      rrprime_2 = _mm256_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
+      rrprime_3 = _mm256_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
+      rrprime_4 = _mm256_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
+      rrprime_5 = _mm256_add_epi64(u32_lo_prod_5, u32_hi_prod_slide_5);
+      rrprime_6 = _mm256_add_epi64(u32_lo_prod_6, u32_hi_prod_slide_6);
+      rrprime_7 = _mm256_add_epi64(u32_lo_prod_7, u32_hi_prod_slide_7);
+      rrprime_8 = _mm256_add_epi64(u32_lo_prod_8, u32_hi_prod_slide_8);
+      const __m256i rrprime_perm_1 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_1, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_2 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_2, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_3 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_3, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_4 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_4, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_5 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_5, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_6 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_6, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_7 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_7, 0b10'01'00'11), 32U);
+      const __m256i rrprime_perm_8 = _mm256_srli_epi64(_mm256_permute4x64_epi64(rrprime_8, 0b10'01'00'11), 32U);
+      const __m256i rrprime_slide_1 = _mm256_blend_epi32(rrprime_perm_1, ZERO, 0b00'00'00'11);
+      const __m256i rrprime_slide_2 = _mm256_blend_epi32(rrprime_perm_2, rrprime_perm_1, 0b00'00'00'11);
+      const __m256i rrprime_slide_3 = _mm256_blend_epi32(rrprime_perm_3, rrprime_perm_2, 0b00'00'00'11);
+      const __m256i rrprime_slide_4 = _mm256_blend_epi32(rrprime_perm_4, rrprime_perm_3, 0b00'00'00'11);
+      const __m256i rrprime_slide_5 = _mm256_blend_epi32(rrprime_perm_5, rrprime_perm_4, 0b00'00'00'11);
+      const __m256i rrprime_slide_6 = _mm256_blend_epi32(rrprime_perm_6, rrprime_perm_5, 0b00'00'00'11);
+      const __m256i rrprime_slide_7 = _mm256_blend_epi32(rrprime_perm_7, rrprime_perm_6, 0b00'00'00'11);
+      const __m256i rrprime_slide_8 = _mm256_blend_epi32(rrprime_perm_8, rrprime_perm_7, 0b00'00'00'11);
+      rrprime_1 = _mm256_add_epi32(rrprime_1, rrprime_slide_1);
+      rrprime_2 = _mm256_add_epi32(rrprime_2, rrprime_slide_2);
+      rrprime_3 = _mm256_add_epi32(rrprime_3, rrprime_slide_3);
+      rrprime_4 = _mm256_add_epi32(rrprime_4, rrprime_slide_4);
+      rrprime_5 = _mm256_add_epi32(rrprime_5, rrprime_slide_5);
+      rrprime_6 = _mm256_add_epi32(rrprime_6, rrprime_slide_6);
+      rrprime_7 = _mm256_add_epi32(rrprime_7, rrprime_slide_7);
+      rrprime_8 = _mm256_add_epi32(rrprime_8, rrprime_slide_8);
+    }
+
+    // Total digits in 5^k
+    const uint32_t total_digits = std::floor(k * std::log10(5)) + 1;
+    constexpr unsigned NUM_WORDS = 40;
+    std::array<uint32_t, NUM_WORDS> written = { 0 };
+    std::array<uint32_t, NUM_WORDS> r = { 0 };
+
+    const __m128i u32_pack_1 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_1, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_2 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_2, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_3 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_3, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_4 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_4, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_5 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_5, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_6 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_6, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_7 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_7, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+    const __m128i u32_pack_8 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(rrprime_8, _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7)));
+
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[0]), u32_pack_1);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[4]), u32_pack_2);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[8]), u32_pack_3);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[12]), u32_pack_4);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[16]), u32_pack_5);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[20]), u32_pack_6);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[24]), u32_pack_7);
+    _mm_storeu_si128(reinterpret_cast<__m128i *>(&written[28]), u32_pack_8);
+
+    r[0] = 1; // Initialize R = 1
+
+    for(uint32_t i = 0; i < P; ++i)
+    {
+      uint32_t carry = 0;
+      for(unsigned int &w : r)
+      {
+        uint64_t p = (uint64_t)w * 10ULL + carry;
+        w = (uint32_t)p;
+        carry = (uint32_t)(p >> 32);
+      }
+    }
+
+    size_t first = 0;
+
+    while(first < r.size() && r[first] == 0)
+    {
+      ++first;
+    }
+
+    if(first != 0 && first != r.size())
+    {
+      const size_t count = r.size() - first;
+
+      std::memmove(r.data(), r.data() + first, count * sizeof(uint32_t));
+
+      std::memset(r.data() + count, 0, first * sizeof(uint32_t));
+    }
+
+    if(written != r)
+    {
+      std::cout << "k = " << k << "; P = " << P << '\n';
+      goto backwards;
+    }
+
+    assert(written == r);
+
+    // std::cout << "\n";
+  }
+
+  return 0;
+}
+*/
+
+/*
 int main()
 {
   constexpr uint32_t POW_5_CORRECTION[] = { 1, 10, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 100'000'000 };
@@ -324,6 +1595,7 @@ int main()
 
   return 0;
 }
+*/
 
 /*
 int main()

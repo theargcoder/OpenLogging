@@ -219,6 +219,7 @@ namespace Helpers::Simd::x86_64
   template <>
   unsigned Multiply<float>(const uint32_t &mantissa, const uint32_t *table, uint32_t &first_9_digits, uint32_t &middle_9_digits, uint32_t &last_9_digits) noexcept
   {
+    /*
     const __m256i TABLE = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(table)));
     const __m256i MANTISSA = _mm256_set1_epi64x(mantissa);
     const __m256i ZERO = _mm256_setzero_si256();
@@ -269,6 +270,7 @@ namespace Helpers::Simd::x86_64
     const unsigned status = fir9 | mid9 << 8U | las9 << 16U;
 
     return status;
+    */
   }
 
   template <typename T>
