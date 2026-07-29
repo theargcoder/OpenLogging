@@ -161,9 +161,28 @@ namespace Helpers::Numeric::Integral
 
   template <bool FORCE_SIGN = false, int N, typename T>
     requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
-  static void ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char, const int &st_idx)
+  static void ToStrReverseWriteToCharArrayResult(T val, char_array<N> &out_char)
   {
-    char *__restrict__ it = &out_char.array[st_idx];
+    char *__restrict__ it = &out_char.array[0] + out_char.start_idx;
+
+    static const constexpr auto BASE = 10;
+
+    do
+    {
+      const auto rem = val % BASE;
+      val /= BASE;
+
+      *--it = '0' + rem;
+    } while(val);
+
+    out_char.start_idx = it - &out_char.array[0];
+  }
+
+  template <bool FORCE_SIGN = false, int N, typename T>
+    requires std::is_integral_v<T> || std::is_same_v<T, __uint128_t>
+  static void ToStrReverseWriteToCharArray(const T &input, char_array<N> &out_char)
+  {
+    char *__restrict__ it = &out_char.array[0] + out_char.start_idx;
 
     static const constexpr auto BASE = 10;
     const bool NEGATIVE = input < 0;
