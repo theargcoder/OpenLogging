@@ -1,8 +1,75 @@
 
+#include <cmath>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
 
+int main()
+{
+  // Hacker's Delight magic constants for 32-bit division by 100,000,000
+  // No 128-bit math required. Fits inside a standard uint64_t.
+  constexpr uint64_t MAGIC_10E8 = 1441151881ULL;
+  constexpr int SHIFT_10E8 = 57;
+
+  for(int k = 984; k < 985; k++)
+  {
+    // Total digits in 2^k
+    uint32_t total_digits = std::floor(k * std::log10(2)) + 1;
+
+    // Calculate number of 8-digit chunks needed
+    uint32_t max_chunks = (total_digits + 7) / 8;
+
+    // 45 words * 32 bits. ALL heap allocation eliminated.
+    constexpr int NUM_WORDS = 45;
+
+    // Storage strictly 32-bit
+    uint32_t r[NUM_WORDS] = { 0 };
+    r[0] = 1;
+
+    int bits_left = k;
+
+    // Process a max of 5 bits per step so that: (10^8 - 1) * 2^5 + carry <= 3.2 billion (Fits strictly in uint32_t)
+    while(bits_left > 0)
+    {
+      int chunk_bits = std::min(bits_left, 5);
+      uint32_t multiplier = 1U << chunk_bits;
+
+      // Carry is strictly 32-bit
+      uint32_t carry = 0;
+
+      for(unsigned int &w : r)
+      {
+        // 32-bit math (base 10^8 x multiplier + carry). Max p is ~3.2 * 10^9, so it never overflows uint32_t.
+        uint32_t p = w * multiplier + carry;
+
+        // Hacker's Delight Division: 32x32 -> 64-bit math
+        carry = (uint32_t)(((uint64_t)p * MAGIC_10E8) >> SHIFT_10E8);
+
+        // Hacker's Delight Modulo: instantly resolves the remainder
+        w = p - carry * 100'000'000U;
+      }
+
+      bits_left -= chunk_bits;
+    }
+
+    std::cout << "k = " << k << " : ";
+
+    for(int w = NUM_WORDS - 1; w >= 0; --w)
+    {
+      if(r[w] == 0)
+      {
+        continue;
+      }
+
+      std::cout << std::setfill('0') << std::setw(8) << r[w];
+    }
+    std::cout << "\n";
+  }
+
+  return 0;
+}
+
+/*
 int main()
 {
   uint32_t k = 1024; // Test range [1, 1024]
@@ -68,6 +135,7 @@ int main()
 
   return 0;
 }
+*/
 
 /*
 #include <cstdint>

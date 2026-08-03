@@ -6,5 +6,6 @@ endfunction()
 
 add_logging_test(maybe maybe.cpp)
 add_logging_test(maybe2 maybe2.cpp)
+add_logging_test(maybe2n maybe2n.cpp)
 add_logging_test(maybe5k maybe5k.cpp)
 add_logging_test(maybe5k2 maybe5k2.cpp)
