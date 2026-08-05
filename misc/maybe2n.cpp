@@ -266,8 +266,6 @@ int main()
         rrrprime_2 = _mm512_add_epi64(u32_lo_prod_2, u32_hi_prod_slide_2);
         rrrprime_3 = _mm512_add_epi64(u32_lo_prod_3, u32_hi_prod_slide_3);
         rrrprime_4 = _mm512_add_epi64(u32_lo_prod_4, u32_hi_prod_slide_4);
-        const auto tmp = _mm512_alignr_epi64(rrrprime_1, ZERO, 7);
-        const auto tmp_shf = _mm512_srli_epi64(tmp, 32);
         const __m512i rrprime_slide_1 = _mm512_srli_epi64(_mm512_alignr_epi64(rrrprime_1, ZERO, 7), 32);
         const __m512i rrprime_slide_2 = _mm512_srli_epi64(_mm512_alignr_epi64(rrrprime_2, rrrprime_1, 7), 32);
         const __m512i rrprime_slide_3 = _mm512_srli_epi64(_mm512_alignr_epi64(rrrprime_3, rrrprime_2, 7), 32);
