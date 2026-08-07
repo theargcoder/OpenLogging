@@ -1,0 +1,29 @@
+
+statistics:
+
+L1 Cache Hit: Takes ~4 to 5 cycles (1 nanosecond).
+L2 Cache Hit: Takes ~12 to 14 cycles (2.5 nanoseconds).
+L3 Cache Hit: Takes ~40 to 60 cycles (10 nanoseconds).
+Main Memory (RAM): Takes ~250 to 300 cycles (50 to 60 nanoseconds).
+
+======================================
+for /misc/*
+
+in RYU 
+  for 2^k table size is :
+    POW10_SPLIT = 29'376 Bytes ~ 30 KBytes
+    POW10_SPLIT_2 = 75'192 Bytes ~ 75 KBytes
+
+    APROX 100 KBytes memory footprint
+    
+    never in L1 cache most likely in L2 cache
+
+    once they read from L2 cache into L1 cache the specific number (already takes ~12 cycles)
+
+    they do a 22 cycle latency mulshift_mod10e9()
+
+    recursively till operation expires....
+
+
+======================================
+
